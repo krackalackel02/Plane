@@ -24,6 +24,20 @@ export default [
         1,
         { extensions: [".js", ".jsx", ".ts", ".tsx"] },
       ],
+      // Custom rule: Ignore specific properties for no-unknown-property checks
+      "react/no-unknown-property": [
+        "error",
+        {
+          ignore: [
+            "args", // Ignore 'args'
+            "intensity", // Ignore 'intensity'
+            "position", // Ignore 'position'
+            "angle", // Ignore 'angle'
+            "penumbra", // Ignore 'penumbra'
+            "decay", // Ignore 'decay'
+          ],
+        },
+      ],
     },
   },
 ];
