@@ -21,10 +21,6 @@ function App() {
         <Box position={[1.2, 0, 0]} />
       </Canvas>
       <Counter />
-      <Counter />
-      <Counter />
-      <Counter />
-      <Counter />
       <p className="read-the-docs">
         Click on the Vite and React logos to learn more
       </p>

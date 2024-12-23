@@ -8,7 +8,7 @@ function Box(props: ThreeElements["mesh"]) {
   const [active, setActive] = useState(false);
 
   // Rotate the mesh in the useFrame callback, checking for the meshRef
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     if (meshRef.current) {
       meshRef.current.rotation.x += delta;
     }
