@@ -1,14 +1,13 @@
 import "./App.css";
-import Counter from "./components/counter";
 import { Canvas } from "@react-three/fiber";
-import Box from "./components/box";
 import { Stats, OrbitControls } from "@react-three/drei";
 import Galaxy from "./components/galaxy";
+import Ship from "./components/ship";
 
 function App() {
   return (
     <>
-      <Canvas id="threejs-canvas" camera={{ position: [0, 0, 50], fov: 75 }}>
+      <Canvas id="threejs-canvas">
         {/* Lighting */}
         <ambientLight intensity={0.5} />
         <spotLight
@@ -21,18 +20,13 @@ function App() {
         <pointLight position={[-10, -10, -10]} intensity={1} />
 
         {/* Scene Elements */}
-        <Box position={[-1.2, 0, 0]} />
-        <Box position={[1.2, 0, 0]} />
         <Galaxy />
-
+        <Ship />
         {/* Controls and Stats */}
         <OrbitControls />
         <Stats />
+        {/* <CameraHelper/> */}
       </Canvas>
-      <Counter />
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
     </>
   );
 }

@@ -29,12 +29,18 @@ export default [
         "error",
         {
           ignore: [
-            "args", // Ignore 'args'
-            "intensity", // Ignore 'intensity'
-            "position", // Ignore 'position'
-            "angle", // Ignore 'angle'
-            "penumbra", // Ignore 'penumbra'
-            "decay", // Ignore 'decay'
+            "args",
+            "intensity",
+            "position",
+            "angle",
+            "penumbra",
+            "decay",
+            "attach", // Add these to ignored properties
+            "array",
+            "count",
+            "itemSize",
+            "vertexColors",
+            "object",
           ],
         },
       ],
