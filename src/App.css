@@ -4,13 +4,11 @@
   height: 100vh;
   overflow-y: auto;
   text-align: center;
+  display: flex;
+  flex-direction: column;
 }
 
 #threejs-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
   height: 100%;
 }
 
