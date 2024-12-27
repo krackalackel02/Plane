@@ -1,13 +1,19 @@
 import { Canvas } from "@react-three/fiber";
-import { Stats, OrbitControls } from "@react-three/drei";
+import { Stats } from "@react-three/drei";
 import Galaxy from "../galaxy";
 import Ship from "../ship";
-
+import Camera from "../helper/camera";
 const Scene = () => {
+  const config = {
+    showCameraHelper: false,
+    showStats: true,
+  };
+
   return (
     <>
       <Canvas id="threejs-canvas">
         {/* Lighting */}
+        <Camera helper={config.showCameraHelper} />
         <ambientLight intensity={0.5} />
         <spotLight
           position={[10, 10, 10]}
@@ -21,11 +27,19 @@ const Scene = () => {
         {/* Scene Elements */}
         <Galaxy />
         <Ship />
-        {/* Controls and Stats */}
-        <OrbitControls />
-        <Stats />
-        {/* <CameraHelper/> */}
+        {/* Stats */}
+        {config.showStats && <Stats />}
       </Canvas>
+      {/* Camera Helper */}
+      {config.showCameraHelper && (
+        <div id="camera-vectors">
+          <span>Free Camera Vectors:</span>
+          <br />
+          <span id="position"></span>
+          <br />
+          <span id="lookingAt"></span>
+        </div>
+      )}
     </>
   );
 };
