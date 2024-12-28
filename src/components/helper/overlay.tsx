@@ -38,7 +38,7 @@ const Overlay = () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = "camera-vectors.json";
+            a.download = "cameraPos.json";
             a.click();
             URL.revokeObjectURL(url);
           }
