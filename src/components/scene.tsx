@@ -8,7 +8,7 @@ import Lights from "./lights";
 import Timeline from "./timeline";
 const Scene = () => {
   const config = {
-    showCameraHelper: false,
+    showCameraHelper: true,
     showStats: false,
     showShip: true,
   };

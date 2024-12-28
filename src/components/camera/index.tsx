@@ -8,6 +8,10 @@ import * as THREE from "three";
 import { useEffect } from "react";
 import "./camera.css";
 import cameraPos from "../../utils/cameraPos.json";
+import gsap from "gsap";
+import anim from "./kframe.json";
+const kframe = anim.frames;
+
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
 
@@ -16,22 +20,56 @@ interface CameraProps {
   fly?: boolean; // Optional boolean prop to control the fly controls
 }
 
+const animate = (
+  camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
+) => {
+  useEffect(() => {
+    const timeline = gsap.timeline({ repeat: 0, repeatDelay: 1 });
+
+    kframe.forEach((frame, index) => {
+      // Animate camera position
+      timeline.to(camera.position, {
+        x: frame.position.x,
+        y: frame.position.y,
+        z: frame.position.z,
+        duration: 2,
+        ease: "power2.out",
+        onUpdate: () => camera.updateProjectionMatrix(),
+      });
+
+      // Animate camera lookAt
+      timeline.to(
+        {},
+        {
+          duration: 2,
+          onUpdate: () => {
+            const lookAt = new THREE.Vector3(
+              frame.lookingAt.x,
+              frame.lookingAt.y,
+              frame.lookingAt.z,
+            );
+            camera.lookAt(lookAt);
+          },
+        },
+        index * 2, // Sync lookAt with position animation
+      );
+    });
+
+    // Return a cleanup function that stops the timeline
+    return () => {
+      timeline.kill();
+    };
+  }, [camera]);
+};
+
 const Camera: React.FC<CameraProps> = ({ helper = false, fly = false }) => {
   const { camera } = useThree();
-
-  useEffect(() => {
-    // Check if the JSON object exists and contains valid data
-    if (cameraPos && cameraPos.position && cameraPos.lookingAt) {
-      const { position, lookingAt } = cameraPos;
-      // Set the initial camera position and look direction from JSON
-      camera.position.set(position.x, position.y, position.z);
-      camera.lookAt(lookingAt.x, lookingAt.y, lookingAt.z);
-    } else {
-      // Default values if JSON doesn't exist or is invalid
-      camera.position.set(3.43, -0.09, 4.05);
-      camera.lookAt(-0.68, 0.12, 0.72);
-    }
-  }, [camera]);
+  camera.position.set(
+    cameraPos.position.x,
+    cameraPos.position.y,
+    cameraPos.position.z,
+  );
+  animate(camera);
 
   useFrame(() => {
     if (!helper) return;
