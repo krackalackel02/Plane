@@ -86,6 +86,10 @@ jobs:
             ${{ runner.os }}-node-
 
       - name: Build project with Npx Vite
+        env:
+          VITE_SHOW_STATS: ${{ secrets.VITE_SHOW_STATS}}
+          VITE_SHOW_CAMERA: ${{ secrets.VITE_SHOW_CAMERA}}
+          VITE_SHOW_SHIP: ${{ secrets.VITE_SHOW_SHIP}}
         run: npm run build
 
       - name: Upload artifact

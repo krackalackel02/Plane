@@ -6,29 +6,26 @@ import Camera from "./camera";
 import Overlay from "./helper/overlay";
 import Lights from "./lights";
 import Timeline from "./timeline";
+import { useEnvironment } from "../context/environment";
 const Scene = () => {
-  const config = {
-    showCameraHelper: true,
-    showStats: false,
-    showShip: true,
-  };
-
+  const { showCameraHelper, showShip, showStats } = useEnvironment();
+  console.log(showCameraHelper, showShip, showStats);
   return (
     <>
       <Canvas id="threejs-canvas">
         {/* Lighting */}
-        <Camera helper={config.showCameraHelper} />
+        <Camera helper={showCameraHelper} />
         <Lights />
 
         {/* Scene Elements */}
         <Galaxy />
-        {config.showShip && <Ship />}
+        {showShip && <Ship />}
         <Timeline />
         {/* Stats */}
-        {config.showStats && <Stats />}
+        {showStats && <Stats />}
       </Canvas>
       {/* Camera Helper */}
-      {config.showCameraHelper && <Overlay />}
+      {showCameraHelper && <Overlay />}
     </>
   );
 };
