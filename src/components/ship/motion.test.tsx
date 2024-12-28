@@ -1,11 +1,11 @@
 import { Group } from "three";
-import { Motion } from "./motion";
+import { HarmonicMotion } from "./motion";
 import { describe, test, expect } from "vitest";
 
-describe("Motion class tests", () => {
+describe("HarmonicMotion class tests", () => {
   test("attaches to a group and updates rotation while holding down the key", async () => {
     const group = new Group();
-    const motion = new Motion({
+    const motion = new HarmonicMotion({
       axis: "x",
       stiffness: 50,
       damping: 4,
