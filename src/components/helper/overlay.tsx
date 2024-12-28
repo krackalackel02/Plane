@@ -14,6 +14,30 @@ const Overlay = () => {
           const lookingAtSpan = document.getElementById("lookingAt")?.innerText;
 
           if (positionSpan && lookingAtSpan) {
+            const position = "Position: " + positionSpan;
+            const lookingAt = "LookingAt: " + lookingAtSpan;
+            const data = position + "\n" + lookingAt;
+            navigator.clipboard
+              .writeText(data)
+              .then(() => {
+                console.log("Data copied to clipboard!");
+              })
+              .catch((err) => {
+                console.error("Failed to copy to clipboard: ", err);
+              });
+          }
+        }}
+      >
+        copy
+      </button>
+      <br />
+      <button
+        onClick={() => {
+          // Get values from spans
+          const positionSpan = document.getElementById("position")?.innerText;
+          const lookingAtSpan = document.getElementById("lookingAt")?.innerText;
+
+          if (positionSpan && lookingAtSpan) {
             // Parse values into JSON
             const parseValues = (text: string) =>
               Object.fromEntries(
@@ -44,7 +68,7 @@ const Overlay = () => {
           }
         }}
       >
-        save values
+        save
       </button>
     </div>
   );

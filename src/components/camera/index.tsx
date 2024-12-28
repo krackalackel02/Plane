@@ -5,9 +5,10 @@ import {
 } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { useEffect } from "react";
 import "./camera.css";
 import cameraPos from "../../utils/cameraPos.json";
+import animate from "./animate";
+
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
 
@@ -18,20 +19,12 @@ interface CameraProps {
 
 const Camera: React.FC<CameraProps> = ({ helper = false, fly = false }) => {
   const { camera } = useThree();
-
-  useEffect(() => {
-    // Check if the JSON object exists and contains valid data
-    if (cameraPos && cameraPos.position && cameraPos.lookingAt) {
-      const { position, lookingAt } = cameraPos;
-      // Set the initial camera position and look direction from JSON
-      camera.position.set(position.x, position.y, position.z);
-      camera.lookAt(lookingAt.x, lookingAt.y, lookingAt.z);
-    } else {
-      // Default values if JSON doesn't exist or is invalid
-      camera.position.set(3.43, -0.09, 4.05);
-      camera.lookAt(-0.68, 0.12, 0.72);
-    }
-  }, [camera]);
+  camera.position.set(
+    cameraPos.position.x,
+    cameraPos.position.y,
+    cameraPos.position.z,
+  );
+  animate(camera);
 
   useFrame(() => {
     if (!helper) return;
