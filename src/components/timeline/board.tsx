@@ -13,9 +13,6 @@ type BoardParams = {
   outerZ: number;
   frame: number;
   depth: number;
-  positionX: number;
-  positionY: number;
-  positionZ: number;
 };
 
 const defaultValues: BoardParams = {
@@ -24,9 +21,12 @@ const defaultValues: BoardParams = {
   outerZ: 0.4,
   frame: 0.35,
   depth: 0.25,
-  positionX: 4.0,
-  positionY: 2.5,
-  positionZ: 0.5,
+};
+
+type BoardProps = {
+  imagePath?: string;
+  helper?: boolean;
+  position?: [number, number, number]; // New position prop
 };
 
 const Material = () => {
@@ -58,10 +58,8 @@ const Material = () => {
 const Board = ({
   imagePath,
   helper = false,
-}: {
-  imagePath?: string;
-  helper?: boolean;
-}) => {
+  position = [4.0, 2.5, 0.5],
+}: BoardProps) => {
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
   const [params, setParams] = useState(initialValues);
   const texture = imagePath ? useLoader(TextureLoader, imagePath) : null;
@@ -91,9 +89,6 @@ const Board = ({
         outerZ: createControl("outerZ", 0.1, 2, 0.05),
         frame: createControl("frame", 0.1, 2, 0.05),
         depth: createControl("depth", 0.1, 1, 0.05),
-        positionX: createControl("positionX", 1, 10, 0.1),
-        positionY: createControl("positionY", 1, 10, 0.1),
-        positionZ: createControl("positionZ", 0.1, 2, 0.05),
         Save: button(() => {
           const blob = new Blob([JSON.stringify(params, null, 2)], {
             type: "application/json",
@@ -109,16 +104,7 @@ const Board = ({
       [params],
     );
 
-  const {
-    outerX,
-    outerY,
-    outerZ,
-    frame,
-    depth,
-    positionX,
-    positionY,
-    positionZ,
-  } = params;
+  const { outerX, outerY, outerZ, frame, depth } = params;
 
   const delta = 0.001;
   const validateDimensions = () => {
@@ -147,10 +133,7 @@ const Board = ({
   ];
 
   return (
-    <mesh
-      position={[positionX, positionY, positionZ]}
-      rotation={[0, -Math.PI / 2, 0]}
-    >
+    <mesh position={position} rotation={[0, -Math.PI / 2, 0]}>
       <Material />
       <Geometry>
         <Base geometry={new RoundedBoxGeometry(...outer, 4, 0.2)}></Base>
