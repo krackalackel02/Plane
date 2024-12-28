@@ -41,6 +41,7 @@ export default [
             "itemSize",
             "vertexColors",
             "object",
+            "map",
           ],
         },
       ],

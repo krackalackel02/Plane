@@ -1,14 +1,16 @@
 import { Canvas } from "@react-three/fiber";
 import { Stats } from "@react-three/drei";
-import Galaxy from "../galaxy";
-import Ship from "../ship";
-import Camera from "../camera";
-import Overlay from "../helper/overlay";
-import Lights from "../lights";
+import Galaxy from "./galaxy";
+import Ship from "./ship";
+import Camera from "./camera";
+import Overlay from "./helper/overlay";
+import Lights from "./lights";
+import Timeline from "./timeline";
 const Scene = () => {
   const config = {
     showCameraHelper: true,
     showStats: false,
+    showShip: false,
   };
 
   return (
@@ -20,7 +22,8 @@ const Scene = () => {
 
         {/* Scene Elements */}
         <Galaxy />
-        <Ship />
+        {config.showShip && <Ship />}
+        <Timeline />
         {/* Stats */}
         {config.showStats && <Stats />}
       </Canvas>

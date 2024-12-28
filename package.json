@@ -23,6 +23,7 @@
 		]
 	},
 	"dependencies": {
+		"@react-three/csg": "^3.2.0",
 		"@react-three/drei": "^9.120.4",
 		"@react-three/fiber": "^8.17.10",
 		"jest-canvas-mock": "^2.5.2",
