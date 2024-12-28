@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { Geometry, Base, Subtraction } from "@react-three/csg";
 import { useControls, button } from "leva";
 import boardParams from "../../utils/boardParams.json"; // Import JSON file
+import { RoundedBoxGeometry } from "three-stdlib";
 
 type BoardParams = {
   outerX: number;
@@ -28,6 +29,32 @@ const defaultValues: BoardParams = {
   positionZ: 0.5,
 };
 
+const Material = () => {
+  const baseColorMap = useLoader(
+    TextureLoader,
+    "./textures/aluminium/base.jpg",
+  );
+  const metallicMap = useLoader(
+    TextureLoader,
+    "./textures/aluminium/metal.png",
+  );
+  const normalMap = useLoader(TextureLoader, "./textures/aluminium/normal.png");
+  const roughnessMap = useLoader(
+    TextureLoader,
+    "./textures/aluminium/rough.png",
+  );
+
+  return (
+    <meshStandardMaterial
+      map={baseColorMap} // Base color
+      metalnessMap={metallicMap} // Metallic property
+      normalMap={normalMap} // Surface details
+      roughnessMap={roughnessMap} // Roughness property
+      side={THREE.DoubleSide} // Ensure visibility on both sides
+    />
+  );
+};
+
 const Board = ({
   imagePath,
   helper = false,
@@ -38,6 +65,7 @@ const Board = ({
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
   const [params, setParams] = useState(initialValues);
   const texture = imagePath ? useLoader(TextureLoader, imagePath) : null;
+  const placeHolder = useLoader(TextureLoader, "./images/placeholder.jpg");
 
   const updateParam = (key: keyof BoardParams) => (value: number) =>
     setParams((prev) => ({ ...prev, [key]: value }));
@@ -123,9 +151,9 @@ const Board = ({
       position={[positionX, positionY, positionZ]}
       rotation={[0, -Math.PI / 2, 0]}
     >
-      <meshStandardMaterial color={0xffffff} />
+      <Material />
       <Geometry>
-        <Base geometry={new THREE.BoxGeometry(...outer)}></Base>
+        <Base geometry={new RoundedBoxGeometry(...outer, 4, 0.2)}></Base>
         <Subtraction
           geometry={new THREE.BoxGeometry(...inner)}
           position={[0, 0, depth / 2]}
@@ -136,7 +164,7 @@ const Board = ({
         {texture ? (
           <meshBasicMaterial map={texture} />
         ) : (
-          <meshBasicMaterial color="red" />
+          <meshBasicMaterial map={placeHolder} />
         )}
       </mesh>
     </mesh>
