@@ -1,5 +1,5 @@
 import "./App.css";
-import Scene from "./components/3d/scene";
+import Scene from "./components/scene";
 
 function App() {
   return (
