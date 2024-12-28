@@ -6,7 +6,7 @@ import Camera from "../helper/camera";
 const Scene = () => {
   const config = {
     showCameraHelper: false,
-    showStats: true,
+    showStats: false,
   };
 
   return (

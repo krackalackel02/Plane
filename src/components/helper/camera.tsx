@@ -20,8 +20,8 @@ const Camera: React.FC<CameraProps> = ({ helper = false }) => {
 
   useEffect(() => {
     // Set the initial camera position and look direction
-    camera.position.set(-1.74, 0.58, -2.94); // Position: x: -1.74, y: 0.58, z: -2.94
-    camera.lookAt(0.66, 0.19, 0.73); // Looking At: x: 0.66, y: 0.19, z: 0.73
+    camera.position.set(3.43, -0.09, 4.05); // Position: x: -1.74, y: 0.58, z: -2.94
+    camera.lookAt(-0.68, 0.12, 0.72); // Looking At: x: 0.66, y: 0.19, z: 0.73
   }, [camera]);
 
   useFrame(() => {
