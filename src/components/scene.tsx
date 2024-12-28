@@ -10,7 +10,7 @@ const Scene = () => {
   const config = {
     showCameraHelper: true,
     showStats: false,
-    showShip: false,
+    showShip: true,
   };
 
   return (

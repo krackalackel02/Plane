@@ -1,65 +1,145 @@
+import { useState } from "react";
 import { useLoader } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
 import { Geometry, Base, Subtraction } from "@react-three/csg";
+import { useControls, button } from "leva";
+import boardParams from "../../utils/boardParams.json"; // Import JSON file
 
-const Board = ({ imagePath }: { imagePath?: string }) => {
-  // Load the image texture if provided
+type BoardParams = {
+  outerX: number;
+  outerY: number;
+  outerZ: number;
+  frame: number;
+  depth: number;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+};
+
+const defaultValues: BoardParams = {
+  outerX: 6.7,
+  outerY: 4.4,
+  outerZ: 0.4,
+  frame: 0.35,
+  depth: 0.25,
+  positionX: 4.0,
+  positionY: 2.5,
+  positionZ: 0.5,
+};
+
+const Board = ({
+  imagePath,
+  helper = false,
+}: {
+  imagePath?: string;
+  helper?: boolean;
+}) => {
+  const initialValues: BoardParams = { ...defaultValues, ...boardParams };
+  const [params, setParams] = useState(initialValues);
   const texture = imagePath ? useLoader(TextureLoader, imagePath) : null;
 
-  // Frame and board dimensions
-  const frame = 0.5; // Frame thickness
-  const depth = 0.35; // Board thickness
-  const outer = [4, 2.5, 0.5]; // Outer dimensions of the board
-  const frameColor = 0xffffff; // Frame color
-  const delta = 0.001; // Delta value for the subtraction operation
+  const updateParam = (key: keyof BoardParams) => (value: number) =>
+    setParams((prev) => ({ ...prev, [key]: value }));
 
-  // Validate the dimensions
-  if (outer[0] <= frame * 2 || outer[1] <= frame * 2) {
-    console.error(
-      `Invalid dimensions: Outer x (${outer[0]}) and y (${outer[1]}) must be greater than double the frame (${frame * 2}).`,
+  const createControl = (
+    key: keyof BoardParams,
+    min: number,
+    max: number,
+    step: number,
+  ) => ({
+    value: params[key],
+    min,
+    max,
+    step,
+    onChange: updateParam(key),
+  });
+
+  if (helper)
+    useControls(
+      {
+        outerX: createControl("outerX", 1, 10, 0.1),
+        outerY: createControl("outerY", 1, 10, 0.1),
+        outerZ: createControl("outerZ", 0.1, 2, 0.05),
+        frame: createControl("frame", 0.1, 2, 0.05),
+        depth: createControl("depth", 0.1, 1, 0.05),
+        positionX: createControl("positionX", 1, 10, 0.1),
+        positionY: createControl("positionY", 1, 10, 0.1),
+        positionZ: createControl("positionZ", 0.1, 2, 0.05),
+        Save: button(() => {
+          const blob = new Blob([JSON.stringify(params, null, 2)], {
+            type: "application/json",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "boardParams.json";
+          a.click();
+          URL.revokeObjectURL(url);
+        }),
+      },
+      [params],
     );
-    return null; // Render nothing if invalid
-  }
 
-  if (outer[2] <= depth) {
-    console.error(
-      `Invalid dimensions: Outer z (${outer[2]}) must be greater than depth (${depth}).`,
-    );
-    return null; // Render nothing if invalid
-  }
+  const {
+    outerX,
+    outerY,
+    outerZ,
+    frame,
+    depth,
+    positionX,
+    positionY,
+    positionZ,
+  } = params;
 
-  // Inner cutout dimensions
-  const inner = [outer[0] - frame * 2, outer[1] - frame * 2, outer[2] - depth];
+  const delta = 0.001;
+  const validateDimensions = () => {
+    if (outerX <= frame * 2 || outerY <= frame * 2) {
+      console.error(
+        `Invalid dimensions: Outer x (${outerX}) and y (${outerY}) must be greater than double the frame (${frame * 2}).`,
+      );
+      return false;
+    }
+    if (outerZ <= depth) {
+      console.error(
+        `Invalid dimensions: Outer z (${outerZ}) must be greater than depth (${depth}).`,
+      );
+      return false;
+    }
+    return true;
+  };
 
-  // Outer and inner geometries
-  const outerBox = new THREE.BoxGeometry(...outer); // Outer dimensions
-  const innerCutout = new THREE.BoxGeometry(...inner); // Inner cutout dimensions
+  if (!validateDimensions()) return null;
+
+  const outer = [outerX, outerY, outerZ];
+  const inner = [
+    outerX - frame * 2,
+    outerY - frame * 2,
+    outerZ - depth + delta,
+  ];
 
   return (
-    <>
-      <mesh>
-        {/* Apply material to the board frame */}
-        <meshStandardMaterial color={frameColor} />
-        <Geometry>
-          {/* Outer box as base geometry */}
-          <Base geometry={outerBox} />
-
-          {/* Subtract inner cutout from the outer box */}
-          <Subtraction geometry={innerCutout} position={[0, 0, depth / 2]} />
-        </Geometry>
-
-        {/* Add inner face (front face of inner cutout) */}
-        <mesh position={[0, 0, -(outer[2] / 2 - depth) + delta]}>
-          <planeGeometry args={[inner[0], inner[1]]} />
-          {texture ? (
-            <meshBasicMaterial map={texture} />
-          ) : (
-            <meshBasicMaterial color="red" />
-          )}
-        </mesh>
+    <mesh
+      position={[positionX, positionY, positionZ]}
+      rotation={[0, -Math.PI / 2, 0]}
+    >
+      <meshStandardMaterial color={0xffffff} />
+      <Geometry>
+        <Base geometry={new THREE.BoxGeometry(...outer)}></Base>
+        <Subtraction
+          geometry={new THREE.BoxGeometry(...inner)}
+          position={[0, 0, depth / 2]}
+        />
+      </Geometry>
+      <mesh position={[0, 0, -(outerZ / 2 - depth) + delta]}>
+        <planeGeometry args={[inner[0], inner[1]]} />
+        {texture ? (
+          <meshBasicMaterial map={texture} />
+        ) : (
+          <meshBasicMaterial color="red" />
+        )}
       </mesh>
-    </>
+    </mesh>
   );
 };
 
