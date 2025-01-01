@@ -18,6 +18,6 @@
         "axis": "y"
     },
     "exhaust":{
-        "coneAngle": 30
+        "coneAngle": 10
     }
 }

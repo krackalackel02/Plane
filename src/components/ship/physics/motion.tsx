@@ -1,12 +1,15 @@
 import { Group } from "three";
 import { Spring } from "wobble";
+
 export type Axis = "x" | "y" | "z";
 export type MotionType = "roll" | "pitch" | "yaw";
+
 export const Motion = {
   ROLL: "roll" as MotionType,
   PITCH: "pitch" as MotionType,
   YAW: "yaw" as MotionType,
 };
+
 import constants from "../../../utils/constants.json";
 import { deg2rad } from "../../../utils/3d";
 import keys from "../../../utils/keys.json";
@@ -15,9 +18,9 @@ interface BaseMotionConfig {
   axis: Axis;
   positiveKey: string;
   negativeKey: string;
-  rateIncrement?: number; // Increment per frame for angular velocity
-  maxRate?: number; // Maximum angular velocity
-  decayFactor?: number; // Decay factor for slowing down
+  rateIncrement?: number;
+  maxRate?: number;
+  decayFactor?: number;
 }
 
 export class BaseMotion {
@@ -51,36 +54,31 @@ export class BaseMotion {
     this.group = group;
   }
 
-  update(delta: number) {
+  update(delta: number, activeKeys: Set<string>) {
     if (this.group) {
-      // Apply angular velocity
+      if (activeKeys.has(this.positiveKey)) {
+        this.currentRate = Math.min(
+          this.currentRate + this.rateIncrement,
+          this.maxRate,
+        );
+      } else if (activeKeys.has(this.negativeKey)) {
+        this.currentRate = Math.max(
+          this.currentRate - this.rateIncrement,
+          -this.maxRate,
+        );
+      }
+
       this.group.rotation[this.axis] += this.currentRate * delta;
 
-      // Decay towards zero when no key is pressed
-      if (this.currentRate !== 0) {
+      // Decay towards zero
+      if (
+        !activeKeys.has(this.positiveKey) &&
+        !activeKeys.has(this.negativeKey)
+      ) {
         this.currentRate *= this.decayFactor;
-        if (Math.abs(this.currentRate) < 0.01) this.currentRate = 0; // Stop small oscillations
+        if (Math.abs(this.currentRate) < 0.01) this.currentRate = 0;
       }
     }
-  }
-
-  handleKeyDown(e: KeyboardEvent) {
-    if (e.key === this.positiveKey) {
-      this.currentRate = Math.min(
-        this.currentRate + this.rateIncrement,
-        this.maxRate,
-      );
-    } else if (e.key === this.negativeKey) {
-      this.currentRate = Math.max(
-        this.currentRate - this.rateIncrement,
-        -this.maxRate,
-      );
-    }
-  }
-
-  handleKeyUp(e: KeyboardEvent) {
-    // Let decay handle returning to zero
-    e.preventDefault();
   }
 
   cleanup() {
@@ -110,7 +108,6 @@ export class HarmonicMotion extends BaseMotion {
     super({ axis, positiveKey, negativeKey });
     this.maxAngle = maxAngle;
 
-    // Initialize spring
     this.spring = new Spring({
       fromValue: 0,
       toValue: 0,
@@ -125,19 +122,14 @@ export class HarmonicMotion extends BaseMotion {
     });
   }
 
-  handleKeyDown(e: KeyboardEvent) {
-    if (e.key === this.positiveKey) {
+  update(_delta: number, activeKeys: Set<string>) {
+    if (activeKeys.has(this.positiveKey)) {
       this.spring.updateConfig({ toValue: this.maxAngle });
       this.spring.start();
-    }
-    if (e.key === this.negativeKey) {
+    } else if (activeKeys.has(this.negativeKey)) {
       this.spring.updateConfig({ toValue: -this.maxAngle });
       this.spring.start();
-    }
-  }
-
-  handleKeyUp(e: KeyboardEvent) {
-    if (e.key === this.positiveKey || e.key === this.negativeKey) {
+    } else {
       this.spring.updateConfig({ toValue: 0 });
       this.spring.start();
     }
@@ -152,6 +144,7 @@ export const createMotion = (type: MotionType): BaseMotion | HarmonicMotion => {
   const axis = constants[type].axis as Axis;
   const positiveKey = keys[type].positive;
   const negativeKey = keys[type].negative;
+
   if (type !== "yaw") {
     return new HarmonicMotion({
       axis,

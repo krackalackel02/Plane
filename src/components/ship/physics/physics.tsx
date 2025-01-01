@@ -2,22 +2,17 @@ import { useEffect, useRef } from "react";
 import { Group } from "three";
 import { useFrame } from "@react-three/fiber";
 import { Motion, createMotion } from "./motion";
-import KeyHandler from "../../helper/keyHandler";
+import { useKeyContext } from "../../../context/keyContext";
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
-
-const ROLL = createMotion(Motion.ROLL);
-const PITCH = createMotion(Motion.PITCH);
-const YAW = createMotion(Motion.YAW);
-
 const Physics: React.FC<{
   groupRef: React.RefObject<Group>;
 }> = ({ groupRef }) => {
-  const rollMotion = useRef(ROLL);
+  const rollMotion = useRef(createMotion(Motion.ROLL));
+  const pitchMotion = useRef(createMotion(Motion.PITCH));
+  const yawMotion = useRef(createMotion(Motion.YAW));
 
-  const pitchMotion = useRef(PITCH);
-
-  const yawMotion = useRef(YAW);
+  const activeKeys = useKeyContext();
 
   useEffect(() => {
     if (!groupRef.current) return;
@@ -38,22 +33,12 @@ const Physics: React.FC<{
   }, [groupRef]);
 
   useFrame((_, delta) => {
-    yawMotion.current.update(delta);
+    rollMotion.current.update(delta, activeKeys);
+    pitchMotion.current.update(delta, activeKeys);
+    yawMotion.current.update(delta, activeKeys);
   });
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    rollMotion.current.handleKeyDown(e);
-    pitchMotion.current.handleKeyDown(e);
-    yawMotion.current.handleKeyDown(e);
-  };
-
-  const handleKeyUp = (e: KeyboardEvent) => {
-    rollMotion.current.handleKeyUp(e);
-    pitchMotion.current.handleKeyUp(e);
-    yawMotion.current.handleKeyUp(e);
-  };
-
-  return <KeyHandler onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />;
+  return null;
 };
 
 export default Physics;

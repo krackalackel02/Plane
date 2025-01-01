@@ -1,50 +1,27 @@
-import KeyHandler from "../../helper/keyHandler";
-import ParticleGenerator from "./particleGenerator";
-import { useState } from "react";
-import keys from "../../../utils/keys.json";
-import constants from "../../../utils/constants.json";
-import { deg2rad } from "../../../utils/3d";
-// Disable react/prop-types for this file
-/* eslint-disable react/prop-types */
-const Jet: React.FC<{
-  coneAngle?: number;
-  position: [number, number, number];
-}> = ({
-  coneAngle = deg2rad(constants.exhaust.coneAngle),
-  position = [0, 0, 0],
-}) => {
-  const [exhaust, setExhaust] = useState(false); // Track particle generator state
-  const handleExhaustKeyDown = (e: KeyboardEvent) => {
-    if (e.key === keys.exhaust) setExhaust(true);
-  };
-
-  const handleExhaustKeyUp = (e: KeyboardEvent) => {
-    if (e.key === keys.exhaust) setExhaust(false);
-  };
-
-  return (
-    <>
-      <ParticleGenerator
-        active={exhaust}
-        position={position}
-        count={200}
-        coneAngle={coneAngle}
-      />
-      <KeyHandler
-        onKeyDown={handleExhaustKeyDown}
-        onKeyUp={handleExhaustKeyUp}
-      />
-    </>
-  );
-};
+import { useControlState } from "../../../context/keyContext";
+import Jet from "./jet";
 
 const Exhaust: React.FC = () => {
   const right: [number, number, number] = [-0.5, 0.75, -0.5]; // Right position
   const left: [number, number, number] = [0.5, 0.75, -0.5]; // Left position
+  const { direction, turn } = useControlState(); // Only consume exhaust state
+
+  let leftJetActive =
+    (direction !== "neutral" && turn != "left") || turn === "right";
+  let rightJetActive =
+    (direction !== "neutral" && turn != "right") || turn === "left";
+
+  const reverse = direction === "backward";
+
+  if (reverse && turn !== "neutral") {
+    leftJetActive = !leftJetActive;
+    rightJetActive = !rightJetActive;
+  }
+
   return (
     <>
-      <Jet position={left} />
-      <Jet position={right} />
+      <Jet position={left} active={leftJetActive} reverse={reverse} />
+      <Jet position={right} active={rightJetActive} reverse={reverse} />
     </>
   );
 };

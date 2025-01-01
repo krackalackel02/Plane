@@ -23,6 +23,7 @@ interface ParticleGeneratorProps {
   coneAngle?: number;
   decaySpeed?: number;
   speedDecay?: number;
+  reverse?: boolean;
 }
 
 const ParticleGenerator: React.FC<ParticleGeneratorProps> = ({
@@ -32,6 +33,7 @@ const ParticleGenerator: React.FC<ParticleGeneratorProps> = ({
   coneAngle = Math.PI / 6,
   decaySpeed = 0.01,
   speedDecay = 0.98,
+  reverse = false,
 }) => {
   const particlesRef = useRef<Points>(null);
   const velocities = useRef<Float32Array>(new Float32Array(count * 3));
@@ -82,7 +84,11 @@ const ParticleGenerator: React.FC<ParticleGeneratorProps> = ({
 
         positions[idx] += velocities.current[idx];
         positions[idx + 1] += velocities.current[idx + 1];
-        positions[idx + 2] += velocities.current[idx + 2];
+        if (reverse) {
+          positions[idx + 2] -= velocities.current[idx + 2];
+        } else {
+          positions[idx + 2] += velocities.current[idx + 2];
+        }
 
         lifetimes.current[i] = Math.max(0, lifetimes.current[i] - decaySpeed);
 
