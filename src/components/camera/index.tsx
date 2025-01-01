@@ -8,16 +8,17 @@ import * as THREE from "three";
 import "./camera.css";
 import cameraPos from "../../utils/cameraPos.json";
 import animate from "./animate";
+import { useEnvironment } from "../../context/envContext";
 
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
 
 interface CameraProps {
-  helper?: boolean; // Optional boolean prop to control the helper display
   fly?: boolean; // Optional boolean prop to control the fly controls
 }
 
-const Camera: React.FC<CameraProps> = ({ helper = false, fly = false }) => {
+const Camera: React.FC<CameraProps> = ({ fly = false }) => {
+  const { showCameraHelper: helper } = useEnvironment();
   const { camera } = useThree();
   camera.position.set(
     cameraPos.position.x,

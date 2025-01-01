@@ -4,10 +4,12 @@ import { computeScale } from "../../utils/3d";
 import Exhaust from "./exhaust/exhaust";
 import Body from "./model/body";
 import Physics from "./physics/physics";
+import { useEnvironment } from "../../context/envContext";
 
 const Ship: React.FC = () => {
   const groupRef = useRef<Group>(null);
   const scaleTo = { x: 5, y: 3, z: 2 }; // Scale the model to fit the scene
+  const { showShip } = useEnvironment();
 
   // Bounding box and scale computation
   useEffect(() => {
@@ -27,13 +29,15 @@ const Ship: React.FC = () => {
   }, [scaleTo]);
 
   return (
-    <>
-      <group ref={groupRef}>
-        <Body />
-        <Exhaust />
-        <Physics groupRef={groupRef} />
-      </group>
-    </>
+    showShip && (
+      <>
+        <group ref={groupRef}>
+          <Body />
+          <Exhaust />
+          <Physics groupRef={groupRef} />
+        </group>
+      </>
+    )
   );
 };
 
