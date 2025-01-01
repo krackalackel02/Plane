@@ -6,7 +6,7 @@ import {
   Range,
   precomputeRanges,
   getColorFromLifetime,
-} from "../../utils/3d";
+} from "../../../utils/3d";
 
 const colorMap: ColorMapEntry[] = [
   { limit: 1, color: [0, 0, 1] },

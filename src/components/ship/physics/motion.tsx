@@ -1,6 +1,15 @@
 import { Group } from "three";
 import { Spring } from "wobble";
-type Axis = "x" | "y" | "z";
+export type Axis = "x" | "y" | "z";
+export type MotionType = "roll" | "pitch" | "yaw";
+export const Motion = {
+  ROLL: "roll" as MotionType,
+  PITCH: "pitch" as MotionType,
+  YAW: "yaw" as MotionType,
+};
+import constants from "../../../utils/constants.json";
+import { deg2rad } from "../../../utils/3d";
+import keys from "../../../utils/keys.json";
 
 interface BaseMotionConfig {
   axis: Axis;
@@ -138,3 +147,28 @@ export class HarmonicMotion extends BaseMotion {
     this.spring.removeAllListeners();
   }
 }
+
+export const createMotion = (type: MotionType): BaseMotion | HarmonicMotion => {
+  const axis = constants[type].axis as Axis;
+  const positiveKey = keys[type].positive;
+  const negativeKey = keys[type].negative;
+  if (type !== "yaw") {
+    return new HarmonicMotion({
+      axis,
+      stiffness: constants[type].stiffness,
+      damping: constants[type].damping,
+      maxAngle: deg2rad(constants[type].maxAngle),
+      positiveKey,
+      negativeKey,
+    });
+  } else {
+    return new BaseMotion({
+      axis,
+      positiveKey,
+      negativeKey,
+      rateIncrement: constants[type].rateIncrement,
+      maxRate: constants[type].maxRate,
+      decayFactor: constants[type].decayFactor,
+    });
+  }
+};

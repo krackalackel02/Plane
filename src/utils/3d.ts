@@ -56,3 +56,5 @@ export const computeScale = (
   const scaleZ = dimensions.z / (bbox.max.z - bbox.min.z);
   return Math.min(scaleX, scaleY, scaleZ);
 };
+
+export const deg2rad = (deg: number) => (deg * Math.PI) / 180;

@@ -1,0 +1,19 @@
+{
+    "roll":{
+        "positive": "ArrowRight",
+        "negative": "ArrowLeft"
+    },
+    "pitch":{
+        "positive": "ArrowUp",
+        "negative": "ArrowDown"
+    },
+    "yaw":{
+        "positive": "a",
+        "negative": "d"
+    },
+    "throttle":{
+        "positive": "w",
+        "negative": "s"
+    },
+    "exhaust":" "
+}

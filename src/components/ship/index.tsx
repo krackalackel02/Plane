@@ -1,9 +1,9 @@
 import React, { useRef, useEffect } from "react";
 import { Group, Mesh } from "three";
 import { computeScale } from "../../utils/3d";
-import Exhaust from "./exhaust";
-import Body from "./body";
-import Physics from "./physics";
+import Exhaust from "./exhaust/exhaust";
+import Body from "./model/body";
+import Physics from "./physics/physics";
 
 const Ship: React.FC = () => {
   const groupRef = useRef<Group>(null);

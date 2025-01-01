@@ -1,19 +1,25 @@
-import KeyHandler from "../helper/keyHandler";
+import KeyHandler from "../../helper/keyHandler";
 import ParticleGenerator from "./particleGenerator";
 import { useState } from "react";
+import keys from "../../../utils/keys.json";
+import constants from "../../../utils/constants.json";
+import { deg2rad } from "../../../utils/3d";
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
 const Jet: React.FC<{
   coneAngle?: number;
   position: [number, number, number];
-}> = ({ coneAngle = Math.PI / 6, position = [0, 0, 0] }) => {
+}> = ({
+  coneAngle = deg2rad(constants.exhaust.coneAngle),
+  position = [0, 0, 0],
+}) => {
   const [exhaust, setExhaust] = useState(false); // Track particle generator state
   const handleExhaustKeyDown = (e: KeyboardEvent) => {
-    if (e.key === " ") setExhaust(true);
+    if (e.key === keys.exhaust) setExhaust(true);
   };
 
   const handleExhaustKeyUp = (e: KeyboardEvent) => {
-    if (e.key === " ") setExhaust(false);
+    if (e.key === keys.exhaust) setExhaust(false);
   };
 
   return (
