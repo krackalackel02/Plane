@@ -6,11 +6,13 @@ import Camera from "./camera";
 import Overlay from "./helper/overlay";
 import Lights from "./lights";
 import Timeline from "./timeline";
-import { EnvironmentProvider, useEnvironment } from "../context/environment";
-import { KeyProvider } from "../context/keys";
+import { EnvironmentProvider, useEnvironment } from "../context/envContext";
+import { KeyProvider } from "../context/keyContext";
+import { print } from "../utils/common";
+
 const Scene = () => {
   const { showCameraHelper, showShip, showStats } = useEnvironment();
-  // console.log(showCameraHelper, showShip, showStats);
+  print(showCameraHelper, showShip, showStats);
   return (
     <EnvironmentProvider>
       <KeyProvider>
