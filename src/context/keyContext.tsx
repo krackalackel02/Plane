@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
+import { print } from "../utils/common";
 
 // Create context
 const KeyContext = createContext<Set<string>>(new Set());
@@ -24,8 +25,8 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     const { key } = event;
     setActiveKeys((prev) => {
       const next = new Set(prev).add(key);
-      //   console.log(`${key === " " ? "space" : key} down`);
-      //   console.log("Updated Keys (after add):", next);
+      print(`${key === " " ? "space" : key} down`);
+      print("Updated Keys (after add):", next);
       return next;
     });
   }, []);
@@ -35,8 +36,8 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     setActiveKeys((prev) => {
       const next = new Set(prev);
       next.delete(key);
-      //   console.log(`${key === " " ? "space" : key} up`);
-      //   console.log("Updated Keys (after delete):", next);
+      print(`${key === " " ? "space" : key} up`);
+      print("Updated Keys (after delete):", next);
       return next;
     });
   }, []);
