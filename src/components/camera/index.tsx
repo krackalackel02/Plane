@@ -26,7 +26,7 @@ const Camera: React.FC<CameraProps> = ({ fly = false, shipRef }) => {
     cameraPos.position.y,
     cameraPos.position.z,
   );
-  animate(camera);
+  if (!helper) animate(camera);
   shipRef.current?.add(camera);
 
   useFrame(() => {
