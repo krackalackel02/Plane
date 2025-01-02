@@ -15,9 +15,10 @@ import { useEnvironment } from "../../context/envContext";
 
 interface CameraProps {
   fly?: boolean; // Optional boolean prop to control the fly controls
+  shipRef: React.RefObject<THREE.Group<THREE.Object3DEventMap>>; // Optional ref to the ship group
 }
 
-const Camera: React.FC<CameraProps> = ({ fly = false }) => {
+const Camera: React.FC<CameraProps> = ({ fly = false, shipRef }) => {
   const { showCameraHelper: helper } = useEnvironment();
   const { camera } = useThree();
   camera.position.set(
@@ -26,10 +27,11 @@ const Camera: React.FC<CameraProps> = ({ fly = false }) => {
     cameraPos.position.z,
   );
   animate(camera);
+  shipRef.current?.add(camera);
 
   useFrame(() => {
+    if (shipRef.current) camera.lookAt(shipRef.current.position);
     if (!helper) return;
-
     const position = camera.position;
     const lookingAt = camera.getWorldDirection(new THREE.Vector3());
 
