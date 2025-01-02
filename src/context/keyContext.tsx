@@ -7,20 +7,7 @@ import React, {
 } from "react";
 import { print } from "../utils/common";
 import keys from "../utils/keys.json";
-
-// Define types for controls and control states
-type ControlKeys = {
-  roll: { positive: string; negative: string };
-  pitch: { positive: string; negative: string };
-  yaw: { positive: string; negative: string };
-  throttle: { positive: string; negative: string };
-  exhaust: string;
-};
-
-type ControlState = {
-  direction: "forward" | "neutral" | "backward";
-  turn: "left" | "neutral" | "right";
-};
+import { ControlKeys, ControlState } from "../components/types/types";
 
 // Import and assert control keys
 const controlKeys = keys as ControlKeys;

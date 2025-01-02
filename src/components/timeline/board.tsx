@@ -6,14 +6,7 @@ import { Geometry, Base, Subtraction } from "@react-three/csg";
 import { useControls, button } from "leva";
 import boardParams from "../../utils/boardParams.json"; // Import JSON file
 import { RoundedBoxGeometry } from "three-stdlib";
-
-type BoardParams = {
-  outerX: number;
-  outerY: number;
-  outerZ: number;
-  frame: number;
-  depth: number;
-};
+import { BoardParams, BoardProps } from "../types/types";
 
 const defaultValues: BoardParams = {
   outerX: 6.7,
@@ -21,12 +14,6 @@ const defaultValues: BoardParams = {
   outerZ: 0.4,
   frame: 0.35,
   depth: 0.25,
-};
-
-type BoardProps = {
-  imagePath?: string;
-  helper?: boolean;
-  position?: [number, number, number]; // New position prop
 };
 
 const Material = () => {

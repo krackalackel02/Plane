@@ -1,12 +1,8 @@
 import React, { useRef, useEffect } from "react";
 import { Points } from "three";
 import { useFrame } from "@react-three/fiber";
-import {
-  ColorMapEntry,
-  Range,
-  precomputeRanges,
-  getColorFromLifetime,
-} from "../../../utils/3d";
+import { precomputeRanges, getColorFromLifetime } from "../../../utils/3d";
+import { ColorMapEntry, Range } from "../../types/types";
 
 const colorMap: ColorMapEntry[] = [
   { limit: 1, color: [0, 0, 1] },

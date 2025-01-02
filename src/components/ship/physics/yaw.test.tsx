@@ -1,17 +1,17 @@
 import { Group } from "three";
-import { HarmonicMotion } from "./motion";
+import { YawMotion } from "./yaw";
 import { describe, test, expect } from "vitest";
 
-describe("HarmonicMotion class tests", () => {
+describe("YawMotion class tests", () => {
   test("attaches to a group and updates rotation based on active keys", async () => {
     const group = new Group();
-    const motion = new HarmonicMotion({
-      axis: "x",
-      stiffness: 50,
-      damping: 4,
-      maxAngle: Math.PI / 12,
-      positiveKey: "ArrowUp",
-      negativeKey: "ArrowDown",
+    const motion = new YawMotion({
+      axis: "y",
+      positiveKey: "ArrowRight",
+      negativeKey: "ArrowLeft",
+      rateIncrement: 0.1,
+      maxRate: 1,
+      decayFactor: 0.95,
     });
 
     motion.attachTo(group);
@@ -20,16 +20,16 @@ describe("HarmonicMotion class tests", () => {
     const activeKeys = new Set<string>();
 
     // Add "ArrowUp" to the active keys and update
-    activeKeys.add("ArrowUp");
+    activeKeys.add("ArrowRight");
     motion.update(0.016, activeKeys); // Simulate 16ms frame update
 
     // Allow the spring to update over time
     await new Promise((resolve) => setTimeout(resolve, 100)); // Adjust timing as needed
 
     // Check that the rotation is not 0
-    expect(group.rotation.x).not.toBe(0);
+    expect(group.rotation.y).not.toBe(0);
 
     // Optionally, ensure it's moving in the positive direction
-    expect(group.rotation.x).toBeGreaterThan(0);
+    expect(group.rotation.y).toBeGreaterThan(0);
   });
 });

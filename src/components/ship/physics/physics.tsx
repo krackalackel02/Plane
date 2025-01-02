@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Group } from "three";
 import { useFrame } from "@react-three/fiber";
-import { Motion, createMotion } from "./motion";
+import { Motion, createMotion } from "../../../utils/3d";
 import { useKeyContext } from "../../../context/keyContext";
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
