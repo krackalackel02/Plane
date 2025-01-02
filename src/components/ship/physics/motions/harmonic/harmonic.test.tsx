@@ -1,11 +1,11 @@
 import { Group } from "three";
-import { Motion } from "./motion";
+import { HarmonicMotion } from "./harmonic";
 import { describe, test, expect } from "vitest";
 
-describe("Motion class tests", () => {
-  test("attaches to a group and updates rotation while holding down the key", async () => {
+describe("HarmonicMotion class tests", () => {
+  test("attaches to a group and updates rotation based on active keys", async () => {
     const group = new Group();
-    const motion = new Motion({
+    const motion = new HarmonicMotion({
       axis: "x",
       stiffness: 50,
       damping: 4,
@@ -16,8 +16,12 @@ describe("Motion class tests", () => {
 
     motion.attachTo(group);
 
-    // Simulate holding down the ArrowUp key
-    motion.handleKeyDown({ key: "ArrowUp" } as KeyboardEvent);
+    // Simulate active keys using a Set
+    const activeKeys = new Set<string>();
+
+    // Add "ArrowUp" to the active keys and update
+    activeKeys.add("ArrowUp");
+    motion.update(0.016, activeKeys); // Simulate 16ms frame update
 
     // Allow the spring to update over time
     await new Promise((resolve) => setTimeout(resolve, 100)); // Adjust timing as needed

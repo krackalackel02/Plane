@@ -3,17 +3,11 @@ import { useLoader } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
 import { Geometry, Base, Subtraction } from "@react-three/csg";
-import { useControls, button } from "leva";
+import { useControls } from "leva";
 import boardParams from "../../utils/boardParams.json"; // Import JSON file
 import { RoundedBoxGeometry } from "three-stdlib";
-
-type BoardParams = {
-  outerX: number;
-  outerY: number;
-  outerZ: number;
-  frame: number;
-  depth: number;
-};
+import { BoardParams, BoardProps } from "../types/types";
+import { createSaveButton } from "../../utils/3d";
 
 const defaultValues: BoardParams = {
   outerX: 6.7,
@@ -21,12 +15,6 @@ const defaultValues: BoardParams = {
   outerZ: 0.4,
   frame: 0.35,
   depth: 0.25,
-};
-
-type BoardProps = {
-  imagePath?: string;
-  helper?: boolean;
-  position?: [number, number, number]; // New position prop
 };
 
 const Material = () => {
@@ -89,17 +77,7 @@ const Board = ({
         outerZ: createControl("outerZ", 0.1, 2, 0.05),
         frame: createControl("frame", 0.1, 2, 0.05),
         depth: createControl("depth", 0.1, 1, 0.05),
-        Save: button(() => {
-          const blob = new Blob([JSON.stringify(params, null, 2)], {
-            type: "application/json",
-          });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "boardParams.json";
-          a.click();
-          URL.revokeObjectURL(url);
-        }),
+        Save: createSaveButton(params, "boardParams.json"),
       },
       [params],
     );

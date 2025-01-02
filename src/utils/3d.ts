@@ -1,11 +1,5 @@
-export type Color = [number, number, number];
-export type ColorMapEntry = { limit: number; color: Color };
-export type Range = { start: number; end: number } | null;
-
-interface BoundingBox {
-  max: { x: number; y: number; z: number };
-  min: { x: number; y: number; z: number };
-}
+import { button } from "leva";
+import { Color, ColorMapEntry, Range } from "../components/types/types";
 
 export const precomputeRanges = (colorMap: ColorMapEntry[]): Range[] =>
   colorMap.map((_, i) =>
@@ -47,6 +41,10 @@ export const generateRandomPosition = (
   (Math.random() - 0.5) * range,
 ];
 
+interface BoundingBox {
+  max: { x: number; y: number; z: number };
+  min: { x: number; y: number; z: number };
+}
 export const computeScale = (
   dimensions: { x: number; y: number; z: number },
   bbox: BoundingBox,
@@ -56,3 +54,18 @@ export const computeScale = (
   const scaleZ = dimensions.z / (bbox.max.z - bbox.min.z);
   return Math.min(scaleX, scaleY, scaleZ);
 };
+
+export const deg2rad = (deg: number) => (deg * Math.PI) / 180;
+
+export const createSaveButton = (data: unknown, filename: string) =>
+  button(() => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  });

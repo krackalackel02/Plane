@@ -1,32 +1,42 @@
 import { Canvas } from "@react-three/fiber";
-import { Stats } from "@react-three/drei";
 import Galaxy from "./galaxy";
 import Ship from "./ship";
 import Camera from "./camera";
 import Overlay from "./helper/overlay";
 import Lights from "./lights";
 import Timeline from "./timeline";
-import { useEnvironment } from "../context/environment";
-const Scene = () => {
-  const { showCameraHelper, showShip, showStats } = useEnvironment();
-  console.log(showCameraHelper, showShip, showStats);
-  return (
-    <>
-      <Canvas id="threejs-canvas">
-        {/* Lighting */}
-        <Camera helper={showCameraHelper} />
-        <Lights />
+import { EnvironmentProvider } from "../context/envContext";
+import { KeyProvider } from "../context/keyContext";
+import Stats from "./helper/stats";
+import { useRef } from "react";
+import { Group } from "three";
 
-        {/* Scene Elements */}
-        <Galaxy />
-        {showShip && <Ship />}
-        <Timeline />
-        {/* Stats */}
-        {showStats && <Stats />}
-      </Canvas>
-      {/* Camera Helper */}
-      {showCameraHelper && <Overlay />}
-    </>
+const Scene = () => {
+  const shipRef = useRef<Group>(null);
+
+  return (
+    <EnvironmentProvider>
+      <KeyProvider>
+        <Canvas id="threejs-canvas">
+          {/* Camera */}
+          <Camera shipRef={shipRef} />
+
+          {/* Lighting */}
+          <Lights />
+
+          {/* Scene Elements */}
+          <Galaxy />
+          <Ship shipRef={shipRef} />
+          <Timeline />
+
+          {/* Stats */}
+          <Stats />
+        </Canvas>
+
+        {/* Camera Helper */}
+        <Overlay />
+      </KeyProvider>
+    </EnvironmentProvider>
   );
 };
 

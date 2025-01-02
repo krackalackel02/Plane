@@ -1,9 +1,10 @@
 import React, { createContext, useContext } from "react";
 // Configuration based on environment
-const config = {
+export const config = {
   showCameraHelper: import.meta.env.VITE_SHOW_CAMERA === "true",
   showStats: import.meta.env.VITE_SHOW_STATS === "true",
   showShip: import.meta.env.VITE_SHOW_SHIP === "true",
+  showDebug: import.meta.env.VITE_SHOW_DEBUG === "true",
 };
 
 // Create the context with default values based on the environment

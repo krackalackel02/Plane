@@ -8,27 +8,30 @@ import * as THREE from "three";
 import "./camera.css";
 import cameraPos from "../../utils/cameraPos.json";
 import animate from "./animate";
+import { useEnvironment } from "../../context/envContext";
 
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
 
 interface CameraProps {
-  helper?: boolean; // Optional boolean prop to control the helper display
   fly?: boolean; // Optional boolean prop to control the fly controls
+  shipRef: React.RefObject<THREE.Group<THREE.Object3DEventMap>>; // Optional ref to the ship group
 }
 
-const Camera: React.FC<CameraProps> = ({ helper = false, fly = false }) => {
+const Camera: React.FC<CameraProps> = ({ fly = false, shipRef }) => {
+  const { showCameraHelper: helper } = useEnvironment();
   const { camera } = useThree();
   camera.position.set(
     cameraPos.position.x,
     cameraPos.position.y,
     cameraPos.position.z,
   );
-  animate(camera);
+  if (!helper) animate(camera);
+  shipRef.current?.add(camera);
 
   useFrame(() => {
+    if (shipRef.current) camera.lookAt(shipRef.current.position);
     if (!helper) return;
-
     const position = camera.position;
     const lookingAt = camera.getWorldDirection(new THREE.Vector3());
 
