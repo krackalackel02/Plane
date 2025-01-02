@@ -1,9 +1,9 @@
 import React, { useEffect } from "react";
 import { Group, Mesh, Object3DEventMap } from "three";
 import { computeScale } from "../../utils/3d";
-import Exhaust from "./exhaust/exhaust";
-import Body from "./model/body";
-import Physics from "./physics/physics";
+import Exhaust from "./exhaust";
+import Body from "./body";
+import Physics from "./physics";
 import { useEnvironment } from "../../context/envContext";
 
 const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({

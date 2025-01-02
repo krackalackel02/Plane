@@ -1,16 +1,4 @@
-import {
-  AxisType,
-  Color,
-  ColorMapEntry,
-  MotionType,
-  Range,
-} from "../components/types/types";
-import constants from "../utils/motionConstants.json";
-import keys from "../utils/keys.json";
-import { BaseMotion } from "../components/ship/physics/motion";
-import { HarmonicMotion } from "../components/ship/physics/harmonic";
-import { TranslationMotion } from "../components/ship/physics/translation";
-import { YawMotion } from "../components/ship/physics/yaw";
+import { Color, ColorMapEntry, Range } from "../components/types/types";
 
 export const precomputeRanges = (colorMap: ColorMapEntry[]): Range[] =>
   colorMap.map((_, i) =>
@@ -67,44 +55,3 @@ export const computeScale = (
 };
 
 export const deg2rad = (deg: number) => (deg * Math.PI) / 180;
-
-export const Motion = {
-  ROLL: "roll" as MotionType,
-  PITCH: "pitch" as MotionType,
-  YAW: "yaw" as MotionType,
-  THROTTLE: "throttle" as MotionType,
-};
-export const createMotion = (
-  type: MotionType,
-): BaseMotion | HarmonicMotion | TranslationMotion => {
-  const positiveKey = keys[type].positive;
-  const negativeKey = keys[type].negative;
-
-  if (type === "roll" || type === "pitch") {
-    return new HarmonicMotion({
-      axis: constants[type].axis as AxisType,
-      stiffness: constants[type].stiffness,
-      damping: constants[type].damping,
-      maxAngle: deg2rad(constants[type].maxAngle),
-      positiveKey,
-      negativeKey,
-    });
-  } else if (type === "yaw") {
-    return new YawMotion({
-      axis: constants[type].axis as AxisType,
-      positiveKey,
-      negativeKey,
-      rateIncrement: constants[type].rateIncrement,
-      maxRate: constants[type].maxRate,
-      decayFactor: constants[type].decayFactor,
-    });
-  } else {
-    return new TranslationMotion({
-      positiveKey,
-      negativeKey,
-      decayFactor: constants[type].decayFactor,
-      maxSpeed: constants[type].maxSpeed,
-      acceleration: constants[type].acceleration,
-    });
-  }
-};

@@ -1,4 +1,4 @@
-import { BaseMotion, BaseMotionConfig } from "./motion";
+import { BaseMotion, BaseMotionConfig } from "../baseMotion";
 
 export interface YawMotionConfig extends BaseMotionConfig {
   maxRate: number;

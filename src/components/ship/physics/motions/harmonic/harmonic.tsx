@@ -1,6 +1,6 @@
 import { Group } from "three";
 import { Spring } from "wobble";
-import { BaseMotion, BaseMotionConfig } from "./motion";
+import { BaseMotion, BaseMotionConfig } from "../baseMotion";
 
 export interface HarmonicMotionConfig extends BaseMotionConfig {
   stiffness: number;
