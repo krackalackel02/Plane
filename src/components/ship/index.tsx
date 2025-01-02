@@ -10,7 +10,7 @@ const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({
   shipRef,
 }) => {
   const scaleTo = { x: 5, y: 3, z: 2 }; // Scale the model to fit the scene
-  const { showShip, showCameraHelper } = useEnvironment();
+  const { showShip } = useEnvironment();
 
   // Bounding box and scale computation
   useEffect(() => {
@@ -35,7 +35,7 @@ const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({
         <group ref={shipRef}>
           <Body />
           <Exhaust />
-          <Physics groupRef={shipRef} helper={!showCameraHelper} />
+          <Physics groupRef={shipRef} />
         </group>
       </>
     )
