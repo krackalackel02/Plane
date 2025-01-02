@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Group } from "three";
 import { useFrame } from "@react-three/fiber";
-import { useControls, button } from "leva";
+import { useControls } from "leva";
 import { Motion, createMotion } from "./helper/motion";
 import { useKeyContext } from "../../../context/keyContext";
 import motionConstants from "../../../utils/motionConstants.json";
+import { createSaveButton } from "../../../utils/3d";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react/prop-types */
 const defaultMotionParams = {
@@ -96,17 +97,7 @@ const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
     });
 
     useControls({
-      Save: button(() => {
-        const blob = new Blob([JSON.stringify(params, null, 2)], {
-          type: "application/json",
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "motionConstants.json";
-        a.click();
-        URL.revokeObjectURL(url);
-      }),
+      Save: createSaveButton(params, "motionConstants.json"),
     });
   }
 

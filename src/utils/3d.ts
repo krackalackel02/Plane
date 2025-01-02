@@ -1,3 +1,4 @@
+import { button } from "leva";
 import { Color, ColorMapEntry, Range } from "../components/types/types";
 
 export const precomputeRanges = (colorMap: ColorMapEntry[]): Range[] =>
@@ -55,3 +56,16 @@ export const computeScale = (
 };
 
 export const deg2rad = (deg: number) => (deg * Math.PI) / 180;
+
+export const createSaveButton = (data: unknown, filename: string) =>
+  button(() => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
