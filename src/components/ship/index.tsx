@@ -35,7 +35,7 @@ const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({
         <group ref={shipRef}>
           <Body />
           <Exhaust />
-          <Physics groupRef={shipRef} />
+          <Physics groupRef={shipRef} helper={true} />
         </group>
       </>
     )

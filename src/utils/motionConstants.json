@@ -12,10 +12,10 @@
         "axis": "x"
     },
     "yaw":{
-        "rateIncrement": 2,
-        "maxRate": 5,
         "decayFactor": 0.9,
-        "axis": "y"
+        "axis": "y",
+        "acceleration": 0.5,
+        "maxSpeed": 5
     },
     "throttle":{
         "acceleration": 0.5,

@@ -1,6 +1,7 @@
 import { Group } from "three";
 import { Spring } from "wobble";
 import { BaseMotion, BaseMotionConfig } from "../baseMotion";
+import { deg2rad } from "../../../../../utils/3d";
 
 export interface HarmonicMotionConfig extends BaseMotionConfig {
   stiffness: number;
@@ -21,7 +22,7 @@ export class HarmonicMotion extends BaseMotion {
     negativeKey,
   }: HarmonicMotionConfig) {
     super({ axis, positiveKey, negativeKey });
-    this.maxAngle = maxAngle;
+    this.maxAngle = deg2rad(maxAngle);
 
     this.spring = new Spring({
       fromValue: 0,
@@ -29,6 +30,21 @@ export class HarmonicMotion extends BaseMotion {
       stiffness,
       damping,
     });
+  }
+  updateConfig(config: Partial<HarmonicMotionConfig>) {
+    super.updateConfig(config);
+
+    if (config.maxAngle !== undefined) {
+      this.maxAngle = deg2rad(config.maxAngle);
+    }
+
+    if (config.stiffness !== undefined || config.damping !== undefined) {
+      this.spring.updateConfig({
+        ...(config.stiffness !== undefined && { stiffness: config.stiffness }),
+        ...(config.damping !== undefined && { damping: config.damping }),
+      });
+      this.spring.start();
+    }
   }
 
   attachTo(group: Group) {

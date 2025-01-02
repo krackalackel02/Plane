@@ -35,7 +35,12 @@ export class BaseMotion {
   update(delta: number, activeKeys: Set<string>) {
     print("BaseMotion update", delta, activeKeys);
   }
-
+  updateConfig(config: Partial<BaseMotionConfig>) {
+    if (config.axis !== undefined) this.axis = config.axis;
+    if (config.positiveKey !== undefined) this.positiveKey = config.positiveKey;
+    if (config.negativeKey !== undefined) this.negativeKey = config.negativeKey;
+    if (config.decayFactor !== undefined) this.decayFactor = config.decayFactor;
+  }
   cleanup() {
     this.group = undefined;
   }

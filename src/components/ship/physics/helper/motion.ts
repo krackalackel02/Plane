@@ -32,9 +32,9 @@ export const createMotion = (
       axis: constants[type].axis as AxisType,
       positiveKey,
       negativeKey,
-      rateIncrement: constants[type].rateIncrement,
-      maxRate: constants[type].maxRate,
       decayFactor: constants[type].decayFactor,
+      maxSpeed: constants[type].maxSpeed,
+      acceleration: constants[type].acceleration,
     });
   } else {
     return new TranslationMotion({

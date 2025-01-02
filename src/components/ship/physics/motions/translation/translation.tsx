@@ -21,6 +21,13 @@ export class TranslationMotion extends BaseMotion {
     this.acceleration = acceleration as number;
   }
 
+  updateConfig(config: Partial<TranslationMotionConfig>) {
+    super.updateConfig(config);
+    if (config.acceleration !== undefined)
+      this.acceleration = config.acceleration;
+    if (config.maxSpeed !== undefined) this.maxSpeed = config.maxSpeed;
+  }
+
   update(delta: number, activeKeys: Set<string>) {
     if (!this.group) return;
     const yaw = this.group.rotation.y || 0;

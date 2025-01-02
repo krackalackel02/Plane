@@ -9,8 +9,8 @@ describe("YawMotion class tests", () => {
       axis: "y",
       positiveKey: "ArrowRight",
       negativeKey: "ArrowLeft",
-      rateIncrement: 0.1,
-      maxRate: 1,
+      acceleration: 0.1,
+      maxSpeed: 1,
       decayFactor: 0.95,
     });
 
