@@ -2,12 +2,13 @@ import { Group } from "three";
 import { Spring } from "wobble";
 
 export type Axis = "x" | "y" | "z";
-export type MotionType = "roll" | "pitch" | "yaw";
+export type MotionType = "roll" | "pitch" | "yaw" | "throttle";
 
 export const Motion = {
   ROLL: "roll" as MotionType,
   PITCH: "pitch" as MotionType,
   YAW: "yaw" as MotionType,
+  THROTTLE: "throttle" as MotionType,
 };
 
 import constants from "../../../utils/constants.json";
@@ -15,7 +16,7 @@ import { deg2rad } from "../../../utils/3d";
 import keys from "../../../utils/keys.json";
 
 interface BaseMotionConfig {
-  axis: Axis;
+  axis?: Axis;
   positiveKey: string;
   negativeKey: string;
   rateIncrement?: number;
@@ -41,7 +42,7 @@ export class BaseMotion {
     maxRate = 3,
     decayFactor = 0.95,
   }: BaseMotionConfig) {
-    this.axis = axis;
+    this.axis = axis as Axis;
     this.positiveKey = positiveKey;
     this.negativeKey = negativeKey;
     this.rateIncrement = rateIncrement;
@@ -139,29 +140,79 @@ export class HarmonicMotion extends BaseMotion {
     this.spring.removeAllListeners();
   }
 }
+export class TranslationMotion extends BaseMotion {
+  private velocity: { x: number; z: number } = { x: 0, z: 0 };
 
-export const createMotion = (type: MotionType): BaseMotion | HarmonicMotion => {
-  const axis = constants[type].axis as Axis;
+  constructor({ positiveKey, negativeKey }: BaseMotionConfig) {
+    super({ positiveKey, negativeKey });
+  }
+
+  attachTo(group: Group) {
+    this.group = group;
+  }
+
+  update(delta: number, activeKeys: Set<string>) {
+    if (!this.group) return;
+    const yaw = this.group.rotation.y || 0;
+
+    const speed = this.rateIncrement * this.maxRate;
+
+    // Determine movement direction based on active keys
+    if (activeKeys.has(this.negativeKey)) {
+      this.velocity.z -= Math.cos(yaw) * speed * delta;
+      this.velocity.x -= Math.sin(yaw) * speed * delta;
+    } else if (activeKeys.has(this.positiveKey)) {
+      this.velocity.z += Math.cos(yaw) * speed * delta;
+      this.velocity.x += Math.sin(yaw) * speed * delta;
+    } else {
+      // Apply decay factor if no key is pressed
+      this.velocity.z *= this.decayFactor;
+      this.velocity.x *= this.decayFactor;
+
+      // Reset velocity if below threshold
+      if (Math.abs(this.velocity.z) < 0.01) this.velocity.z = 0;
+      if (Math.abs(this.velocity.x) < 0.01) this.velocity.x = 0;
+    }
+
+    // Apply translation to the group
+    this.group.position.z += this.velocity.z;
+    this.group.position.x += this.velocity.x;
+  }
+
+  cleanup() {
+    this.group = undefined;
+    this.velocity = { x: 0, z: 0 };
+  }
+}
+
+export const createMotion = (
+  type: MotionType,
+): BaseMotion | HarmonicMotion | TranslationMotion => {
   const positiveKey = keys[type].positive;
   const negativeKey = keys[type].negative;
 
-  if (type !== "yaw") {
+  if (type === "roll" || type === "pitch") {
     return new HarmonicMotion({
-      axis,
+      axis: constants[type].axis as Axis,
       stiffness: constants[type].stiffness,
       damping: constants[type].damping,
       maxAngle: deg2rad(constants[type].maxAngle),
       positiveKey,
       negativeKey,
     });
-  } else {
+  } else if (type === "yaw") {
     return new BaseMotion({
-      axis,
+      axis: constants[type].axis as Axis,
       positiveKey,
       negativeKey,
       rateIncrement: constants[type].rateIncrement,
       maxRate: constants[type].maxRate,
       decayFactor: constants[type].decayFactor,
+    });
+  } else {
+    return new TranslationMotion({
+      positiveKey,
+      negativeKey,
     });
   }
 };

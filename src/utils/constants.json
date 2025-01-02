@@ -17,6 +17,11 @@
         "decayFactor": 0.9,
         "axis": "y"
     },
+    "throttle":{
+        "rateIncrement": 0.01,
+        "maxRate": 0.5,
+        "decayFactor": 0.0005
+    },
     "exhaust":{
         "coneAngle": 10
     }

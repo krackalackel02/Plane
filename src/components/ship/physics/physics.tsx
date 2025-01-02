@@ -11,6 +11,7 @@ const Physics: React.FC<{
   const rollMotion = useRef(createMotion(Motion.ROLL));
   const pitchMotion = useRef(createMotion(Motion.PITCH));
   const yawMotion = useRef(createMotion(Motion.YAW));
+  const throttleMotion = useRef(createMotion(Motion.THROTTLE));
 
   const activeKeys = useKeyContext();
 
@@ -20,15 +21,18 @@ const Physics: React.FC<{
     const roll = rollMotion.current;
     const pitch = pitchMotion.current;
     const yaw = yawMotion.current;
+    const throttle = throttleMotion.current;
 
     roll.attachTo(groupRef.current);
     pitch.attachTo(groupRef.current);
     yaw.attachTo(groupRef.current);
+    throttle.attachTo(groupRef.current);
 
     return () => {
       roll.cleanup();
       pitch.cleanup();
       yaw.cleanup();
+      throttle.cleanup();
     };
   }, [groupRef]);
 
@@ -36,6 +40,7 @@ const Physics: React.FC<{
     rollMotion.current.update(delta, activeKeys);
     pitchMotion.current.update(delta, activeKeys);
     yawMotion.current.update(delta, activeKeys);
+    throttleMotion.current.update(delta, activeKeys);
   });
 
   return null;
