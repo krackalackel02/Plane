@@ -19,14 +19,14 @@ interface CameraProps {
 }
 
 const Camera: React.FC<CameraProps> = ({ fly = false, shipRef }) => {
-  const { showCameraHelper: helper } = useEnvironment();
+  const { showStats: helper } = useEnvironment();
   const { camera } = useThree();
   camera.position.set(
     cameraPos.position.x,
     cameraPos.position.y,
     cameraPos.position.z,
   );
-  if (!helper) animate(camera);
+  if (helper) animate(camera);
   shipRef.current?.add(camera);
 
   useFrame(() => {
