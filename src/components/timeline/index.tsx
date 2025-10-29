@@ -1,5 +1,10 @@
-import Board from "./board";
+import Board from "./board"; // Import Board component
 
+/**
+ * Timeline component for managing multiple boards
+ * Renders a series of boards positioned along the z-axis
+ * @returns JSX.Element
+ */
 const Timeline = () => {
   // Number of boards
   const boardCount = 5;
@@ -18,10 +23,10 @@ const Timeline = () => {
 
   return (
     <>
-      {boardPositions.map((position, index) => (
+      {boardPositions.map((boardPosition, boardIndex) => (
         <Board
-          key={index}
-          position={position} // Pass position prop
+          key={boardIndex}
+          position={boardPosition} // Pass position prop
           helper={false} // Disable helper controls
         />
       ))}

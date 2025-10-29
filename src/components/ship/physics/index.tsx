@@ -1,13 +1,26 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react/prop-types */
+
 import { useEffect, useRef, useState } from "react";
 import { Group } from "three";
 import { useFrame } from "@react-three/fiber";
-import { useControls } from "leva";
+
+import { useControls } from "leva"; // Leva for UI controls
+
+// Motion helper utilities
 import { Motion, createMotion } from "./helper/motion";
 import { useKeyContext } from "../../../context/keyContext";
 import motionConstants from "../../../utils/motionConstants.json";
 import { createSaveButton } from "../../../utils/3d";
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable react/prop-types */
+
+/**
+ * Default motion parameters for ship physics
+ * Used as fallback and for initializing controls
+ * - roll: Roll motion parameters
+ * - pitch: Pitch motion parameters
+ * - yaw: Yaw motion parameters
+ * - throttle: Throttle motion parameters
+ */
 const defaultMotionParams = {
   roll: {
     stiffness: 50,
@@ -34,6 +47,11 @@ const defaultMotionParams = {
   },
 };
 
+/**
+ * Get control properties for a specific motion parameter
+ * @param key id of control
+ * @returns control properties
+ */
 const getControlProps = (key: string) => {
   if (key === "decayFactor") return { min: 0, max: 1, step: 0.05 };
   if (key === "stiffness") return { min: 0, max: 100, step: 1 };
@@ -43,12 +61,19 @@ const getControlProps = (key: string) => {
   if (key === "maxSpeed") return { min: 0, max: 100, step: 1 };
   return { min: 0, max: 10, step: 1 };
 };
+
+/**
+ * Props for Physics component
+ * - groupRef: Reference to the ship's group object
+ * - helper: Optional boolean to enable motion parameter controls
+ */
 interface PhysicsProps {
   groupRef: React.RefObject<Group>; // This already exists
   helper?: boolean; // Optional prop
 }
 
 const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
+  // Initialize motion parameters state
   const initialParams: Record<keyof typeof defaultMotionParams, any> = {
     roll: { ...defaultMotionParams.roll, ...motionConstants.roll },
     pitch: { ...defaultMotionParams.pitch, ...motionConstants.pitch },
@@ -58,6 +83,7 @@ const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
 
   const [params, setParams] = useState(initialParams);
 
+  // Refs to motion instances
   const motions = useRef({
     [Motion.ROLL]: createMotion(Motion.ROLL),
     [Motion.PITCH]: createMotion(Motion.PITCH),
@@ -67,6 +93,7 @@ const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
 
   const activeKeys = useKeyContext();
 
+  // Setup Leva controls if helper is enabled
   if (helper) {
     (Object.keys(params) as Array<keyof typeof params>).forEach((type) => {
       const config = params[type];
@@ -74,20 +101,19 @@ const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
         type,
         Object.entries(config).reduce(
           (acc, [key, value]) => {
-            if (typeof value === "number") {
-              const { min, max, step } = getControlProps(key);
-              acc[key] = {
-                value,
-                min,
-                max,
-                step,
-                onChange: (value: number) =>
-                  setParams((prev) => ({
-                    ...prev,
-                    [type]: { ...prev[type], [key]: value },
-                  })),
-              };
-            }
+            if (typeof value !== "number") return acc;
+            const { min, max, step } = getControlProps(key);
+            acc[key] = {
+              value,
+              min,
+              max,
+              step,
+              onChange: (value: number) =>
+                setParams((prev) => ({
+                  ...prev,
+                  [type]: { ...prev[type], [key]: value },
+                })),
+            };
             return acc;
           },
           {} as Record<string, any>,
@@ -101,6 +127,7 @@ const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
     });
   }
 
+  // Attach motions to the group on mount
   useEffect(() => {
     if (!groupRef.current) return;
 
@@ -113,6 +140,7 @@ const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
     };
   }, [groupRef]);
 
+  // Update motions each frame
   useFrame((_, delta) => {
     Object.entries(motions.current).forEach(([type, motion]) => {
       const config = params[type as keyof typeof params];

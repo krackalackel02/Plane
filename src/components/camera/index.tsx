@@ -13,11 +13,20 @@ import { useEnvironment } from "../../context/envContext";
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
 
+/**
+ * Props for Camera component
+ */
 interface CameraProps {
   fly?: boolean; // Optional boolean prop to control the fly controls
   shipRef: React.RefObject<THREE.Group<THREE.Object3DEventMap>>; // Optional ref to the ship group
 }
 
+/**
+ * Camera component for 3D scene
+ * @param fly - Whether to use fly controls
+ * @param shipRef - Reference to the ship group
+ * @returns JSX.Element
+ */
 const Camera: React.FC<CameraProps> = ({ fly = false, shipRef }) => {
   const { showCameraHelper: helper } = useEnvironment();
   const { camera } = useThree();

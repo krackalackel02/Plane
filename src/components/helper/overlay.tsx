@@ -1,5 +1,9 @@
 import { useEnvironment } from "../../context/envContext";
 
+/**
+ * Overlay component for displaying camera information
+ * @returns JSX.Element | null
+ */
 const Overlay = () => {
   const { showCameraHelper } = useEnvironment();
 
