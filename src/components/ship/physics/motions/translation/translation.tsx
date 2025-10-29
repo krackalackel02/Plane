@@ -112,8 +112,9 @@ export class TranslationMotion extends BaseMotion {
     else {
       // Apply damping (friction  ) to gradually slow the object down.
       // Multiplying by a factor < 1 (e.g., 0.95) reduces the velocity each frame.
-      this.velocity.z *= this.decayFactor;
-      this.velocity.x *= this.decayFactor;
+      const decayMultiplier = Math.pow(1 - this.decayFactor, delta);
+      this.velocity.z *= decayMultiplier;
+      this.velocity.x *= decayMultiplier;
 
       // To prevent infinitely small "drifting", snap velocity to 0
       // if it falls below a very small threshold.

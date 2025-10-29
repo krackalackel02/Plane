@@ -53,7 +53,8 @@ export class YawMotion extends BaseMotion {
       );
     } else {
       // Apply decay factor if no key is pressed
-      this.currentRate *= this.decayFactor;
+      const decayMultiplier = Math.pow(1 - this.decayFactor, delta);
+      this.currentRate *= decayMultiplier;
       if (Math.abs(this.currentRate) < 0.01) this.currentRate = 0; // Threshold to stop small oscillations
     }
 
