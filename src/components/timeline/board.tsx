@@ -3,12 +3,25 @@ import { useLoader } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
 import { Geometry, Base, Subtraction } from "@react-three/csg";
+
+// Leva for UI controls
 import { useControls } from "leva";
+
+// Import board parameters from JSON
 import boardParams from "../../utils/boardParams.json"; // Import JSON file
 import { RoundedBoxGeometry } from "three-stdlib";
 import { BoardParams, BoardProps } from "../types/types";
 import { createSaveButton } from "../../utils/3d";
 
+/**
+ * Default board parameters
+ * Used as fallback when no parameters are provided
+ * - outerX: Outer dimension in X direction
+ * - outerY: Outer dimension in Y direction
+ * - outerZ: Outer dimension in Z direction
+ * - frame: Frame thickness
+ * - depth: Depth of the board
+ */
 const defaultValues: BoardParams = {
   outerX: 6.7,
   outerY: 4.4,
@@ -17,6 +30,7 @@ const defaultValues: BoardParams = {
   depth: 0.25,
 };
 
+// Material component for the board
 const Material = () => {
   const baseColorMap = useLoader(
     TextureLoader,
@@ -43,19 +57,29 @@ const Material = () => {
   );
 };
 
+/**
+ * Board component for displaying a 3D board
+ * @param imagePath - Path to the board image texture
+ * @param helper - Whether to show helper controls
+ * @param position - Position of the board in 3D space
+ * @returns JSX.Element
+ */
 const Board = ({
   imagePath,
   helper = false,
   position = [4.0, 2.5, 0.5],
 }: BoardProps) => {
+  // Combine default and custom parameters
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
   const [params, setParams] = useState(initialValues);
   const texture = imagePath ? useLoader(TextureLoader, imagePath) : null;
   const placeHolder = useLoader(TextureLoader, "./images/placeholder.jpg");
 
+  // Function to update a specific parameter
   const updateParam = (key: keyof BoardParams) => (value: number) =>
     setParams((prev) => ({ ...prev, [key]: value }));
 
+  // Helper function to create a control for Leva
   const createControl = (
     key: keyof BoardParams,
     min: number,
@@ -69,6 +93,7 @@ const Board = ({
     onChange: updateParam(key),
   });
 
+  // Leva controls for board parameters
   if (helper)
     useControls(
       {
@@ -84,7 +109,9 @@ const Board = ({
 
   const { outerX, outerY, outerZ, frame, depth } = params;
 
+  // Small delta to prevent z-fighting
   const delta = 0.001;
+  // Validate dimensions to ensure proper geometry
   const validateDimensions = () => {
     if (outerX <= frame * 2 || outerY <= frame * 2) {
       console.error(
@@ -103,6 +130,7 @@ const Board = ({
 
   if (!validateDimensions()) return null;
 
+  // Calculate outer and inner dimensions
   const outer = [outerX, outerY, outerZ];
   const inner = [
     outerX - frame * 2,
@@ -114,6 +142,8 @@ const Board = ({
     <mesh position={position} rotation={[0, -Math.PI / 2, 0]}>
       <Material />
       <Geometry>
+        {" "}
+        {/* Geometry for the board */}
         <Base geometry={new RoundedBoxGeometry(...outer, 4, 0.2)}></Base>
         <Subtraction
           geometry={new THREE.BoxGeometry(...inner)}
@@ -121,6 +151,7 @@ const Board = ({
         />
       </Geometry>
       <mesh position={[0, 0, -(outerZ / 2 - depth) + delta]}>
+        {/* Plane for the board surface */}
         <planeGeometry args={[inner[0], inner[1]]} />
         {texture ? (
           <meshBasicMaterial map={texture} />

@@ -1,18 +1,26 @@
 import React, { useEffect } from "react";
 import { Group, Mesh, Object3DEventMap } from "three";
-import { computeScale } from "../../utils/3d";
-import Exhaust from "./exhaust";
-import Body from "./body";
-import Physics from "./physics";
+
+// Import environment context to access configuration
 import { useEnvironment } from "../../context/envContext";
+
+// Utility to compute scale based on bounding box
+import { computeScale } from "../../utils/3d";
+
+// Ship sub-components
+import Exhaust from "./exhaust"; // Exhaust effects component
+import Body from "./body"; // Ship body model component
+import Physics from "./physics"; // Physics and movement component
 
 const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({
   shipRef,
 }) => {
   const scaleTo = { x: 5, y: 3, z: 2 }; // Scale the model to fit the scene
-  const { showShip } = useEnvironment();
+  const { showShip } = useEnvironment(); // Get showShip from environment context
 
-  // Bounding box and scale computation
+  if (!showShip) return null;
+
+  // Scale the ship model based on its bounding box
   useEffect(() => {
     if (!shipRef.current) return;
 
@@ -22,6 +30,7 @@ const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({
         mesh.geometry.computeBoundingBox();
         const bbox = mesh.geometry.boundingBox;
         if (bbox) {
+          // Compute and set the scale factor
           const scaleFactor = computeScale(scaleTo, bbox);
           shipRef.current?.scale.set(scaleFactor, scaleFactor, scaleFactor);
         }
@@ -30,15 +39,11 @@ const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({
   }, [scaleTo]);
 
   return (
-    showShip && (
-      <>
-        <group ref={shipRef}>
-          <Body />
-          <Exhaust />
-          <Physics groupRef={shipRef} />
-        </group>
-      </>
-    )
+    <group ref={shipRef}>
+      <Body />
+      <Exhaust />
+      <Physics groupRef={shipRef} />
+    </group>
   );
 };
 
