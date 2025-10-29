@@ -2,6 +2,7 @@
 import ParticleGenerator from "./particleGenerator";
 import constants from "../../../utils/constants.json";
 import { deg2rad } from "../../../utils/3d";
+import { log } from "../../../utils/common";
 
 interface JetProps {
   coneAngle?: number;
@@ -16,6 +17,7 @@ const Jet: React.FC<JetProps> = ({
   active,
   reverse,
 }) => {
+  log(`[Render] [Jet] active prop is: ${active}`);
   return (
     <ParticleGenerator
       active={active}

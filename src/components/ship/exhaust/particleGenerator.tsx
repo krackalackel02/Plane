@@ -31,6 +31,9 @@ const ParticleGenerator: React.FC<ParticleGeneratorProps> = ({
   speedDecay = 0.98,
   reverse = false,
 }) => {
+  // TODO: Use a ref to track the active prop
+  // to stop useFrame with stale active value
+  // respark of particles on keyup
   const particlesRef = useRef<Points>(null);
   const velocities = useRef<Float32Array>(new Float32Array(count * 3));
   const lifetimes = useRef<Float32Array>(new Float32Array(count));

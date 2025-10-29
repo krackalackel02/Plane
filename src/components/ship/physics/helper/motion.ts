@@ -6,12 +6,22 @@ import { deg2rad } from "../../../../utils/3d";
 import constants from "../../../../utils/motionConstants.json";
 import keys from "../../../../utils/keys.json";
 
+/**
+ * Enumeration of available motion types.
+ * Includes roll, pitch, yaw, and throttle motions.
+ */
 export const Motion = {
   ROLL: "roll" as MotionType,
   PITCH: "pitch" as MotionType,
   YAW: "yaw" as MotionType,
   THROTTLE: "throttle" as MotionType,
 };
+
+/**
+ * Creates a motion instance based on the specified type.
+ * @param type  - The type of motion to create (roll, pitch, yaw, throttle).
+ * @returns A motion instance of the specified type.
+ */
 export const createMotion = (
   type: MotionType,
 ): YawMotion | HarmonicMotion | TranslationMotion => {

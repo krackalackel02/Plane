@@ -2,7 +2,7 @@ import { Group } from "three";
 
 // BaseMotion class to be extended by specific motion implementations
 import { AxisType } from "../../../types/types";
-import { print } from "../../../../utils/common";
+import { log } from "../../../../utils/common";
 
 /**
  * Configuration interface for BaseMotion
@@ -70,7 +70,7 @@ export class BaseMotion {
    * @param activeKeys - The set of currently active input keys.
    */
   update(delta: number, activeKeys: Set<string>) {
-    print("BaseMotion update", delta, activeKeys);
+    log("BaseMotion update", delta, activeKeys);
   }
 
   /**
