@@ -96,9 +96,11 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
       }
     }
 
+    const isHighlighted = activeID && currentlyHovered;
+
     const material = meshRef.current.material as MeshStandardMaterial;
-    material.color.lerp(currentlyHovered ? hoverColor : defaultColor, 0.1);
-    material.opacity = currentlyHovered ? 0.5 : 0.25;
+    material.color.lerp(isHighlighted ? hoverColor : defaultColor, 0.1);
+    material.opacity = isHighlighted ? 0.5 : 0.25;
   });
 
   return (
