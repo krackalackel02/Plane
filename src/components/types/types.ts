@@ -13,10 +13,12 @@ export type BoardParams = {
 
 export interface boardJsonProps {
   id: string;
-  imagePath?: string;
   title?: string;
+  imagePath?: string;
   link?: string;
+  githubLink?: string; // Add field for GitHub link
   description?: string;
+  techStack?: string[]; // Add field for tech stack
 }
 
 export interface BoardProps {

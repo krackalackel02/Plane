@@ -62,20 +62,35 @@ const processBoardData = (rawItems: any[]): boardJsonProps[] => {
       typeof item.image === "string" && item.image.trim() !== ""
         ? item.image
         : undefined;
+    // 3. Validate and consolidate links
+    let finalLink = getValidUrl(item.link);
+    let finalGithubLink = getValidUrl(item.githubLink);
 
-    // 3. Validate link
-    const finalLink = getValidUrl(item.link);
-
-    // 4. Validate description
+    if (finalLink && !finalGithubLink) {
+      // If only the main link is provided, use it for the GitHub link too.
+      finalGithubLink = finalLink;
+    } else if (!finalLink && finalGithubLink) {
+      // If only the GitHub link is provided, use it for the main link too.
+      finalLink = finalGithubLink;
+    }
     const finalDescription =
       typeof item.description === "string" ? item.description : undefined;
+
+    // Validate tech stack
+    const finalTechStack: string[] | undefined =
+      Array.isArray(item.techStack) &&
+      item.techStack.every((t: unknown) => typeof t === "string")
+        ? item.techStack
+        : undefined;
 
     return {
       id: finalId,
       title: typeof item.title === "string" ? item.title : "Untitled",
-      imagePath: finalImage,
+      image: finalImage,
       link: finalLink,
+      githubLink: finalGithubLink, // Add to returned object
       description: finalDescription,
+      techStack: finalTechStack, // Add to returned object
     };
   });
 };

@@ -12,6 +12,7 @@ interface HighlightProps {
 const Highlight: React.FC<HighlightProps> = ({ position, projectData }) => {
   const { activeID, setActiveID } = useProjects();
   const isVisible = activeID === projectData.id;
+  //TODO: 2nd button isnt appearing
   if (!isVisible) {
     print("Highlight not active for ID:", projectData.id); // Debugging line
     return null;
@@ -40,24 +41,53 @@ const Highlight: React.FC<HighlightProps> = ({ position, projectData }) => {
     position[1] + 2,
     position[2],
   ];
-
+  const descriptionPoints = projectData.description
+    ?.split("•")
+    .filter((p) => p.trim() !== "");
   return (
     // Add zIndexRange to ensure it's on top of other DOM elements.
     <Html position={popupPosition} visible={isVisible}>
-      <div className="highlight-container">
-        <div className="highlight-content-3d">
+      <div className="highlight-content-3d">
+        <div className="highlight-header">
+          <h2>{projectData.title}</h2>
           <button className="close-button" onClick={() => setActiveID(null)}>
             &times;
           </button>
-          <h2>{projectData.title}</h2>
-          <p>{projectData.description}</p>
+        </div>
+
+        {projectData.techStack && (
+          <p className="tech-stack">
+            <strong>Tech:</strong> {projectData.techStack.join(", ")}
+          </p>
+        )}
+
+        {descriptionPoints && (
+          <ul className="description-list">
+            {descriptionPoints.map((point, index) => (
+              <li key={index}>{point.trim()}</li>
+            ))}
+          </ul>
+        )}
+
+        <div className="button-group">
           {projectData.link && (
             <a
               href={projectData.link}
+              className="btn btn-primary"
               target="_blank"
               rel="noopener noreferrer"
             >
               View Project
+            </a>
+          )}
+          {projectData.githubLink && (
+            <a
+              href={projectData.githubLink}
+              className="btn btn-secondary"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View on GitHub
             </a>
           )}
         </div>
