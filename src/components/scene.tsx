@@ -9,30 +9,33 @@ import { EnvironmentProvider } from "../context/envContext";
 import { KeyProvider } from "../context/keyContext";
 import Stats from "./helper/stats";
 import { SceneProvider } from "../context/sceneContext";
+import { ProjectProvider } from "../context/projectContext";
 
 const Scene = () => {
   return (
     <EnvironmentProvider>
       <KeyProvider>
         <SceneProvider>
-          <Canvas id="threejs-canvas">
-            {/* Camera */}
-            <Camera />
+          <ProjectProvider>
+            <Canvas id="threejs-canvas">
+              {/* Camera */}
+              <Camera />
 
-            {/* Lighting */}
-            <Lights />
+              {/* Lighting */}
+              <Lights />
 
-            {/* Scene Elements */}
-            <Galaxy />
-            <Ship />
-            <Timeline />
+              {/* Scene Elements */}
+              <Galaxy />
+              <Ship />
+              <Timeline />
 
-            {/* Stats */}
-            <Stats />
-          </Canvas>
+              {/* Stats */}
+              <Stats />
+            </Canvas>
 
-          {/* Camera Helper */}
-          <Overlay />
+            {/* Camera Helper */}
+            <Overlay />
+          </ProjectProvider>
         </SceneProvider>
       </KeyProvider>
     </EnvironmentProvider>

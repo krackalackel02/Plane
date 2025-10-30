@@ -15,7 +15,6 @@ export const SceneProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   // Create the ref here, inside the component body
   const shipRef = useRef<Group>(null);
-
   return (
     // Provide the created ref to all children
     <SceneContext.Provider value={{ shipRef }}>

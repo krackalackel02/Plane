@@ -20,7 +20,7 @@ export interface boardJsonProps {
 }
 
 export interface BoardProps {
-  id?: string | number;
+  id: string;
   imagePath?: string;
   title?: string;
   link?: string;

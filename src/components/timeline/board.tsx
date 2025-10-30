@@ -8,8 +8,8 @@ import boardParams from "../../utils/boardParams.json"; // Import JSON file
 import { RoundedBoxGeometry } from "three-stdlib";
 import { BoardParams, BoardProps } from "../types/types";
 import { createSaveButton } from "../../utils/3d";
-import { print } from "../../utils/common";
 import ActivationZone from "./activationZone";
+import Highlight from "./highlight";
 
 const defaultValues: BoardParams = {
   outerX: 6.7,
@@ -46,6 +46,7 @@ const Material = () => {
 };
 
 const Board = ({
+  id,
   imagePath,
   title, // Accept new prop
   link, // Accept new prop
@@ -56,10 +57,6 @@ const Board = ({
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
   const [params, setParams] = useState(initialValues);
   const texture = imagePath ? useLoader(TextureLoader, imagePath) : null;
-  print("Board render:", title); // Debugging line
-  print("Image Path:", imagePath); // Debugging line
-  print("Link:", link); // Debugging line
-  print("Description:", description); // Debugging line
   const placeHolder = useLoader(TextureLoader, "./images/placeholder.jpg");
 
   const updateParam = (key: keyof BoardParams) => (value: number) =>
@@ -120,7 +117,7 @@ const Board = ({
   ];
 
   return (
-    <group position={position}>
+    <group>
       <mesh position={position} rotation={[0, -Math.PI / 2, 0]}>
         <Material />
         <Geometry>
@@ -140,7 +137,12 @@ const Board = ({
         </mesh>
       </mesh>
       <ActivationZone
+        id={id}
         position={[position[0] - outerX, position[1] - 3.0, position[2]]} // Positioned on the floor in front of the board
+      />
+      <Highlight
+        position={[position[0] + 0.5, position[1] + 4, position[2]]}
+        projectData={{ id, title, description, link }}
       />
     </group>
   );

@@ -2,8 +2,11 @@ import React, { useRef, useState, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Color, Mesh, MeshStandardMaterial, Shape, DoubleSide } from "three";
 import { useScene } from "../../context/sceneContext";
+import { useProjects } from "../../context/projectContext";
+import { print } from "../../utils/common";
 
 interface ActivationZoneProps {
+  id: string;
   position: [number, number, number];
   size?: [number, number]; // width, length
   borderThickness?: number; // Thickness of the border lines
@@ -11,6 +14,7 @@ interface ActivationZoneProps {
 }
 
 const ActivationZone: React.FC<ActivationZoneProps> = ({
+  id,
   position,
   size = [8, 6],
   borderThickness = 0.2,
@@ -18,6 +22,7 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
 }) => {
   const meshRef = useRef<Mesh>(null);
   const { shipRef } = useScene();
+  const { activeID, setActiveID } = useProjects();
   const [isHovered, setIsHovered] = useState(false);
 
   const defaultColor = new Color("#888888");
@@ -78,6 +83,17 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
 
     if (currentlyHovered !== isHovered) {
       setIsHovered(currentlyHovered);
+      if (currentlyHovered) {
+        // Set the project data, which will trigger the popup to appear
+        setActiveID(id);
+        print("Entered activation zone for ID:", id); // Debugging line
+      } else {
+        // If leaving this zone, check if it's the active one before clearing
+        if (activeID === id) {
+          setActiveID(null);
+          print("Exited activation zone for ID:", id); // Debugging line
+        }
+      }
     }
 
     const material = meshRef.current.material as MeshStandardMaterial;
