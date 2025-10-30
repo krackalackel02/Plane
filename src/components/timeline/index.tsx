@@ -8,7 +8,7 @@ const Timeline = () => {
   const boardCount = items.length;
 
   // Base position for the first board
-  const basePosition: [number, number, number] = [4.0, 1.5, 0.5];
+  const basePosition: [number, number, number] = [4.0, 1.5, 10];
 
   // Offset between boards along the z-axis
   const offsetZ = 10.0;
