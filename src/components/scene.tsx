@@ -8,33 +8,32 @@ import Timeline from "./timeline";
 import { EnvironmentProvider } from "../context/envContext";
 import { KeyProvider } from "../context/keyContext";
 import Stats from "./helper/stats";
-import { useRef } from "react";
-import { Group } from "three";
+import { SceneProvider } from "../context/sceneContext";
 
 const Scene = () => {
-  const shipRef = useRef<Group>(null);
-
   return (
     <EnvironmentProvider>
       <KeyProvider>
-        <Canvas id="threejs-canvas">
-          {/* Camera */}
-          <Camera shipRef={shipRef} />
+        <SceneProvider>
+          <Canvas id="threejs-canvas">
+            {/* Camera */}
+            <Camera />
 
-          {/* Lighting */}
-          <Lights />
+            {/* Lighting */}
+            <Lights />
 
-          {/* Scene Elements */}
-          <Galaxy />
-          <Ship shipRef={shipRef} />
-          <Timeline />
+            {/* Scene Elements */}
+            <Galaxy />
+            <Ship />
+            <Timeline />
 
-          {/* Stats */}
-          <Stats />
-        </Canvas>
+            {/* Stats */}
+            <Stats />
+          </Canvas>
 
-        {/* Camera Helper */}
-        <Overlay />
+          {/* Camera Helper */}
+          <Overlay />
+        </SceneProvider>
       </KeyProvider>
     </EnvironmentProvider>
   );

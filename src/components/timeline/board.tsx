@@ -8,6 +8,8 @@ import boardParams from "../../utils/boardParams.json"; // Import JSON file
 import { RoundedBoxGeometry } from "three-stdlib";
 import { BoardParams, BoardProps } from "../types/types";
 import { createSaveButton } from "../../utils/3d";
+import { print } from "../../utils/common";
+import ActivationZone from "./activationZone";
 
 const defaultValues: BoardParams = {
   outerX: 6.7,
@@ -45,12 +47,19 @@ const Material = () => {
 
 const Board = ({
   imagePath,
+  title, // Accept new prop
+  link, // Accept new prop
+  description, // Accept new prop
   helper = false,
   position = [4.0, 2.5, 0.5],
 }: BoardProps) => {
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
   const [params, setParams] = useState(initialValues);
   const texture = imagePath ? useLoader(TextureLoader, imagePath) : null;
+  print("Board render:", title); // Debugging line
+  print("Image Path:", imagePath); // Debugging line
+  print("Link:", link); // Debugging line
+  print("Description:", description); // Debugging line
   const placeHolder = useLoader(TextureLoader, "./images/placeholder.jpg");
 
   const updateParam = (key: keyof BoardParams) => (value: number) =>
@@ -111,24 +120,29 @@ const Board = ({
   ];
 
   return (
-    <mesh position={position} rotation={[0, -Math.PI / 2, 0]}>
-      <Material />
-      <Geometry>
-        <Base geometry={new RoundedBoxGeometry(...outer, 4, 0.2)}></Base>
-        <Subtraction
-          geometry={new THREE.BoxGeometry(...inner)}
-          position={[0, 0, depth / 2]}
-        />
-      </Geometry>
-      <mesh position={[0, 0, -(outerZ / 2 - depth) + delta]}>
-        <planeGeometry args={[inner[0], inner[1]]} />
-        {texture ? (
-          <meshBasicMaterial map={texture} />
-        ) : (
-          <meshBasicMaterial map={placeHolder} />
-        )}
+    <group position={position}>
+      <mesh position={position} rotation={[0, -Math.PI / 2, 0]}>
+        <Material />
+        <Geometry>
+          <Base geometry={new RoundedBoxGeometry(...outer, 4, 0.2)}></Base>
+          <Subtraction
+            geometry={new THREE.BoxGeometry(...inner)}
+            position={[0, 0, depth / 2]}
+          />
+        </Geometry>
+        <mesh position={[0, 0, -(outerZ / 2 - depth) + delta]}>
+          <planeGeometry args={[inner[0], inner[1]]} />
+          {texture ? (
+            <meshBasicMaterial map={texture} />
+          ) : (
+            <meshBasicMaterial map={placeHolder} />
+          )}
+        </mesh>
       </mesh>
-    </mesh>
+      <ActivationZone
+        position={[position[0] - outerX, position[1] - 3.0, position[2]]} // Positioned on the floor in front of the board
+      />
+    </group>
   );
 };
 

@@ -11,11 +11,23 @@ export type BoardParams = {
   depth: number;
 };
 
-export type BoardProps = {
+export interface boardJsonProps {
+  id: string;
   imagePath?: string;
+  title?: string;
+  link?: string;
+  description?: string;
+}
+
+export interface BoardProps {
+  id?: string | number;
+  imagePath?: string;
+  title?: string;
+  link?: string;
+  description?: string;
   helper?: boolean;
-  position?: [number, number, number]; // New position prop
-};
+  position?: [number, number, number];
+}
 
 // Define types for controls and control states
 export type ControlKeys = {
