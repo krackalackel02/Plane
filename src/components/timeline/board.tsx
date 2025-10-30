@@ -90,7 +90,7 @@ const Board = ({
 
   const { outerX, outerY, outerZ, frame, depth } = params;
 
-  const delta = 0.001;
+  const delta = 0.05;
   const validateDimensions = () => {
     if (outerX <= frame * 2 || outerY <= frame * 2) {
       console.error(
