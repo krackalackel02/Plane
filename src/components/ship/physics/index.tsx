@@ -48,7 +48,7 @@ interface PhysicsProps {
   helper?: boolean; // Optional prop
 }
 
-const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = true }) => {
+const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
   const initialParams: Record<keyof typeof defaultMotionParams, any> = {
     roll: { ...defaultMotionParams.roll, ...motionConstants.roll },
     pitch: { ...defaultMotionParams.pitch, ...motionConstants.pitch },
