@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
-import { print } from "../utils/common";
+import { log } from "../utils/common";
 import keys from "../utils/keys.json";
 import { ControlKeys, ControlState } from "../components/types/types";
 
@@ -61,8 +61,8 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
       if (prev.has(key)) return prev;
 
       const updatedKeys = new Set(prev).add(key);
-      print(`${key} down`);
-      print("Updated Keys (after add):", updatedKeys);
+      log(`${key} down`);
+      log("Updated Keys (after add):", updatedKeys);
 
       setControlState(determineControlState(updatedKeys));
       return updatedKeys;
@@ -76,8 +76,8 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const updatedKeys = new Set(prev);
       updatedKeys.delete(key);
-      print(`${key} up`);
-      print("Updated Keys (after delete):", updatedKeys);
+      log(`${key} up`);
+      log("Updated Keys (after delete):", updatedKeys);
 
       setControlState(determineControlState(updatedKeys));
       return updatedKeys;

@@ -1,4 +1,5 @@
 import { useControlState } from "../../../context/keyContext";
+import { log } from "../../../utils/common";
 import Jet from "./jet";
 
 const Exhaust: React.FC = () => {
@@ -17,7 +18,9 @@ const Exhaust: React.FC = () => {
     leftJetActive = !leftJetActive;
     rightJetActive = !rightJetActive;
   }
-
+  log(
+    `[Render] [Exhaust] active prop is: ${leftJetActive} (left), ${rightJetActive} (right)`,
+  );
   return (
     <>
       <Jet position={left} active={leftJetActive} reverse={reverse} />
