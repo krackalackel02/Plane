@@ -1,5 +1,5 @@
 import { Group } from "three";
-import { AxisType } from "../../../types/types";
+import { AxisType } from "../../../types/controlTypes";
 import { print } from "../../../../utils/common";
 
 export interface BaseMotionConfig {

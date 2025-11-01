@@ -1,5 +1,5 @@
 import { button } from "leva";
-import { Color, ColorMapEntry, Range } from "../components/types/types";
+import { Color, ColorMapEntry, Range } from "../components/types/colourTypes";
 
 export const precomputeRanges = (colorMap: ColorMapEntry[]): Range[] =>
   colorMap.map((_, i) =>

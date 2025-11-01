@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from "react";
 import { Points } from "three";
 import { useFrame } from "@react-three/fiber";
 import { precomputeRanges, getColorFromLifetime } from "../../../utils/3d";
-import { ColorMapEntry, Range } from "../../types/types";
+import { ColorMapEntry, Range } from "../../types/colourTypes";
 
 const colorMap: ColorMapEntry[] = [
   { limit: 1, color: [0, 0, 1] },

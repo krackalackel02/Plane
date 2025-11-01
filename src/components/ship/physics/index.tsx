@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Group } from "three";
 import { useFrame } from "@react-three/fiber";
 import { useControls } from "leva";
 import { Motion, createMotion } from "./helper/motion";
 import { useKeyContext } from "../../../context/keyContext";
 import motionConstants from "../../../utils/motionConstants.json";
 import { createSaveButton } from "../../../utils/3d";
+import { useScene } from "../../../context/sceneContext";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react/prop-types */
 const defaultMotionParams = {
@@ -44,17 +44,18 @@ const getControlProps = (key: string) => {
   return { min: 0, max: 10, step: 1 };
 };
 interface PhysicsProps {
-  groupRef: React.RefObject<Group>; // This already exists
   helper?: boolean; // Optional prop
 }
 
-const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
+const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   const initialParams: Record<keyof typeof defaultMotionParams, any> = {
     roll: { ...defaultMotionParams.roll, ...motionConstants.roll },
     pitch: { ...defaultMotionParams.pitch, ...motionConstants.pitch },
     yaw: { ...defaultMotionParams.yaw, ...motionConstants.yaw },
     throttle: { ...defaultMotionParams.throttle, ...motionConstants.throttle },
   };
+
+  const { shipRef: groupRef } = useScene();
 
   const [params, setParams] = useState(initialParams);
 

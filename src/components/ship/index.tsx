@@ -1,14 +1,14 @@
 import React, { useEffect } from "react";
-import { Group, Mesh, Object3DEventMap } from "three";
+import { Mesh } from "three";
 import { computeScale } from "../../utils/3d";
 import Exhaust from "./exhaust";
 import Body from "./body";
 import Physics from "./physics";
 import { useEnvironment } from "../../context/envContext";
+import { useScene } from "../../context/sceneContext";
 
-const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({
-  shipRef,
-}) => {
+const Ship: React.FC = () => {
+  const { shipRef } = useScene();
   const scaleTo = { x: 5, y: 3, z: 2 }; // Scale the model to fit the scene
   const { showShip } = useEnvironment();
 
@@ -35,7 +35,7 @@ const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({
         <group ref={shipRef}>
           <Body />
           <Exhaust />
-          <Physics groupRef={shipRef} />
+          <Physics />
         </group>
       </>
     )
