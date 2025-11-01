@@ -5,6 +5,7 @@ export const config = {
   showStats: import.meta.env.VITE_SHOW_STATS === "true",
   showShip: import.meta.env.VITE_SHOW_SHIP === "true",
   showDebug: import.meta.env.VITE_SHOW_DEBUG === "true",
+  showSpheres: import.meta.env.VITE_SHOW_SPHERES === "true",
 };
 
 // Create the context with default values based on the environment
