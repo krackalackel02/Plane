@@ -3,7 +3,6 @@ import { Html } from "@react-three/drei";
 import "./highlight.css";
 import { useProjects } from "../../context/projectContext";
 import { boardJsonProps } from "../types/boardTypes";
-import { print } from "../../utils/common";
 import { useKeyContext } from "../../context/keyContext";
 interface HighlightProps {
   projectData: boardJsonProps;
@@ -66,9 +65,7 @@ const GitHubButton: React.FC<{ link: string }> = ({ link }) => (
 const Highlight: React.FC<HighlightProps> = ({ projectData }) => {
   const { activeProjectId, setActiveProjectId } = useProjects();
   const isVisible = activeProjectId === projectData.id;
-  //TODO: 2nd button isnt appearing
   if (!isVisible) {
-    print("Highlight not active for ID:", projectData.id); // Debugging line
     return null;
   }
   const activeKeys = useKeyContext();
