@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { Html } from "@react-three/drei";
 import "./highlight.css";
 import { useProjects } from "../../context/projectContext";
-import { boardJsonProps } from "../types/types";
+import { boardJsonProps } from "../types/boardTypes";
 import { print } from "../../utils/common";
 import { useKeyContext } from "../../context/keyContext";
 interface HighlightProps {

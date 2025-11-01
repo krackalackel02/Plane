@@ -6,7 +6,7 @@ import { Geometry, Base, Subtraction } from "@react-three/csg";
 import { useControls } from "leva";
 import boardParams from "../../utils/boardParams.json"; // Import JSON file
 import { RoundedBoxGeometry } from "three-stdlib";
-import { BoardParams, BoardProps } from "../types/types";
+import { BoardParams } from "../types/boardTypes";
 import { createSaveButton } from "../../utils/3d";
 import ActivationZone from "./activationZone";
 import Highlight from "./highlight";

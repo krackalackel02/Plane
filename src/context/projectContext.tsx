@@ -5,7 +5,7 @@ import React, {
   Dispatch,
   SetStateAction,
 } from "react";
-import { boardJsonProps } from "../components/types/types";
+import { boardJsonProps } from "../components/types/boardTypes";
 import boardData from "../components/timeline/boardItems.json";
 
 /**
