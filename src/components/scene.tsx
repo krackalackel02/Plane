@@ -34,20 +34,20 @@ const Scene = () => {
             <Canvas id="threejs-canvas">
               {/** 3D rendering canvas */}
               {/* 
-            Camera Setup 
-             - Ship-following camera component
-          */}
+                  Camera Setup 
+                  - Ship-following camera component
+              */}
               {/* Camera */}
               <Camera />
               {/* 
-            Lighting Setup
-              - Scene lights configuration
-          */}
+                Lighting Setup
+                  - Scene lights configuration
+              */}
               <Lights />
               {/* 
-            Objects Setup
-              - Scene objects configuration
-          */}
+                Objects Setup
+                  - Scene objects configuration
+              */}
               <Galaxy />
               {/* Background galaxy component */}
               <Ship />

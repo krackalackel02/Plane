@@ -67,7 +67,6 @@ interface PictureFrameProps {
 
 const PictureFrame = ({
   params,
-
   texture,
   debugValue, // NEW: Add debugValue prop
 }: PictureFrameProps) => {
