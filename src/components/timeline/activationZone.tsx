@@ -1,32 +1,69 @@
-import React, { useRef, useState, useMemo } from "react";
+import React, {
+  useRef,
+  useState,
+  useMemo,
+  useEffect,
+  useCallback,
+} from "react";
 import { useFrame } from "@react-three/fiber";
-import { Color, Mesh, MeshStandardMaterial, Shape, DoubleSide } from "three";
+import {
+  Color,
+  Mesh,
+  MeshStandardMaterial,
+  Shape,
+  DoubleSide,
+  Vector3,
+  MathUtils,
+} from "three";
 import { useScene } from "../../context/sceneContext";
 import { useProjects } from "../../context/projectContext";
-import { print } from "../../utils/common";
+import { print, useFrameDelay } from "../../utils/common";
+import Sphere from "../helper/sphere";
 
 interface ActivationZoneProps {
   id: string;
-  position: [number, number, number];
-  size?: [number, number]; // width, length
-  borderThickness?: number; // Thickness of the border lines
-  depth?: number; // The height/extrusion of the border
+  size?: [number, number];
+  borderThickness?: number;
+  depth?: number;
+  numberOfSquares?: number; // New prop for multiple squares
 }
 
 const ActivationZone: React.FC<ActivationZoneProps> = ({
   id,
-  position,
   size = [8, 6],
   borderThickness = 0.2,
   depth = 0.1,
+  numberOfSquares = 2, // Default to 3 squares total
 }) => {
-  const meshRef = useRef<Mesh>(null);
-  const { shipRef } = useScene();
-  const { activeID, setActiveID } = useProjects();
-  const [isHovered, setIsHovered] = useState(false);
+  // Refs
+  const zoneMeshRef = useRef<Mesh>(null);
+  // Use an array of refs for the inner meshes
+  const innerMeshRefs = useRef<(Mesh | null)[]>([]);
+  const sharedMaterialRef = useRef<MeshStandardMaterial>(null!);
 
-  const defaultColor = new Color("#888888");
-  const hoverColor = new Color("#ffffff");
+  const { shipRef } = useScene();
+  // State and Context
+  const { activeProjectId, setActiveProjectId } = useProjects();
+  const [isHovered, setIsHovered] = useState(false);
+  const [isActivated, setIsActivated] = useState(false);
+  // Colors, vectors, and scaling
+  const defaultColor = useMemo(() => new Color("#888888"), []);
+  const hoverColor = useMemo(() => new Color("#ffffff"), []);
+  const shipToSquareLocalPosition = new Vector3();
+  const innerScale = 0.9;
+
+  // Create a single shared material instance
+  const [sharedMaterial] = useState(() => {
+    const mat = new MeshStandardMaterial({
+      color: defaultColor,
+      opacity: 0.25,
+      side: DoubleSide,
+      transparent: true,
+    });
+    sharedMaterialRef.current = mat;
+    return mat;
+  });
+  // -------------------------------------------------------------
 
   // Create the frame geometry using a Shape and ExtrudeGeometry
   const frameGeometry = useMemo(() => {
@@ -63,57 +100,108 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
     return { shape, extrudeSettings };
   }, [size, borderThickness, depth]);
 
+  useEffect(() => {
+    setIsActivated(activeProjectId === id && isHovered);
+  }, [activeProjectId, id, isHovered]);
+
+  const logDebugInfo = useCallback(() => {
+    if (!shipRef.current || !zoneMeshRef.current) return;
+
+    print(`--- DEBUG (ID: ${id}) ---`);
+    print("Ship Local Position:", shipRef.current.position);
+    print("Ship to Square Position:", shipToSquareLocalPosition);
+    print(
+      "Ship World Position:",
+      shipRef.current.getWorldPosition(new Vector3()),
+    );
+    print(
+      "Zone World Position:",
+      zoneMeshRef.current.getWorldPosition(new Vector3()),
+    );
+  }, [id, shipRef, shipToSquareLocalPosition]);
+  // --- Use the custom hook to execute the log function ---
+  useFrameDelay(
+    logDebugInfo, // The function to execute
+    3, // The interval in seconds
+    id === "0", // The condition to enable the hook
+  );
+
   useFrame(() => {
-    if (!meshRef.current || !shipRef?.current) return;
+    if (!zoneMeshRef.current || !shipRef?.current || !sharedMaterialRef.current)
+      return;
 
-    const shipPosition = shipRef.current.position;
-    const zonePosition = meshRef.current.position;
-
-    // Bounding box check remains the same
-    const minX = zonePosition.x - size[0] / 2;
-    const maxX = zonePosition.x + size[0] / 2;
-    const minZ = zonePosition.z - size[1] / 2;
-    const maxZ = zonePosition.z + size[1] / 2;
-
+    // --- Collision detection (based on the outermost square) ---
+    zoneMeshRef.current.worldToLocal(
+      shipRef.current.getWorldPosition(shipToSquareLocalPosition),
+    );
     const currentlyHovered =
-      shipPosition.x >= minX &&
-      shipPosition.x <= maxX &&
-      shipPosition.z >= minZ &&
-      shipPosition.z <= maxZ;
+      Math.abs(shipToSquareLocalPosition.x) <= size[1] / 2 &&
+      Math.abs(shipToSquareLocalPosition.y) <= size[0] / 2;
 
     if (currentlyHovered !== isHovered) {
       setIsHovered(currentlyHovered);
       if (currentlyHovered) {
-        // Set the project data, which will trigger the popup to appear
-        setActiveID(id);
-        print("Entered activation zone for ID:", id); // Debugging line
-      } else {
-        // If leaving this zone, check if it's the active one before clearing
-        if (activeID === id) {
-          setActiveID(null);
-          print("Exited activation zone for ID:", id); // Debugging line
-        }
+        setActiveProjectId(id);
+        print("Entered activation zone for ID:", id);
+      } else if (activeProjectId === id) {
+        setActiveProjectId(null);
+        print("Exited activation zone for ID:", id);
       }
     }
 
-    const isHighlighted = activeID && currentlyHovered;
+    // --- Animate Shared Material ---
+    const material = sharedMaterialRef.current;
+    material.color.lerp(isActivated ? hoverColor : defaultColor, 0.1);
+    material.opacity = MathUtils.lerp(
+      material.opacity,
+      isActivated ? 0.5 : 0.25,
+      0.1,
+    );
 
-    const material = meshRef.current.material as MeshStandardMaterial;
-    material.color.lerp(isHighlighted ? hoverColor : defaultColor, 0.1);
-    material.opacity = isHighlighted ? 0.5 : 0.25;
+    // --- Animate Inner Meshes ---
+    innerMeshRefs.current.forEach((mesh, index) => {
+      if (mesh) {
+        // The targetZ is 0.1 multiplied by the square's index in the stack (1, 2, 3...)
+        const targetZ = isActivated ? 0.2 * (index + 1) : 0;
+        mesh.position.z = MathUtils.lerp(mesh.position.z, targetZ, 0.1);
+      }
+    });
   });
 
+  const offsetPosition: [number, number, number] = [-5, -2.5, 0];
+  const offsetRotation: [number, number, number] = [-Math.PI / 2, 0, 0];
+
   return (
-    <mesh ref={meshRef} position={position} rotation={[-Math.PI / 2, 0, 0]}>
-      <extrudeGeometry
-        args={[frameGeometry.shape, frameGeometry.extrudeSettings]}
-      />
-      <meshStandardMaterial
-        color={defaultColor}
-        opacity={0.25}
-        side={DoubleSide} // Make it visible from both sides
-      />
-    </mesh>
+    <group position={offsetPosition} rotation={offsetRotation}>
+      <Sphere position={[0, 0, 0]} />
+
+      {/* Outermost Mesh (index 0) */}
+      {/* eslint-disable-next-line react/no-unknown-property */}
+      <mesh ref={zoneMeshRef} material={sharedMaterial}>
+        <extrudeGeometry
+          args={[frameGeometry.shape, frameGeometry.extrudeSettings]}
+        />
+      </mesh>
+
+      {/* Generate Inner Meshes */}
+      {Array.from({ length: numberOfSquares - 1 }).map((_, index) => {
+        // The scale is exponential based on the index
+        const scale = Math.pow(innerScale, index + 1);
+        return (
+          <mesh
+            key={index}
+            ref={(el) => (innerMeshRefs.current[index] = el)}
+            // eslint-disable-next-line react/no-unknown-property
+            material={sharedMaterial}
+            scale={[scale, scale, 1]}
+          >
+            <extrudeGeometry
+              args={[frameGeometry.shape, frameGeometry.extrudeSettings]}
+            />
+          </mesh>
+        );
+      })}
+    </group>
   );
 };
 

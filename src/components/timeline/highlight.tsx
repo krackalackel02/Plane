@@ -6,12 +6,66 @@ import { boardJsonProps } from "../types/boardTypes";
 import { print } from "../../utils/common";
 import { useKeyContext } from "../../context/keyContext";
 interface HighlightProps {
-  position: [number, number, number];
   projectData: boardJsonProps;
 }
-const Highlight: React.FC<HighlightProps> = ({ position, projectData }) => {
-  const { activeID, setActiveID } = useProjects();
-  const isVisible = activeID === projectData.id;
+
+const CloseButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+  <button className="close-button" onClick={onClick}>
+    &times;
+  </button>
+);
+
+const Header: React.FC<{
+  text: string | undefined;
+  children: React.ReactNode;
+}> = ({ text, children }) => (
+  <div className="highlight-header">
+    <h2>{text}</h2>
+    {children}
+  </div>
+);
+
+const TechStack: React.FC<{ techStack: string[] }> = ({ techStack }) => (
+  <p className="tech-stack">
+    <strong>Tech:</strong> {techStack.join(", ")}
+  </p>
+);
+
+const Description: React.FC<{ descriptionPoints: string[] }> = ({
+  descriptionPoints,
+}) => (
+  <ul className="description-list">
+    {descriptionPoints.map((point, index) => (
+      <li key={index}>{point.trim()}</li>
+    ))}
+  </ul>
+);
+
+const DemoButton: React.FC<{ link: string }> = ({ link }) => (
+  <a
+    href={link}
+    className="btn btn-primary"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    View Demo
+  </a>
+);
+
+const GitHubButton: React.FC<{ link: string }> = ({ link }) => (
+  <a
+    href={link}
+    className="btn btn-secondary"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    View on GitHub
+  </a>
+);
+
+const Highlight: React.FC<HighlightProps> = ({ projectData }) => {
+  const { activeProjectId, setActiveProjectId } = useProjects();
+  const isVisible = activeProjectId === projectData.id;
   //TODO: 2nd button isnt appearing
   if (!isVisible) {
     print("Highlight not active for ID:", projectData.id); // Debugging line
@@ -31,64 +85,37 @@ const Highlight: React.FC<HighlightProps> = ({ position, projectData }) => {
       }
 
       // 3. Close the highlight panel
-      setActiveID(null);
+      setActiveProjectId(null);
     }
     // Run this effect whenever the active project or key set changes
-  }, [isVisible, activeKeys, setActiveID]);
+  }, [isVisible, activeKeys, setActiveProjectId]);
 
-  const popupPosition: [number, number, number] = [
-    position[0],
-    position[1] + 2,
-    position[2],
-  ];
   const descriptionPoints = projectData.description
     ?.split("•")
     .filter((p) => p.trim() !== "");
+
+  const offsetPosition: [number, number, number] = [0, 5, 0];
+
   return (
     // Add zIndexRange to ensure it's on top of other DOM elements.
-    <Html position={popupPosition} visible={isVisible}>
+    <Html position={offsetPosition} visible={isVisible}>
       <div className="highlight-content-3d">
-        <div className="highlight-header">
-          <h2>{projectData.title}</h2>
-          <button className="close-button" onClick={() => setActiveID(null)}>
-            &times;
-          </button>
-        </div>
+        <Header text={projectData.title}>
+          <CloseButton onClick={() => setActiveProjectId(null)} />
+        </Header>
 
         {projectData.techStack && (
-          <p className="tech-stack">
-            <strong>Tech:</strong> {projectData.techStack.join(", ")}
-          </p>
+          <TechStack techStack={projectData.techStack} />
         )}
 
         {descriptionPoints && (
-          <ul className="description-list">
-            {descriptionPoints.map((point, index) => (
-              <li key={index}>{point.trim()}</li>
-            ))}
-          </ul>
+          <Description descriptionPoints={descriptionPoints} />
         )}
 
         <div className="button-group">
-          {projectData.link && (
-            <a
-              href={projectData.link}
-              className="btn btn-primary"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              View Project
-            </a>
-          )}
+          {projectData.link && <DemoButton link={projectData.link} />}
           {projectData.githubLink && (
-            <a
-              href={projectData.githubLink}
-              className="btn btn-secondary"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              View on GitHub
-            </a>
+            <GitHubButton link={projectData.githubLink} />
           )}
         </div>
       </div>

@@ -1,39 +1,30 @@
 import Board from "./board";
 import { useProjects } from "../../context/projectContext";
+import { calculatedBoardPositionsAndRotations } from "./calculatedBoardPositionsAndRotations";
 
 const Timeline = () => {
   const { items } = useProjects();
 
-  // Number of boards is now determined by the data
-  const boardCount = items.length;
+  const boardsData = calculatedBoardPositionsAndRotations(items, "arc");
 
-  // Base position for the first board
-  const basePosition: [number, number, number] = [4.0, 1.5, 10];
-
-  // Offset between boards along the z-axis
-  const offsetZ = 10.0;
-
-  // Generate positions for the boards
-  const boardPositions: [number, number, number][] = Array.from(
-    { length: boardCount },
-    (_, i) => [basePosition[0], basePosition[1], basePosition[2] + i * offsetZ],
-  );
   return (
-    <>
-      {items.map((item, index) => (
+    <group>
+      {boardsData.map((board) => (
         <Board
-          key={item.id || index}
-          id={item.id}
-          position={boardPositions[index]} // Pass position from the generated array
-          helper={false} // Disable helper controls
-          // Pass the rest of the item data as props
-          title={item.title}
-          link={item.link}
-          imagePath={item.imagePath}
-          description={item.description}
+          key={board.id}
+          id={board.id}
+          position={board.position}
+          rotation={board.rotation} // Pass the calculated rotation to the Board
+          helper={false}
+          title={board.title}
+          link={board.link}
+          imagePath={board.imagePath}
+          description={board.description}
+          githubLink={board.githubLink}
+          techStack={board.techStack}
         />
       ))}
-    </>
+    </group>
   );
 };
 
