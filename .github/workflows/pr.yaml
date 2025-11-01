@@ -17,7 +17,6 @@ concurrency:
 jobs:
   # Job 1: Install Dependencies
   install:
-    if: github.base_ref == 'main' # Exclude PRs targeting main
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -41,7 +40,6 @@ jobs:
 
   # Job 2: Testing Job
   test:
-    if: github.base_ref == 'main' # Exclude PRs targeting main
     needs: install
     runs-on: ubuntu-latest
     steps:
