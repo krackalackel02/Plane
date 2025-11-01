@@ -3,7 +3,11 @@ import { useLoader } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
 import { Geometry, Base, Subtraction } from "@react-three/csg";
+
+// Leva for UI controls
 import { useControls } from "leva";
+
+// Import board parameters from JSON
 import boardParams from "../../utils/boardParams.json"; // Import JSON file
 import { RoundedBoxGeometry } from "three-stdlib";
 import { BoardParams } from "../types/boardTypes";
@@ -11,6 +15,15 @@ import { createSaveButton } from "../../utils/3d";
 import ActivationZone from "./activationZone";
 import Highlight from "./highlight";
 
+/**
+ * Default board parameters
+ * Used as fallback when no parameters are provided
+ * - outerX: Outer dimension in X direction
+ * - outerY: Outer dimension in Y direction
+ * - outerZ: Outer dimension in Z direction
+ * - frame: Frame thickness
+ * - depth: Depth of the board
+ */
 const defaultValues: BoardParams = {
   outerX: 6.7,
   outerY: 4.4,
@@ -19,6 +32,7 @@ const defaultValues: BoardParams = {
   depth: 0.25,
 };
 
+// Material component for the board
 const Material = () => {
   const baseColorMap = useLoader(
     TextureLoader,
@@ -53,7 +67,6 @@ interface PictureFrameProps {
 
 const PictureFrame = ({
   params,
-
   texture,
   debugValue, // NEW: Add debugValue prop
 }: PictureFrameProps) => {
@@ -150,6 +163,21 @@ export interface BoardProps {
   debug?: boolean;
 }
 
+/**
+ * Board component for displaying a 3D board
+ * @param id Unique identifier for the board
+ * @param imagePath Path to the image texture
+ * @param title Title of the board
+ * @param link URL link associated with the board
+ * @param description Description text for the board
+ * @param githubLink GitHub link associated with the board
+ * @param techStack Array of technologies used
+ * @param helper Boolean to enable Leva controls
+ * @param position 3D position of the board
+ * @param rotation 3D rotation of the board
+ * @param debug Boolean to enable debug mode (shows ID on board)
+ * @returns JSX.Element
+ */
 const Board = ({
   id,
   imagePath,
@@ -163,14 +191,17 @@ const Board = ({
   rotation = [0, 0, 0], // Add rotation prop with a default
   debug = false,
 }: BoardProps) => {
+  // Combine default and custom parameters
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
   const [params, setParams] = useState(initialValues);
   const finalImage = imagePath || "./images/placeholder.jpg";
   const texture = useLoader(TextureLoader, finalImage);
 
+  // Function to update a specific parameter
   const updateParam = (key: keyof BoardParams) => (value: number) =>
     setParams((prev) => ({ ...prev, [key]: value }));
 
+  // Helper function to create a control for Leva
   const createControl = (
     key: keyof BoardParams,
     min: number,
@@ -184,6 +215,7 @@ const Board = ({
     onChange: updateParam(key),
   });
 
+  // Leva controls for board parameters
   if (helper)
     useControls(
       {

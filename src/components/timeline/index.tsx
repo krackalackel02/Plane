@@ -2,6 +2,11 @@ import Board from "./board";
 import { useProjects } from "../../context/projectContext";
 import { calculatedBoardPositionsAndRotations } from "./calculatedBoardPositionsAndRotations";
 
+/**
+ * Timeline component for managing multiple boards
+ * Renders a series of boards positioned along the z-axis
+ * @returns JSX.Element
+ */
 const Timeline = () => {
   const { items } = useProjects();
 

@@ -1,5 +1,12 @@
 import React, { createContext, useContext } from "react";
-// Configuration based on environment
+
+/* 
+  Configuration based on environment:
+  - VITE_SHOW_CAMERA: Show camera helper
+  - VITE_SHOW_STATS: Show performance stats
+  - VITE_SHOW_SHIP: Show ship model
+  - VITE_SHOW_DEBUG: Enable debug mode
+*/
 export const config = {
   showCameraHelper: import.meta.env.VITE_SHOW_CAMERA === "true",
   showStats: import.meta.env.VITE_SHOW_STATS === "true",

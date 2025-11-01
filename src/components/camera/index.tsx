@@ -14,10 +14,18 @@ import { useScene } from "../../context/sceneContext";
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
 
+/**
+ * Props for Camera component
+ */
 interface CameraProps {
   fly?: boolean; // Optional boolean prop to control the fly controls
 }
 
+/**
+ * Camera component for 3D scene
+ * @param fly - Whether to use fly controls
+ * @returns JSX.Element
+ */
 const Camera: React.FC<CameraProps> = ({ fly = false }) => {
   const { shipRef } = useScene();
   const { showCameraHelper: helper } = useEnvironment();
