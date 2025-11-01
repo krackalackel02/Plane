@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable react/prop-types */
+ 
+ 
 
 import { useEffect, useRef, useState } from "react";
-import { Group } from "three";
 import { useFrame } from "@react-three/fiber";
 
 import { useControls } from "leva"; // Leva for UI controls
@@ -10,6 +9,7 @@ import { useControls } from "leva"; // Leva for UI controls
 // Motion helper utilities
 import { Motion, createMotion } from "./helper/motion";
 import { useKeyContext } from "../../../context/keyContext";
+import { useScene } from "../../../context/sceneContext";
 import motionConstants from "../../../utils/motionConstants.json";
 import { createSaveButton } from "../../../utils/3d";
 
@@ -21,6 +21,8 @@ import { createSaveButton } from "../../../utils/3d";
  * - yaw: Yaw motion parameters
  * - throttle: Throttle motion parameters
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react/prop-types */
 const defaultMotionParams = {
   roll: {
     stiffness: 50,
@@ -68,11 +70,10 @@ const getControlProps = (key: string) => {
  * - helper: Optional boolean to enable motion parameter controls
  */
 interface PhysicsProps {
-  groupRef: React.RefObject<Group>; // This already exists
   helper?: boolean; // Optional prop
 }
 
-const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
+const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   // Initialize motion parameters state
   const initialParams: Record<keyof typeof defaultMotionParams, any> = {
     roll: { ...defaultMotionParams.roll, ...motionConstants.roll },
@@ -80,6 +81,8 @@ const Physics: React.FC<PhysicsProps> = ({ groupRef, helper = false }) => {
     yaw: { ...defaultMotionParams.yaw, ...motionConstants.yaw },
     throttle: { ...defaultMotionParams.throttle, ...motionConstants.throttle },
   };
+
+  const { shipRef: groupRef } = useScene();
 
   const [params, setParams] = useState(initialParams);
 

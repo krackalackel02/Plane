@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 
 // Utilities for particle color and range computations
 import { precomputeRanges, getColorFromLifetime } from "../../../utils/3d";
-import { ColorMapEntry, Range } from "../../types/types";
+import { ColorMapEntry, Range } from "../../types/colourTypes";
 
 const colorMap: ColorMapEntry[] = [
   { limit: 1, color: [0, 0, 1] }, // Blue

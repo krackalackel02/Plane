@@ -1,5 +1,5 @@
 import { button } from "leva";
-import { Color, ColorMapEntry, Range } from "../components/types/types";
+import { Color, ColorMapEntry, Range } from "../components/types/colourTypes";
 import { Box3 } from "three";
 
 /**

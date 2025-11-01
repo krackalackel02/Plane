@@ -1,8 +1,7 @@
 import React, { useEffect } from "react";
-import { Group, Mesh, Object3DEventMap } from "three";
-
-// Import environment context to access configuration
+import { Mesh } from "three";
 import { useEnvironment } from "../../context/envContext";
+import { useScene } from "../../context/sceneContext";
 
 // Utility to compute scale based on bounding box
 import { computeScale } from "../../utils/3d";
@@ -12,9 +11,8 @@ import Exhaust from "./exhaust"; // Exhaust effects component
 import Body from "./body"; // Ship body model component
 import Physics from "./physics"; // Physics and movement component
 
-const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({
-  shipRef,
-}) => {
+const Ship: React.FC = () => {
+  const { shipRef } = useScene();
   const scaleTo = { x: 5, y: 3, z: 2 }; // Scale the model to fit the scene
   const { showShip } = useEnvironment(); // Get showShip from environment context
 
@@ -39,11 +37,15 @@ const Ship: React.FC<{ shipRef: React.RefObject<Group<Object3DEventMap>> }> = ({
   }, [scaleTo]);
 
   return (
-    <group ref={shipRef}>
-      <Body />
-      <Exhaust />
-      <Physics groupRef={shipRef} />
-    </group>
+    showShip && (
+      <>
+        <group ref={shipRef}>
+          <Body />
+          <Exhaust />
+          <Physics />
+        </group>
+      </>
+    )
   );
 };
 

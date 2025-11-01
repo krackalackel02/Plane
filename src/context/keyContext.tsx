@@ -5,11 +5,9 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
-
-// Utilities and types
 import { print } from "../utils/common"; // Debug print utility
 import keys from "../utils/keys.json"; // Key mappings
-import { ControlKeys, ControlState } from "../components/types/types"; // Control types/states
+import { ControlKeys, ControlState } from "../components/types/controlTypes"; // Control types/states
 
 // Import and assert control keys
 const controlKeys = keys as ControlKeys;

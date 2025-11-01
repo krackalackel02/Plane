@@ -9,6 +9,7 @@ import "./camera.css";
 import cameraPos from "../../utils/cameraPos.json";
 import animate from "./animate";
 import { useEnvironment } from "../../context/envContext";
+import { useScene } from "../../context/sceneContext";
 
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
@@ -18,16 +19,15 @@ import { useEnvironment } from "../../context/envContext";
  */
 interface CameraProps {
   fly?: boolean; // Optional boolean prop to control the fly controls
-  shipRef: React.RefObject<THREE.Group<THREE.Object3DEventMap>>; // Optional ref to the ship group
 }
 
 /**
  * Camera component for 3D scene
  * @param fly - Whether to use fly controls
- * @param shipRef - Reference to the ship group
  * @returns JSX.Element
  */
-const Camera: React.FC<CameraProps> = ({ fly = false, shipRef }) => {
+const Camera: React.FC<CameraProps> = ({ fly = false }) => {
+  const { shipRef } = useScene();
   const { showCameraHelper: helper } = useEnvironment();
   const { camera } = useThree();
   camera.position.set(

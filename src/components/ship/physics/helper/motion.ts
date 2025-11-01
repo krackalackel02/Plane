@@ -1,4 +1,4 @@
-import { AxisType, MotionType } from "../../../types/types"; // Import types
+import { AxisType, MotionType } from "../../../types/controlTypes"; // Import types
 import { HarmonicMotion } from "../motions/harmonic/harmonic"; // Import HarmonicMotion class
 import { TranslationMotion } from "../motions/translation/translation"; // Import TranslationMotion class
 import { YawMotion } from "../motions/yaw/yaw"; // Import YawMotion class
