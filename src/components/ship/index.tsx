@@ -35,7 +35,7 @@ const Ship: React.FC = () => {
         <group ref={shipRef}>
           <Body />
           <Exhaust />
-          <Physics groupRef={shipRef} />
+          <Physics />
         </group>
       </>
     )
