@@ -10,6 +10,7 @@ import { KeyProvider } from "../context/keyContext";
 import Stats from "./helper/stats";
 import { SceneProvider } from "../context/sceneContext";
 import { ProjectProvider } from "../context/projectContext";
+import Sphere from "./helper/sphere";
 
 const Scene = () => {
   return (
@@ -27,6 +28,7 @@ const Scene = () => {
               {/* Scene Elements */}
               <Galaxy />
               <Ship />
+              <Sphere position={[0, 0, 0]} label="Origin" />
               <Timeline />
 
               {/* Stats */}
