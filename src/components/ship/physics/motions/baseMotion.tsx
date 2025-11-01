@@ -1,7 +1,7 @@
 import { Group } from "three";
 
 // BaseMotion class to be extended by specific motion implementations
-import { AxisType } from "../../../types/types";
+import { AxisType } from "../../../types/controlTypes";
 import { log } from "../../../../utils/common";
 
 /**
