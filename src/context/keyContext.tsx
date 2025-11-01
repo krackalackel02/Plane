@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { print } from "../utils/common";
 import keys from "../utils/keys.json";
-import { ControlKeys, ControlState } from "../components/types/types";
+import { ControlKeys, ControlState } from "../components/types/controlTypes";
 
 // Import and assert control keys
 const controlKeys = keys as ControlKeys;
