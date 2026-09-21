@@ -1,12 +1,7 @@
 import React, { useEffect } from "react";
-import { Html } from "@react-three/drei";
 import "./highlight.css";
 import { useProjects } from "../../context/projectContext";
-import { boardJsonProps } from "../types/boardTypes";
 import { useKeyContext } from "../../context/keyContext";
-interface HighlightProps {
-  projectData: boardJsonProps;
-}
 
 const CloseButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <button className="close-button" onClick={onClick}>
@@ -62,43 +57,52 @@ const GitHubButton: React.FC<{ link: string }> = ({ link }) => (
   </a>
 );
 
-const Highlight: React.FC<HighlightProps> = ({ projectData }) => {
-  const { activeProjectId, setActiveProjectId } = useProjects();
-  const isVisible = activeProjectId === projectData.id;
-  if (!isVisible) {
-    return null;
-  }
+/**
+ * Modal shown when the ship activates a project board. Rendered once,
+ * outside the R3F <Canvas> tree (see scene.tsx), as a plain fixed overlay
+ * centered in the viewport — not anchored to the board's 3D position.
+ *
+ * It used to be mounted per-board *inside* the Canvas via drei's <Html>,
+ * anchored to that board's projected 3D screen position with no clamping
+ * against the viewport bounds: depending on where the board sat on screen,
+ * the panel (including its own close button) could render partially or
+ * fully off-screen. Living outside the 3D tree avoids that class of bug
+ * entirely and makes the responsive CSS sizing meaningful on every screen.
+ */
+const Highlight: React.FC = () => {
+  const { items, activeProjectId, setActiveProjectId } = useProjects();
   const activeKeys = useKeyContext();
-  // Handle the 'Enter' key press as a side effect
-  useEffect(() => {
-    // Only proceed if a project is active and the 'Enter' key is pressed
-    if (isVisible && activeKeys.has("Enter")) {
-      // 1. Manually remove the 'Enter' key from the set to break the loop
-      activeKeys.delete("Enter");
+  const projectData = items.find((item) => item.id === activeProjectId);
+  const isVisible = projectData !== undefined;
 
-      // 2. Open the link if it exists
-      if (projectData.link) {
+  useEffect(() => {
+    if (isVisible && activeKeys.has("Enter")) {
+      activeKeys.delete("Enter");
+      if (projectData?.link) {
         window.open(projectData.link, "_blank");
       }
-
-      // 3. Close the highlight panel
       setActiveProjectId(null);
     }
-    // Run this effect whenever the active project or key set changes
-  }, [isVisible, activeKeys, setActiveProjectId]);
+  }, [isVisible, activeKeys, setActiveProjectId, projectData?.link]);
+
+  if (!projectData) {
+    return null;
+  }
 
   const descriptionPoints = projectData.description
     ?.split("•")
     .filter((p) => p.trim() !== "");
 
-  const offsetPosition: [number, number, number] = [0, 5, 0];
+  const close = () => setActiveProjectId(null);
 
   return (
-    // Add zIndexRange to ensure it's on top of other DOM elements.
-    <Html position={offsetPosition} visible={isVisible}>
-      <div className="highlight-content-3d">
+    <div className="highlight-overlay" onClick={close}>
+      <div
+        className="highlight-content-3d"
+        onClick={(event) => event.stopPropagation()}
+      >
         <Header text={projectData.title}>
-          <CloseButton onClick={() => setActiveProjectId(null)} />
+          <CloseButton onClick={close} />
         </Header>
 
         {projectData.techStack && (
@@ -116,7 +120,7 @@ const Highlight: React.FC<HighlightProps> = ({ projectData }) => {
           )}
         </div>
       </div>
-    </Html>
+    </div>
   );
 };
 

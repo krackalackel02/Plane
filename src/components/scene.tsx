@@ -17,6 +17,7 @@ import Lights from "./lights";
 import Timeline from "./timeline";
 import Sphere from "./helper/sphere";
 import MobileControls from "./controls/mobileControls";
+import Highlight from "./timeline/highlight";
 
 /**
  * 3D Scene component
@@ -63,6 +64,8 @@ const Scene = () => {
             <Overlay /> {/* Overlay for camera helper and HUD */}
             {/* Touch controls */}
             <MobileControls />
+            {/* Project details modal, shown when the ship activates a board */}
+            <Highlight />
           </ProjectProvider>
         </SceneProvider>
       </KeyProvider>
