@@ -66,6 +66,14 @@ export class HarmonicMotion extends BaseMotion {
     }
   }
 
+  // Stops the spring's own internal RAF loop immediately, without removing
+  // the onUpdate listener - used when autopilot takes over rotation so a
+  // stale in-flight spring can't keep overwriting group.rotation underneath
+  // it. Normal control resumes the next time update() calls spring.start().
+  pause() {
+    this.spring.stop();
+  }
+
   cleanup() {
     this.spring.removeAllListeners();
   }

@@ -1,6 +1,3 @@
- 
- 
-
 import { useEffect, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 
@@ -10,8 +7,12 @@ import { useControls } from "leva"; // Leva for UI controls
 import { Motion, createMotion } from "./helper/motion";
 import { useKeyContext } from "../../../context/keyContext";
 import { useScene } from "../../../context/sceneContext";
+import { useAutopilot } from "../../../context/autopilotContext";
 import motionConstants from "../../../utils/motionConstants.json";
 import { createSaveButton } from "../../../utils/3d";
+import { HarmonicMotion } from "./motions/harmonic/harmonic";
+import { AutopilotMotion } from "./motions/autopilot/autopilot";
+import keys from "../../../utils/keys.json";
 
 /**
  * Default motion parameters for ship physics
@@ -65,6 +66,17 @@ const getControlProps = (key: string) => {
 };
 
 /**
+ * True if any real movement key (roll/pitch/yaw/throttle) is held -
+ * excludes the exhaust key, which is cosmetic-adjacent rather than a real
+ * motion input. Manual input like this always takes over from autopilot.
+ */
+const hasAnyRealControlKey = (activeKeys: Set<string>) =>
+  [keys.roll, keys.pitch, keys.yaw, keys.throttle].some(
+    ({ positive, negative }) =>
+      activeKeys.has(positive) || activeKeys.has(negative),
+  );
+
+/**
  * Props for Physics component
  * - groupRef: Reference to the ship's group object
  * - helper: Optional boolean to enable motion parameter controls
@@ -95,6 +107,9 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   });
 
   const activeKeys = useKeyContext();
+  const { target, cancelAutopilot, setIsFlying } = useAutopilot();
+  const autopilotMotion = useRef(new AutopilotMotion());
+  const wasFlying = useRef(false);
 
   // Setup Leva controls if helper is enabled
   if (helper) {
@@ -137,14 +152,45 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
     Object.values(motions.current).forEach((motion) => {
       if (groupRef.current) motion.attachTo(groupRef.current);
     });
+    autopilotMotion.current.attachTo(groupRef.current);
 
     return () => {
       Object.values(motions.current).forEach((motion) => motion.cleanup());
+      autopilotMotion.current.cleanup();
     };
   }, [groupRef]);
 
   // Update motions each frame
   useFrame((_, delta) => {
+    if (target) {
+      if (!wasFlying.current) {
+        // Roll/pitch springs run their own independent RAF loop - if the
+        // ship was mid-roll/pitch the instant autopilot engaged, a plain
+        // "stop calling update()" wouldn't stop that stale spring from
+        // still overwriting rotation underneath the flight path.
+        (motions.current[Motion.ROLL] as HarmonicMotion).pause();
+        (motions.current[Motion.PITCH] as HarmonicMotion).pause();
+        autopilotMotion.current.start(
+          groupRef.current!.position.clone(),
+          target.position,
+          target.arcRadius,
+        );
+        wasFlying.current = true;
+        setIsFlying(true);
+      }
+
+      const status = autopilotMotion.current.update(
+        delta,
+        hasAnyRealControlKey(activeKeys),
+      );
+      if (status !== "flying") {
+        cancelAutopilot();
+        wasFlying.current = false;
+        setIsFlying(false);
+      }
+      return; // skip the four normal motions entirely this frame
+    }
+
     Object.entries(motions.current).forEach(([type, motion]) => {
       const config = params[type as keyof typeof params];
       motion.updateConfig(config);

@@ -1,6 +1,6 @@
 import { button } from "leva";
 import { Color, ColorMapEntry, Range } from "../components/types/colourTypes";
-import { Box3 } from "three";
+import { Box3, Vector3 } from "three";
 
 /**
  * Precompute ranges for color mapping based on lifetime limits
@@ -88,6 +88,37 @@ export const computeScale = (
  * @returns The angle in radians.
  */
 export const deg2rad = (deg: number) => (deg * Math.PI) / 180;
+
+/**
+ * Lerp between two angles (radians) along the shortest path, so crossing
+ * the +-PI boundary doesn't spin the long way around.
+ * @param from - Current angle in radians.
+ * @param to - Target angle in radians.
+ * @param t - Interpolation factor (0 to 1).
+ * @returns The interpolated angle in radians.
+ */
+export const lerpAngle = (from: number, to: number, t: number) => {
+  let delta = (to - from) % (Math.PI * 2);
+  delta = ((delta + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  return from + delta * t;
+};
+
+/**
+ * World position of a board's ActivationZone mat, given the board's own
+ * position/rotation. Mirrors ActivationZone's own fixed local offset
+ * ([-5, -2.5, 0]) and the fact that board rotation is Y-axis only, so this
+ * is the same open, floor-level spot ActivationZone itself checks for ship
+ * proximity - landing here (rather than on the board's own position, which
+ * sits in the solid frame's plane) is what keeps autopilot from clipping
+ * the board.
+ */
+export const getBoardMatWorldPosition = (
+  position: [number, number, number],
+  rotationY: number,
+): Vector3 =>
+  new Vector3(-5, -2.5, 0)
+    .applyAxisAngle(new Vector3(0, 1, 0), rotationY)
+    .add(new Vector3(...position));
 
 /**
  * Create a save button for downloading JSON data.
