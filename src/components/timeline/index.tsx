@@ -1,31 +1,35 @@
 import Board from "./board";
+import { useProjects } from "../../context/projectContext";
+import { calculatedBoardPositionsAndRotations } from "./calculatedBoardPositionsAndRotations";
 
+/**
+ * Timeline component for managing multiple boards
+ * Renders a series of boards positioned along the z-axis
+ * @returns JSX.Element
+ */
 const Timeline = () => {
-  // Number of boards
-  const boardCount = 5;
+  const { items } = useProjects();
 
-  // Base position for the first board
-  const basePosition: [number, number, number] = [4.0, 2.5, 0.5];
-
-  // Offset between boards along the x-axis
-  const offsetZ = 10.0;
-
-  // Generate positions for the boards
-  const boardPositions: [number, number, number][] = Array.from(
-    { length: boardCount },
-    (_, i) => [basePosition[0], basePosition[1], basePosition[2] + i * offsetZ],
-  );
+  const boardsData = calculatedBoardPositionsAndRotations(items, "arc");
 
   return (
-    <>
-      {boardPositions.map((position, index) => (
+    <group>
+      {boardsData.map((board) => (
         <Board
-          key={index}
-          position={position} // Pass position prop
-          helper={false} // Disable helper controls
+          key={board.id}
+          id={board.id}
+          position={board.position}
+          rotation={board.rotation} // Pass the calculated rotation to the Board
+          helper={false}
+          title={board.title}
+          link={board.link}
+          imagePath={board.imagePath}
+          description={board.description}
+          githubLink={board.githubLink}
+          techStack={board.techStack}
         />
       ))}
-    </>
+    </group>
   );
 };
 

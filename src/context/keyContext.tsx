@@ -6,9 +6,9 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { print } from "../utils/common";
-import keys from "../utils/keys.json";
-import { ControlKeys, ControlState } from "../components/types/types";
+import { print } from "../utils/common"; // Debug print utility
+import keys from "../utils/keys.json"; // Key mappings
+import { ControlKeys, ControlState } from "../components/types/controlTypes"; // Control types/states
 
 // Import and assert control keys
 const controlKeys = keys as ControlKeys;
@@ -62,6 +62,7 @@ const determineControlState = (activeKeys: Set<string>): ControlState => {
 export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  /// State for active keys and control state
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [controlState, setControlState] = useState<ControlState>({
     direction: "neutral",
@@ -95,6 +96,7 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   }, []);
 
+  /// Event handlers
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => pressKey(event.key),
     [pressKey],

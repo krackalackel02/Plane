@@ -1,22 +1,5 @@
-export type Color = [number, number, number];
-export type ColorMapEntry = { limit: number; color: Color };
-export type Range = { start: number; end: number } | null;
 export type AxisType = "x" | "y" | "z";
 export type MotionType = "roll" | "pitch" | "yaw" | "throttle";
-export type BoardParams = {
-  outerX: number;
-  outerY: number;
-  outerZ: number;
-  frame: number;
-  depth: number;
-};
-
-export type BoardProps = {
-  imagePath?: string;
-  helper?: boolean;
-  position?: [number, number, number]; // New position prop
-};
-
 // Define types for controls and control states
 export type ControlKeys = {
   roll: { positive: string; negative: string };

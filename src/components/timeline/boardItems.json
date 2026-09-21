@@ -1,0 +1,114 @@
+{
+    "boardItems": [
+        {
+            "id": "match-ai",
+            "title": "Match.ai",
+            "link": "https://bit.ly/4iw9JKx",
+            "githubLink": "https://bit.ly/4j2THb4",
+            "imagePath": "./images/match-ai-thumbnail.webp",
+            "description": "• Collaborated on a full-stack team-matching web app using OpenAI’s LLMs to generate optimized groups based on user prompts and preferences.\n• Integrated Clerk for user authentication and DynamoDB for group/team state management, designing around read/write constraints.\n• Implemented key design patterns (Proxy, Adapter, Observer, Mediator) to build scalable and maintainable React-based UI and backend architecture.\n• Provisioned cloud infrastructure with SST and Pulumi; deployed a serverless micro-monolith hybrid on AWS leveraging Lambda, and S3.",
+            "techStack": [
+                "Next.js",
+                "TypeScript",
+                "AWS",
+                "DynamoDB",
+                "OpenAI",
+                "Clerk"
+            ]
+        },
+        {
+            "id": "recsys",
+            "title": "RecSys",
+            "link": "https://bit.ly/3GMnQxw",
+            "githubLink": "https://bit.ly/4ln7gU1",
+            "imagePath": "./images/recsys-thumbnail.webp",
+            "description": "• Developed and benchmarked diverse recommender systems, including collaborative (KNN), sequential (RNN/LSTM), and graph-based (GCN) models.\n• Engineered a high-performing GCN in PyTorch, achieving a final test revenue of $19,481 and a Hit Rate of 37.3%.\n• Designed an adaptive coordinate ascent strategy for efficient hyperparameter tuning under strict computational constraints.\n• Demonstrated excellent generalization, with only a -2.47% performance drop from the training to test phases, proving model robustness.",
+            "techStack": [
+                "Python",
+                "PyTorch",
+                "Scikit-learn",
+                "Pandas",
+                "XGBoost"
+            ]
+        },
+        {
+            "id": "parallel-fluid-solver",
+            "title": "Parallel Fluid Dynamics Solver",
+            "link": "",
+            "githubLink": "https://bit.ly/4aJ2ACp",
+            "imagePath": "./images/parallel-fluid-solver-thumbnail.webp",
+            "description": "• Implemented C++ parallelisation techniques using MPI and OpenMP to distribute computational load and optimize performance for large spatial fluid dynamics problems, resulting in a 30% reduction in CPU time for simulations of the lid-driven cavity problem as demonstrated by scaling plots.\n• Developed Bash scripts to automate optimization and timing tests, streamlining the workflow and ensuring consistent performance evaluations.\n• Integrated unit testing with Boost to rigorously test and verify the accuracy of critical methods in both serial and parallel (MPI and OpenMP) implementations, ensuring reliable and accurate simulation results across different execution models with comprehensive coverage.",
+            "techStack": [
+                "C++",
+                "MPI",
+                "OpenMP",
+                "Bash"
+            ]
+        },
+        {
+            "id": "pitstop-portal",
+            "title": "Pitstop Portal",
+            "link": "https://bit.ly/3Mu16BZ",
+            "githubLink": "https://bit.ly/3XvbYWv",
+            "imagePath": "./images/pitstop-portal-thumbnail.webp",
+            "description": "• Designed a dynamic Formula 1 information app in React, fetching and presenting data on drivers, races, and results from 1970 using the \"Ergast\" API.\n• Leveraged modular CSS and Bootstrap for responsive UI design, ensuring seamless navigation and optimal user experience.",
+            "techStack": [
+                "JavaScript",
+                "ReactJS",
+                "CSS",
+                "Bootstrap"
+            ]
+        },
+        {
+            "id": "knight-mover",
+            "title": "Knight Mover",
+            "link": "https://bit.ly/47DHtQZ",
+            "githubLink": "https://bit.ly/4e8UTqD",
+            "imagePath": "./images/knight-mover-thumbnail.webp",
+            "description": "• Designed interactive knight's pathfinder in React, utilizing Breadth-First Search for shortest path and maintained robust state management.\n• Crafted a user-friendly UI with real-time feedback, seamlessly integrating visual game representations for an enhanced user experience.",
+            "techStack": [
+                "JavaScript",
+                "ReactJS",
+                "CSS"
+            ]
+        },
+        {
+            "id": "duocopter-controller",
+            "title": "Duocopter Controller & Arm Design",
+            "link": "https://bit.ly/3YJSnkh",
+            "githubLink": "",
+            "imagePath": "./images/duocopter-controller-thumbnail.webp",
+            "description": "• Developed a PID controller utilising MATLAB Simulink, undergoing iterative optimisation for enhanced performance.\n• Achieved the lowest average tracking error 0.11m and 1st among university peers in accuracy.\n• Designed a drone arm using Catia 3DX, drawing inspiration and validation from topology optimisation to ensure structural efficiency and robustness.",
+            "techStack": [
+                "Catia 3DX",
+                "Abaqus",
+                "MATLAB Simulink"
+            ]
+        },
+        {
+            "id": "automated-structural-design",
+            "title": "Automated Structural Design",
+            "link": "",
+            "githubLink": "https://bit.ly/44ez2ue",
+            "imagePath": "./images/automated-structural-design-thumbnail.webp",
+            "description": "• Automated testing with Python scripting implemented with Abaqus CLI; reducing simulation setup time from roughly 300 (manual) to 2 seconds.\n• Used Batch scripting to automate file and folder management during development process and program execution.",
+            "techStack": [
+                "Python",
+                "Batch"
+            ]
+        },
+        {
+            "id": "sf-matching-game",
+            "title": "Street Fighter Matching Game",
+            "link": "https://krackalackel02.github.io/Matching-Game/",
+            "githubLink": "https://github.com/krackalackel02/Matching-Game",
+            "imagePath": "./images/sf-matching-game-thumbnail.webp",
+            "description": "• Developed an interactive front-end matching game featuring characters from the Street Fighter series.\n• Implemented game logic to handle card flips, match detection, and win conditions.\n• Styled with HTML and CSS to create an engaging and visually appealing user interface.",
+            "techStack": [
+                "JavaScript",
+                "HTML",
+                "CSS"
+            ]
+        }
+    ]
+}

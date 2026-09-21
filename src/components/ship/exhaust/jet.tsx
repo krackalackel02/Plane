@@ -1,13 +1,14 @@
 /* eslint-disable react/prop-types */
-import ParticleGenerator from "./particleGenerator";
-import constants from "../../../utils/constants.json";
-import { deg2rad } from "../../../utils/3d";
+import constants from "../../../utils/constants.json"; // Import constants for exhaust configuration
+import { deg2rad } from "../../../utils/3d"; // Utility to convert degrees to radians
+
+import ParticleGenerator from "./particleGenerator"; // Particle generator component
 
 interface JetProps {
-  coneAngle?: number;
-  position: [number, number, number];
-  active: boolean;
-  reverse: boolean;
+  coneAngle?: number; // Cone angle in radians
+  position: [number, number, number]; // Position of the jet
+  active: boolean; // Whether the jet is active
+  reverse: boolean; // Whether the jet is in reverse mode
 }
 
 const Jet: React.FC<JetProps> = ({
