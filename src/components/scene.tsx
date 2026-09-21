@@ -18,6 +18,7 @@ import Timeline from "./timeline";
 import Sphere from "./helper/sphere";
 import MobileControls from "./controls/mobileControls";
 import Minimap from "./minimap";
+import Highlight from "./timeline/highlight";
 
 /**
  * 3D Scene component
@@ -66,6 +67,8 @@ const Scene = () => {
             <Minimap />
             {/* Touch controls */}
             <MobileControls />
+            {/* Project details modal, shown when the ship activates a board */}
+            <Highlight />
           </ProjectProvider>
         </SceneProvider>
       </KeyProvider>

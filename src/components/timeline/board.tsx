@@ -13,7 +13,6 @@ import { RoundedBoxGeometry } from "three-stdlib";
 import { BoardParams } from "../types/boardTypes";
 import { createSaveButton } from "../../utils/3d";
 import ActivationZone from "./activationZone";
-import Highlight from "./highlight";
 
 /**
  * Default board parameters
@@ -152,11 +151,6 @@ const PictureFrame = ({
 export interface BoardProps {
   id: string;
   imagePath?: string;
-  title?: string;
-  link?: string;
-  description?: string;
-  githubLink?: string;
-  techStack?: string[];
   helper?: boolean;
   position?: [number, number, number];
   rotation?: [number, number, number];
@@ -167,11 +161,6 @@ export interface BoardProps {
  * Board component for displaying a 3D board
  * @param id Unique identifier for the board
  * @param imagePath Path to the image texture
- * @param title Title of the board
- * @param link URL link associated with the board
- * @param description Description text for the board
- * @param githubLink GitHub link associated with the board
- * @param techStack Array of technologies used
  * @param helper Boolean to enable Leva controls
  * @param position 3D position of the board
  * @param rotation 3D rotation of the board
@@ -181,11 +170,6 @@ export interface BoardProps {
 const Board = ({
   id,
   imagePath,
-  title,
-  link,
-  description,
-  githubLink,
-  techStack,
   helper = false,
   position = [4.0, 2.5, 0.5],
   rotation = [0, 0, 0], // Add rotation prop with a default
@@ -238,9 +222,6 @@ const Board = ({
       />
       <ActivationZone
         id={id} // Positioned on the floor in front of the board
-      />
-      <Highlight
-        projectData={{ id, title, description, link, githubLink, techStack }}
       />
     </group>
   );
