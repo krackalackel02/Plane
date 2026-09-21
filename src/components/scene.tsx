@@ -16,6 +16,7 @@ import Overlay from "./helper/overlay";
 import Lights from "./lights";
 import Timeline from "./timeline";
 import Sphere from "./helper/sphere";
+import MobileControls from "./controls/mobileControls";
 
 /**
  * 3D Scene component
@@ -33,18 +34,18 @@ const Scene = () => {
             {/* Provide loaded projects context */}
             <Canvas id="threejs-canvas">
               {/** 3D rendering canvas */}
-              {/* 
-                  Camera Setup 
+              {/*
+                  Camera Setup
                   - Ship-following camera component
               */}
               {/* Camera */}
               <Camera />
-              {/* 
+              {/*
                 Lighting Setup
                   - Scene lights configuration
               */}
               <Lights />
-              {/* 
+              {/*
                 Objects Setup
                   - Scene objects configuration
               */}
@@ -60,6 +61,8 @@ const Scene = () => {
             </Canvas>
             {/* Camera Helper */}
             <Overlay /> {/* Overlay for camera helper and HUD */}
+            {/* Touch controls */}
+            <MobileControls />
           </ProjectProvider>
         </SceneProvider>
       </KeyProvider>

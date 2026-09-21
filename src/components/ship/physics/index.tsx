@@ -1,6 +1,3 @@
- 
- 
-
 import { useEffect, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 
