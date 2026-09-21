@@ -11,6 +11,7 @@
 		"preview": "vite preview",
 		"test": "vitest --run ",
 		"test-watch": "vitest --watch",
+		"test:e2e": "playwright test",
 		"prepare": "husky"
 	},
 	"lint-staged": {
@@ -31,6 +32,7 @@
 		"jest-canvas-mock": "^2.5.2",
 		"leva": "^0.9.35",
 		"react": "^18.3.1",
+		"react-device-detect": "^2.2.3",
 		"react-dom": "^18.3.1",
 		"sharp": "^0.32.6",
 		"three": "^0.171.0",
@@ -39,6 +41,7 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.17.0",
+		"@playwright/test": "^1.63.0",
 		"@react-three/eslint-plugin": "^0.1.1",
 		"@react-three/test-renderer": "^8.2.1",
 		"@testing-library/jest-dom": "^6.6.3",

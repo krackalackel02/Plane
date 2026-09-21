@@ -18,6 +18,9 @@ import AutopilotBanner from "./helper/autopilotBanner";
 import Lights from "./lights";
 import Timeline from "./timeline";
 import Sphere from "./helper/sphere";
+import MobileControls from "./controls/mobileControls";
+import Minimap from "./minimap";
+import Highlight from "./timeline/highlight";
 
 /**
  * 3D Scene component
@@ -37,21 +40,21 @@ const Scene = () => {
               {/* Provide autopilot flight-request context */}
               <Canvas id="threejs-canvas">
                 {/** 3D rendering canvas */}
-                {/* 
-                  Camera Setup 
+                {/*
+                  Camera Setup
                   - Ship-following camera component
-              */}
+                */}
                 {/* Camera */}
                 <Camera />
-                {/* 
-                Lighting Setup
+                {/*
+                  Lighting Setup
                   - Scene lights configuration
-              */}
+                */}
                 <Lights />
-                {/* 
-                Objects Setup
+                {/*
+                  Objects Setup
                   - Scene objects configuration
-              */}
+                */}
                 <Galaxy />
                 {/* Background galaxy component */}
                 <Ship />
@@ -65,6 +68,12 @@ const Scene = () => {
               {/* Camera Helper */}
               <Overlay /> {/* Overlay for camera helper and HUD */}
               <AutopilotBanner />
+              {/* Bottom-left GTA5-style minimap */}
+              <Minimap />
+              {/* Touch controls */}
+              <MobileControls />
+              {/* Project details modal, shown when the ship activates a board */}
+              <Highlight />
             </AutopilotProvider>
           </ProjectProvider>
         </SceneProvider>

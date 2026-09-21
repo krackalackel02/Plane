@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
 } from "react";
 import { print } from "../utils/common"; // Debug print utility
 import keys from "../utils/keys.json"; // Key mappings
@@ -19,9 +20,21 @@ const ControlStateContext = createContext<ControlState>({
   turn: "neutral",
 });
 
+interface KeyControls {
+  pressKey: (key: string) => void;
+  releaseKey: (key: string) => void;
+}
+const KeyControlsContext = createContext<KeyControls>({
+  pressKey: () => {},
+  releaseKey: () => {},
+});
+
 // Custom hooks
 export const useKeyContext = () => useContext(KeyContext);
 export const useControlState = () => useContext(ControlStateContext);
+// Lets non-keyboard input (e.g. touch joysticks) drive the same activeKeys
+// set that keydown/keyup events do, so Physics/exhaust need no changes.
+export const useKeyControls = () => useContext(KeyControlsContext);
 
 // Helper to detect control state
 const determineControlState = (activeKeys: Set<string>): ControlState => {
@@ -56,9 +69,7 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     turn: "neutral",
   });
 
-  /// Event handlers
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    const { key } = event;
+  const pressKey = useCallback((key: string) => {
     setActiveKeys((prev) => {
       if (prev.has(key)) return prev;
 
@@ -71,8 +82,7 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   }, []);
 
-  const handleKeyUp = useCallback((event: KeyboardEvent) => {
-    const { key } = event;
+  const releaseKey = useCallback((key: string) => {
     setActiveKeys((prev) => {
       if (!prev.has(key)) return prev;
 
@@ -86,6 +96,17 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   }, []);
 
+  /// Event handlers
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => pressKey(event.key),
+    [pressKey],
+  );
+
+  const handleKeyUp = useCallback(
+    (event: KeyboardEvent) => releaseKey(event.key),
+    [releaseKey],
+  );
+
   // Attach and detach event listeners
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -97,10 +118,28 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [handleKeyDown, handleKeyUp]);
 
+  const keyControls = useMemo(
+    () => ({ pressKey, releaseKey }),
+    [pressKey, releaseKey],
+  );
+
+  // Dev-only hook so Playwright (a real browser, unlike the component
+  // tests' jsdom) can assert which keys a touch control actually produced.
+  // import.meta.env.DEV is false in a production build, so this never
+  // ships to the deployed GitHub Pages bundle.
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as unknown as { __activeKeys?: Set<string> }).__activeKeys =
+        activeKeys;
+    }
+  }, [activeKeys]);
+
   return (
     <KeyContext.Provider value={activeKeys}>
       <ControlStateContext.Provider value={controlState}>
-        {children}
+        <KeyControlsContext.Provider value={keyControls}>
+          {children}
+        </KeyControlsContext.Provider>
       </ControlStateContext.Provider>
     </KeyContext.Provider>
   );

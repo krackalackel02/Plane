@@ -1,0 +1,82 @@
+#mobile-controls {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  /* Docked bottom-right so it doesn't collide with the bottom-left
+     minimap. */
+  justify-content: flex-end;
+  align-items: flex-end;
+  padding: 16px calc(16px + env(safe-area-inset-right))
+    calc(24px + env(safe-area-inset-bottom))
+    calc(16px + env(safe-area-inset-left));
+  pointer-events: none;
+  z-index: 10;
+}
+
+.mobile-stick {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.circular-stick-track {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  touch-action: none;
+}
+
+.circular-stick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+
+/* Small direction hints rendered inside each stick. High-contrast white
+   glyphs with a dark outline so they stay legible over any base/knob
+   color and against the scene behind them. */
+.stick-label {
+  position: absolute;
+  pointer-events: none;
+  color: #fff;
+  text-shadow:
+    0 0 2px #000,
+    0 0 2px #000,
+    0 1px 1px #000;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 700;
+  user-select: none;
+}
+
+.circular-stick .stick-label--top {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.circular-stick .stick-label--bottom {
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.circular-stick .stick-label--left {
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.circular-stick .stick-label--right {
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}

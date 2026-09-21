@@ -27,12 +27,7 @@ const Timeline = () => {
             position={board.position}
             rotation={board.rotation} // Pass the calculated rotation to the Board
             helper={false}
-            title={board.title}
-            link={board.link}
             imagePath={board.imagePath}
-            description={board.description}
-            githubLink={board.githubLink}
-            techStack={board.techStack}
             arcRadius={arcRadius}
           />
         ))}
