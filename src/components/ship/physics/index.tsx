@@ -7,7 +7,10 @@ import { useControls } from "leva"; // Leva for UI controls
 import { Motion, createMotion } from "./helper/motion";
 import { useKeyContext } from "../../../context/keyContext";
 import { useScene } from "../../../context/sceneContext";
-import { useAutopilot } from "../../../context/autopilotContext";
+import {
+  useAutopilot,
+  AutopilotTarget,
+} from "../../../context/autopilotContext";
 import motionConstants from "../../../utils/motionConstants.json";
 import { createSaveButton } from "../../../utils/3d";
 import { HarmonicMotion } from "./motions/harmonic/harmonic";
@@ -48,6 +51,9 @@ const defaultMotionParams = {
     maxSpeed: 2,
     decayFactor: 0.85,
   },
+  autopilot: {
+    speed: 12,
+  },
 };
 
 /**
@@ -62,6 +68,7 @@ const getControlProps = (key: string) => {
   if (key === "maxAngle") return { min: 0, max: 90, step: 1 };
   if (key === "acceleration") return { min: 0, max: 1, step: 0.01 };
   if (key === "maxSpeed") return { min: 0, max: 100, step: 1 };
+  if (key === "speed") return { min: 1, max: 50, step: 1 };
   return { min: 0, max: 10, step: 1 };
 };
 
@@ -92,6 +99,10 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
     pitch: { ...defaultMotionParams.pitch, ...motionConstants.pitch },
     yaw: { ...defaultMotionParams.yaw, ...motionConstants.yaw },
     throttle: { ...defaultMotionParams.throttle, ...motionConstants.throttle },
+    autopilot: {
+      ...defaultMotionParams.autopilot,
+      ...motionConstants.autopilot,
+    },
   };
 
   const { shipRef: groupRef } = useScene();
@@ -109,7 +120,12 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   const activeKeys = useKeyContext();
   const { target, cancelAutopilot, setIsFlying } = useAutopilot();
   const autopilotMotion = useRef(new AutopilotMotion());
-  const wasFlying = useRef(false);
+  // Tracks which request object is currently being flown to (not just a
+  // flying/not-flying boolean), so a new requestAutopilot() call mid-flight
+  // - a different target reference - is detected and restarts the path
+  // from the ship's current position, rather than silently continuing
+  // toward the stale destination.
+  const activeTargetRef = useRef<AutopilotTarget | null>(null);
 
   // Setup Leva controls if helper is enabled
   if (helper) {
@@ -163,7 +179,10 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   // Update motions each frame
   useFrame((_, delta) => {
     if (target) {
-      if (!wasFlying.current) {
+      if (activeTargetRef.current !== target) {
+        // First engagement, or requestAutopilot() was called again with a
+        // new destination mid-flight - (re)plan from wherever the ship
+        // actually is right now, not its original starting point.
         // Roll/pitch springs run their own independent RAF loop - if the
         // ship was mid-roll/pitch the instant autopilot engaged, a plain
         // "stop calling update()" wouldn't stop that stale spring from
@@ -174,8 +193,9 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
           groupRef.current!.position.clone(),
           target.position,
           target.arcRadius,
+          params.autopilot.speed,
         );
-        wasFlying.current = true;
+        activeTargetRef.current = target;
         setIsFlying(true);
       }
 
@@ -185,7 +205,7 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
       );
       if (status !== "flying") {
         cancelAutopilot();
-        wasFlying.current = false;
+        activeTargetRef.current = null;
         setIsFlying(false);
       }
       return; // skip the four normal motions entirely this frame

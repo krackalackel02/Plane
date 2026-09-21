@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import { Vector3 } from "three";
 
-interface AutopilotTarget {
+export interface AutopilotTarget {
   position: Vector3;
   // Board-shell radius at request time, so the autopilot motion can decide
   // whether a direct path is already safe or needs to detour via the origin.
