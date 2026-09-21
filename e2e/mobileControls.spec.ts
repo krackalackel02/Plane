@@ -11,11 +11,6 @@ const activeKeys = (page: Page) =>
 // handlers. Dispatching real PointerEvents directly on the target element
 // does, and is exactly what a touch drag looks like from the handler's
 // point of view (same pointerId throughout, clientX/clientY set).
-// Distinct real touches get distinct pointerIds from the OS — reusing one
-// ID across two simultaneously-held sticks isn't realistic and can trip
-// up a real setPointerCapture (only one element may hold a given
-// pointerId at a time), so callers holding two sticks at once must pass
-// different IDs.
 const pointerDown = (
   locator: Locator,
   clientX: number,
@@ -63,82 +58,76 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-test("mobile controls are visible on a real mobile device context", async ({
+test("the joystick is visible on a real mobile device context", async ({
   page,
 }) => {
   // This is the check that jsdom-based component tests cannot do: confirm
   // react-device-detect's MobileView gate actually activates for a real
-  // mobile user-agent, not just that the components render when mocked.
-  await expect(
-    page.locator(".linear-stick--vertical .linear-stick-track"),
-  ).toBeVisible();
-  await expect(
-    page.locator(".linear-stick--horizontal .linear-stick-track"),
-  ).toBeVisible();
+  // mobile user-agent, not just that the component renders when mocked.
+  await expect(page.locator(".circular-stick-track")).toBeVisible();
 });
 
-test("throttle stick presses w when dragged up, and releases on lift", async ({
-  page,
-}) => {
-  const track = page.locator(".linear-stick--vertical .linear-stick-track");
+test("presses w when dragged up, and releases on lift", async ({ page }) => {
+  const track = page.locator(".circular-stick-track");
 
-  await dragBy(track, 0, -45); // up past the deadzone
+  await dragBy(track, 0, -30); // up past the deadzone
   await expect.poll(() => activeKeys(page)).toContain("w");
 
   await pointerUp(track);
   await expect.poll(() => activeKeys(page)).not.toContain("w");
 });
 
-test("throttle stick presses s when dragged down", async ({ page }) => {
-  const track = page.locator(".linear-stick--vertical .linear-stick-track");
+test("presses s when dragged down", async ({ page }) => {
+  const track = page.locator(".circular-stick-track");
 
-  await dragBy(track, 0, 45); // down past the deadzone
+  await dragBy(track, 0, 30); // down past the deadzone
   await expect.poll(() => activeKeys(page)).toContain("s");
 
   await pointerUp(track);
 });
 
-test("yaw stick presses d (turn right) when dragged right, and releases on lift", async ({
+test("presses d (turn right) when dragged right, and releases on lift", async ({
   page,
 }) => {
-  const track = page.locator(".linear-stick--horizontal .linear-stick-track");
+  const track = page.locator(".circular-stick-track");
 
-  await dragBy(track, 45, 0); // right past the deadzone
+  await dragBy(track, 30, 0); // right past the deadzone
   await expect.poll(() => activeKeys(page)).toContain("d");
 
   await pointerUp(track);
   await expect.poll(() => activeKeys(page)).not.toContain("d");
 });
 
-test("yaw stick presses a (turn left) when dragged left", async ({ page }) => {
-  const track = page.locator(".linear-stick--horizontal .linear-stick-track");
+test("presses a (turn left) when dragged left", async ({ page }) => {
+  const track = page.locator(".circular-stick-track");
 
-  await dragBy(track, -45, 0); // left past the deadzone
+  await dragBy(track, -30, 0); // left past the deadzone
   await expect.poll(() => activeKeys(page)).toContain("a");
 
   await pointerUp(track);
 });
 
 test("dragging within the deadzone presses nothing", async ({ page }) => {
-  const track = page.locator(".linear-stick--horizontal .linear-stick-track");
+  const track = page.locator(".circular-stick-track");
 
-  await dragBy(track, 8, 0); // well under the ~17.5px threshold
+  await dragBy(track, 5, 5); // well under the combined deadzone threshold
   await page.waitForTimeout(100);
   expect(await activeKeys(page)).toEqual([]);
 
   await pointerUp(track);
 });
 
-test("yaw and throttle can be held simultaneously (independent axes)", async ({
+test("throttle and yaw engage together on a diagonal drag", async ({
   page,
 }) => {
-  const throttle = page.locator(".linear-stick--vertical .linear-stick-track");
-  const yaw = page.locator(".linear-stick--horizontal .linear-stick-track");
+  const track = page.locator(".circular-stick-track");
 
-  await dragBy(throttle, 0, -45, 1);
-  await dragBy(yaw, 45, 0, 2);
+  await dragBy(track, 28, -28); // up-right diagonal
 
   await expect
     .poll(() => activeKeys(page))
     .toEqual(expect.arrayContaining(["w", "d"]));
+
+  await pointerUp(track);
+  await expect.poll(() => activeKeys(page)).toEqual([]);
 });

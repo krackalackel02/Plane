@@ -1,16 +1,14 @@
 import { MobileView } from "react-device-detect";
-import ThrottleStick from "./throttleStick";
-import YawStick from "./yawStick";
+import MovementStick from "./movementStick";
 import "./mobileControls.css";
 
-// Two floating touch bars, laid out like a real cockpit: throttle in the
-// left hand, yaw in the right hand. Pitch/roll are handled separately by
-// swiping directly on the ship model.
+// One floating circular joystick driving throttle (up/down) and yaw
+// (left/right) together. Pitch/roll are handled separately by swiping
+// directly on the ship model.
 const MobileControls = () => (
   <MobileView>
     <div id="mobile-controls">
-      <ThrottleStick />
-      <YawStick />
+      <MovementStick />
     </div>
   </MobileView>
 );

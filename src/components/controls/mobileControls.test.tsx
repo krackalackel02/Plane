@@ -28,10 +28,9 @@ describe("MobileControls", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("renders both sticks on a mobile device", () => {
+  it("renders the joystick on a mobile device", () => {
     deviceState.isMobile = true;
     const { container } = setup();
-    expect(container.querySelector(".linear-stick--vertical")).toBeTruthy();
-    expect(container.querySelector(".linear-stick--horizontal")).toBeTruthy();
+    expect(container.querySelector(".circular-stick-track")).toBeTruthy();
   });
 });

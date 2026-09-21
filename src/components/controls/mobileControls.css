@@ -4,7 +4,7 @@
   right: 0;
   bottom: 0;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: flex-end;
   padding: 16px calc(16px + env(safe-area-inset-right))
     calc(24px + env(safe-area-inset-bottom))
@@ -18,25 +18,16 @@
   touch-action: none;
 }
 
-.linear-stick-track {
+.circular-stick-track {
   position: relative;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.15);
   touch-action: none;
 }
 
-.linear-stick--vertical .linear-stick-track {
-  width: 60px;
-  height: 150px;
-  border-radius: 30px;
-}
-
-.linear-stick--horizontal .linear-stick-track {
-  width: 150px;
-  height: 60px;
-  border-radius: 30px;
-}
-
-.linear-stick-knob {
+.circular-stick-knob {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -64,26 +55,26 @@
   user-select: none;
 }
 
-.linear-stick--vertical .stick-label--top {
-  top: 10px;
+.circular-stick .stick-label--top {
+  top: 8px;
   left: 50%;
   transform: translateX(-50%);
 }
 
-.linear-stick--vertical .stick-label--bottom {
-  bottom: 10px;
+.circular-stick .stick-label--bottom {
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
 }
 
-.linear-stick--horizontal .stick-label--left {
-  left: 10px;
+.circular-stick .stick-label--left {
+  left: 8px;
   top: 50%;
   transform: translateY(-50%);
 }
 
-.linear-stick--horizontal .stick-label--right {
-  right: 10px;
+.circular-stick .stick-label--right {
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
 }
