@@ -14,6 +14,7 @@ import Galaxy from "./galaxy";
 import Ship from "./ship";
 import Camera from "./camera";
 import Overlay from "./helper/overlay";
+import AutopilotBanner from "./helper/autopilotBanner";
 import Lights from "./lights";
 import Timeline from "./timeline";
 import Sphere from "./helper/sphere";
@@ -63,6 +64,7 @@ const Scene = () => {
               </Canvas>
               {/* Camera Helper */}
               <Overlay /> {/* Overlay for camera helper and HUD */}
+              <AutopilotBanner />
             </AutopilotProvider>
           </ProjectProvider>
         </SceneProvider>
