@@ -4,7 +4,9 @@
   right: 0;
   bottom: 0;
   display: flex;
-  justify-content: center;
+  /* Docked bottom-right so it doesn't collide with the bottom-left
+     minimap. */
+  justify-content: flex-end;
   align-items: flex-end;
   padding: 16px calc(16px + env(safe-area-inset-right))
     calc(24px + env(safe-area-inset-bottom))

@@ -17,6 +17,7 @@ import Lights from "./lights";
 import Timeline from "./timeline";
 import Sphere from "./helper/sphere";
 import MobileControls from "./controls/mobileControls";
+import Minimap from "./minimap";
 import Highlight from "./timeline/highlight";
 
 /**
@@ -62,6 +63,8 @@ const Scene = () => {
             </Canvas>
             {/* Camera Helper */}
             <Overlay /> {/* Overlay for camera helper and HUD */}
+            {/* Bottom-left GTA5-style minimap */}
+            <Minimap />
             {/* Touch controls */}
             <MobileControls />
             {/* Project details modal, shown when the ship activates a board */}
