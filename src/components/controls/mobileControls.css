@@ -1,0 +1,39 @@
+#mobile-controls {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 16px calc(16px + env(safe-area-inset-right))
+    calc(24px + env(safe-area-inset-bottom))
+    calc(16px + env(safe-area-inset-left));
+  pointer-events: none;
+  z-index: 10;
+}
+
+.mobile-stick {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.mobile-stick--throttle .throttle-track {
+  position: relative;
+  width: 60px;
+  height: 150px;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.15);
+  touch-action: none;
+}
+
+.mobile-stick--throttle .throttle-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}

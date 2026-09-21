@@ -10,10 +10,10 @@ import { KeyProvider } from "../context/keyContext";
 import Stats from "./helper/stats";
 import { useRef } from "react";
 import { Group } from "three";
+import MobileControls from "./controls/mobileControls";
 
 const Scene = () => {
   const shipRef = useRef<Group>(null);
-
   return (
     <EnvironmentProvider>
       <KeyProvider>
@@ -35,6 +35,9 @@ const Scene = () => {
 
         {/* Camera Helper */}
         <Overlay />
+
+        {/* Touch controls */}
+        <MobileControls />
       </KeyProvider>
     </EnvironmentProvider>
   );
