@@ -96,3 +96,31 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  # Job 4: Build Job (verifies the app actually builds; PRs don't deploy)
+  build:
+    needs: [test, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Build project with Npx Vite
+        env:
+          VITE_SHOW_STATS: ${{ secrets.VITE_SHOW_STATS}}
+          VITE_SHOW_CAMERA: ${{ secrets.VITE_SHOW_CAMERA}}
+          VITE_SHOW_SHIP: ${{ secrets.VITE_SHOW_SHIP}}
+        run: npm run build
