@@ -15,6 +15,22 @@ export const calculatedBoardPositionsAndRotations = (
   }
 };
 
+/**
+ * Compute the radius of the semicircular arc that boards are placed on.
+ * Exported so other systems (e.g. autopilot pathing) can reason about the
+ * board shell's radius without duplicating this formula.
+ */
+export const computeArcRadius = (
+  count: number,
+  boardWidth: number = 6.7,
+  gap: number = 10.0,
+  deg: number = 180,
+) => {
+  const totalArcAngle = Math.PI * (deg / 180); // Convert degrees to radians
+  const totalArcLength = count * boardWidth + (count - 1) * gap;
+  return totalArcLength / totalArcAngle;
+};
+
 export const calculatedBoardData_arc = (
   items: boardJsonProps[],
   deg: number = 180,
@@ -23,10 +39,8 @@ export const calculatedBoardData_arc = (
   const boardWidth = 6.7;
   const gap = 10.0;
   const arcCenter = new THREE.Vector3(0, 0, 0);
-  const totalArcAngle = Math.PI * (deg / 180); // Convert degrees to radians
 
-  const totalArcLength = boardCount * boardWidth + (boardCount - 1) * gap;
-  const radius = totalArcLength / totalArcAngle;
+  const radius = computeArcRadius(boardCount, boardWidth, gap, deg);
 
   // --- Start of new mapping logic ---
 

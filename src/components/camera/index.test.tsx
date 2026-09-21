@@ -29,6 +29,10 @@ vi.mock("../../context/sceneContext", () => ({
   useScene: () => ({ shipRef: { current: null } }),
 }));
 
+vi.mock("../../context/autopilotContext", () => ({
+  useAutopilot: () => ({ isFlying: false }),
+}));
+
 import Camera from "./index";
 
 describe("Camera intro animation wiring", () => {

@@ -6,6 +6,7 @@ import { EnvironmentProvider } from "../context/envContext";
 import { KeyProvider } from "../context/keyContext";
 import { SceneProvider } from "../context/sceneContext";
 import { ProjectProvider } from "../context/projectContext";
+import { AutopilotProvider } from "../context/autopilotContext";
 import Stats from "./helper/stats";
 
 /// 3D Scene Components
@@ -13,6 +14,7 @@ import Galaxy from "./galaxy";
 import Ship from "./ship";
 import Camera from "./camera";
 import Overlay from "./helper/overlay";
+import AutopilotBanner from "./helper/autopilotBanner";
 import Lights from "./lights";
 import Timeline from "./timeline";
 import Sphere from "./helper/sphere";
@@ -34,41 +36,45 @@ const Scene = () => {
           {/* Provide scene object reference context */}
           <ProjectProvider>
             {/* Provide loaded projects context */}
-            <Canvas id="threejs-canvas">
-              {/** 3D rendering canvas */}
-              {/*
+            <AutopilotProvider>
+              {/* Provide autopilot flight-request context */}
+              <Canvas id="threejs-canvas">
+                {/** 3D rendering canvas */}
+                {/*
                   Camera Setup
                   - Ship-following camera component
-              */}
-              {/* Camera */}
-              <Camera />
-              {/*
-                Lighting Setup
+                */}
+                {/* Camera */}
+                <Camera />
+                {/*
+                  Lighting Setup
                   - Scene lights configuration
-              */}
-              <Lights />
-              {/*
-                Objects Setup
+                */}
+                <Lights />
+                {/*
+                  Objects Setup
                   - Scene objects configuration
-              */}
-              <Galaxy />
-              {/* Background galaxy component */}
-              <Ship />
-              {/* Main ship component */}
-              <Sphere position={[0, 0, 0]} label="Origin" />
-              {/* Origin sphere */}
-              <Timeline /> {/* CV Timeline Objects Path Component */}
-              {/* Performance Stats */}
-              <Stats />
-            </Canvas>
-            {/* Camera Helper */}
-            <Overlay /> {/* Overlay for camera helper and HUD */}
-            {/* Bottom-left GTA5-style minimap */}
-            <Minimap />
-            {/* Touch controls */}
-            <MobileControls />
-            {/* Project details modal, shown when the ship activates a board */}
-            <Highlight />
+                */}
+                <Galaxy />
+                {/* Background galaxy component */}
+                <Ship />
+                {/* Main ship component */}
+                <Sphere position={[0, 0, 0]} label="Origin" />
+                {/* Origin sphere */}
+                <Timeline /> {/* CV Timeline Objects Path Component */}
+                {/* Performance Stats */}
+                <Stats />
+              </Canvas>
+              {/* Camera Helper */}
+              <Overlay /> {/* Overlay for camera helper and HUD */}
+              <AutopilotBanner />
+              {/* Bottom-left GTA5-style minimap */}
+              <Minimap />
+              {/* Touch controls */}
+              <MobileControls />
+              {/* Project details modal, shown when the ship activates a board */}
+              <Highlight />
+            </AutopilotProvider>
           </ProjectProvider>
         </SceneProvider>
       </KeyProvider>

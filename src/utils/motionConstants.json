@@ -21,5 +21,8 @@
         "acceleration": 0.5,
         "maxSpeed": 2,
         "decayFactor": 0.85
+    },
+    "autopilot":{
+        "speed": 12
     }
 }

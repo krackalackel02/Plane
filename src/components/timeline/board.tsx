@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { useLoader } from "@react-three/fiber";
+import { useLoader, ThreeEvent } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
+import { useAutopilot } from "../../context/autopilotContext";
 import { Geometry, Base, Subtraction } from "@react-three/csg";
 
 // Leva for UI controls
@@ -11,7 +12,7 @@ import { useControls } from "leva";
 import boardParams from "../../utils/boardParams.json"; // Import JSON file
 import { RoundedBoxGeometry } from "three-stdlib";
 import { BoardParams } from "../types/boardTypes";
-import { createSaveButton } from "../../utils/3d";
+import { createSaveButton, getBoardMatWorldPosition } from "../../utils/3d";
 import ActivationZone from "./activationZone";
 
 /**
@@ -155,6 +156,7 @@ export interface BoardProps {
   position?: [number, number, number];
   rotation?: [number, number, number];
   debug?: boolean;
+  arcRadius?: number;
 }
 
 /**
@@ -174,12 +176,25 @@ const Board = ({
   position = [4.0, 2.5, 0.5],
   rotation = [0, 0, 0], // Add rotation prop with a default
   debug = false,
+  arcRadius = 0,
 }: BoardProps) => {
   // Combine default and custom parameters
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
   const [params, setParams] = useState(initialValues);
   const finalImage = imagePath || "./images/placeholder.jpg";
   const texture = useLoader(TextureLoader, finalImage);
+  const { requestAutopilot } = useAutopilot();
+
+  // Clicking either the picture frame or its floor mat (ActivationZone)
+  // bubbles up to this single handler - both should fly to the same mat
+  // center. Mirrors ActivationZone's own fixed local offset/rotation.
+  const handleAutopilotClick = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation();
+    requestAutopilot(
+      getBoardMatWorldPosition(position, rotation[1]),
+      arcRadius,
+    );
+  };
 
   // Function to update a specific parameter
   const updateParam = (key: keyof BoardParams) => (value: number) =>
@@ -214,7 +229,11 @@ const Board = ({
     );
 
   return (
-    <group position={position} rotation={rotation}>
+    <group
+      position={position}
+      rotation={rotation}
+      onClick={handleAutopilotClick}
+    >
       <PictureFrame
         params={params}
         texture={texture}
