@@ -123,6 +123,17 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     [pressKey, releaseKey],
   );
 
+  // Dev-only hook so Playwright (a real browser, unlike the component
+  // tests' jsdom) can assert which keys a touch control actually produced.
+  // import.meta.env.DEV is false in a production build, so this never
+  // ships to the deployed GitHub Pages bundle.
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as unknown as { __activeKeys?: Set<string> }).__activeKeys =
+        activeKeys;
+    }
+  }, [activeKeys]);
+
   return (
     <KeyContext.Provider value={activeKeys}>
       <ControlStateContext.Provider value={controlState}>

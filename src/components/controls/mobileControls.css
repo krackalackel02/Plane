@@ -18,16 +18,25 @@
   touch-action: none;
 }
 
-.mobile-stick--throttle .throttle-track {
+.linear-stick-track {
   position: relative;
-  width: 60px;
-  height: 150px;
-  border-radius: 30px;
   background: rgba(255, 255, 255, 0.15);
   touch-action: none;
 }
 
-.mobile-stick--throttle .throttle-knob {
+.linear-stick--vertical .linear-stick-track {
+  width: 60px;
+  height: 150px;
+  border-radius: 30px;
+}
+
+.linear-stick--horizontal .linear-stick-track {
+  width: 150px;
+  height: 60px;
+  border-radius: 30px;
+}
+
+.linear-stick-knob {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -36,4 +45,45 @@
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.55);
   pointer-events: none;
+}
+
+/* Small direction hints rendered inside each stick. High-contrast white
+   glyphs with a dark outline so they stay legible over any base/knob
+   color and against the scene behind them. */
+.stick-label {
+  position: absolute;
+  pointer-events: none;
+  color: #fff;
+  text-shadow:
+    0 0 2px #000,
+    0 0 2px #000,
+    0 1px 1px #000;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 700;
+  user-select: none;
+}
+
+.linear-stick--vertical .stick-label--top {
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.linear-stick--vertical .stick-label--bottom {
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.linear-stick--horizontal .stick-label--left {
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.linear-stick--horizontal .stick-label--right {
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
 }
