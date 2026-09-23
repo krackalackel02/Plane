@@ -79,17 +79,34 @@ class AudioEngine {
   }
 
   /**
-   * Must be called from inside a real user-gesture event handler
-   * (click/keydown/touchstart) - browsers refuse to run audio otherwise.
-   * Resumes the context and, unless disabled via VITE_MUSIC_ENABLED, kicks
-   * off the ambient pad exactly once.
+   * Builds the audio graph and, unless disabled via VITE_MUSIC_ENABLED,
+   * schedules the ambient pad immediately - safe to call as soon as the
+   * app mounts, with no user gesture required. Building/scheduling nodes
+   * doesn't need a gesture, only actually hearing them does (browsers
+   * create a fresh AudioContext in a "suspended" state until one occurs),
+   * so this makes sure the pad is already running and ready the instant
+   * `resume()` is allowed to unlock it, rather than only starting to spin
+   * up after that first interaction.
    */
   init(musicEnabled = true) {
     const ctx = this.ensureContext();
-    if (ctx.state === "suspended") void ctx.resume();
+    this.resume();
     if (!this.musicStarted && musicEnabled) {
       this.musicStarted = true;
       this.startMusic();
+    }
+    return ctx;
+  }
+
+  /**
+   * Attempts to unlock playback. Call this from a real user-gesture event
+   * handler (click/keydown/touchstart) - browsers ignore the attempt
+   * otherwise, so it's harmless to call speculatively (e.g. from `init`)
+   * before one has happened.
+   */
+  resume() {
+    if (this.ctx && this.ctx.state === "suspended") {
+      void this.ctx.resume().catch(() => {});
     }
   }
 
