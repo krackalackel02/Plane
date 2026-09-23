@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import { audioEngine } from "../audio/audioEngine";
+import { useEnvironment } from "./envContext";
 
 interface AudioUIContextType {
   muted: boolean;
@@ -21,15 +22,16 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [muted, setMuted] = useState(() => audioEngine.isMuted());
+  const { musicEnabled } = useEnvironment();
 
   useEffect(() => audioEngine.subscribe(setMuted), []);
 
   // Browsers refuse to play audio until a real user gesture has occurred.
-  // Listen for the first one, start the audio graph + ambient pad, then
-  // stop listening.
+  // Listen for the first one, start the audio graph (+ ambient pad, unless
+  // VITE_MUSIC_ENABLED=false), then stop listening.
   useEffect(() => {
     const start = () => {
-      audioEngine.init();
+      audioEngine.init(musicEnabled);
       window.removeEventListener("pointerdown", start);
       window.removeEventListener("keydown", start);
       window.removeEventListener("touchstart", start);
@@ -44,7 +46,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
       window.removeEventListener("keydown", start);
       window.removeEventListener("touchstart", start);
     };
-  }, []);
+  }, [musicEnabled]);
 
   const toggleMute = useCallback(() => audioEngine.toggleMute(), []);
 

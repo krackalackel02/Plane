@@ -79,12 +79,13 @@ class AudioEngine {
   /**
    * Must be called from inside a real user-gesture event handler
    * (click/keydown/touchstart) - browsers refuse to run audio otherwise.
-   * Resumes the context and kicks off the ambient pad exactly once.
+   * Resumes the context and, unless disabled via VITE_MUSIC_ENABLED, kicks
+   * off the ambient pad exactly once.
    */
-  init() {
+  init(musicEnabled = true) {
     const ctx = this.ensureContext();
     if (ctx.state === "suspended") void ctx.resume();
-    if (!this.musicStarted) {
+    if (!this.musicStarted && musicEnabled) {
       this.musicStarted = true;
       this.startMusic();
     }
