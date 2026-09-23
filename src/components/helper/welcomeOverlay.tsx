@@ -91,13 +91,20 @@ const WelcomeOverlay = () => {
               &times;
             </button>
             <h2 className="welcome-alert-title">
-              🚀 <GlitchText as="span" text="Welcome aboard" charDelayMs={28} />
+              🚀{" "}
+              <GlitchText
+                as="span"
+                text="Welcome aboard"
+                charDelayMs={28}
+                startDelayMs={250}
+              />
             </h2>
             <GlitchText
               as="p"
               className="welcome-alert-body"
               text={body}
               charDelayMs={9}
+              startDelayMs={380}
             />
             <div className="welcome-icons">
               {isMobile ? (
