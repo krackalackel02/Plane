@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -141,6 +142,9 @@ const Minimap = () => {
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Bounding rect captured the instant before an expand/collapse toggle,
+  // consumed by the FLIP effect below.
+  const preToggleRectRef = useRef<DOMRect | null>(null);
   const size = useMapSize(containerRef);
   const { boardPoints, boardsData, toMap, arcRadius } = useWorldToMap(size);
 
@@ -184,7 +188,52 @@ const Minimap = () => {
     return () => cancelAnimationFrame(frameId);
   }, [boardPoints, toMap, shipRef, size]);
 
-  const collapse = useCallback(() => setExpanded(false), []);
+  // Both directions go through the same rect capture so the FLIP effect
+  // below can animate the toggle as one continuous element resizing,
+  // rather than an instant jump followed by a width/height tween.
+  const toggleExpanded = useCallback((next: boolean) => {
+    if (containerRef.current) {
+      preToggleRectRef.current = containerRef.current.getBoundingClientRect();
+    }
+    setExpanded(next);
+  }, []);
+
+  const expand = useCallback(() => toggleExpanded(true), [toggleExpanded]);
+  const collapse = useCallback(() => toggleExpanded(false), [toggleExpanded]);
+
+  // FLIP: right after the dock <-> expanded class swap lands (new layout,
+  // not yet painted), work out how much the box just jumped and undo it
+  // with an inline transform, then release that transform on the next
+  // frame so the CSS transition animates it back to identity. The result
+  // reads as the same circle growing/shrinking in place rather than a
+  // size change plus a teleport to the screen center.
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    const before = preToggleRectRef.current;
+    preToggleRectRef.current = null;
+    if (!el || !before) return;
+
+    const after = el.getBoundingClientRect();
+    if (after.width === 0 || after.height === 0) return;
+
+    const scale = before.width / after.width;
+    const dx = before.left + before.width / 2 - (after.left + after.width / 2);
+    const dy = before.top + before.height / 2 - (after.top + after.height / 2);
+
+    el.style.transition = "none";
+    el.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+    // Force layout so the transform above is actually committed before
+    // it's released - otherwise the browser can coalesce both style
+    // writes into one frame and no animation plays.
+    el.getBoundingClientRect();
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.transition = "";
+        el.style.transform = "";
+      });
+    });
+  }, [expanded]);
 
   // Escape collapses the expanded map, same as tapping off it.
   useEffect(() => {
@@ -213,11 +262,11 @@ const Minimap = () => {
         role: "button" as const,
         tabIndex: 0,
         "aria-label": "Expand map",
-        onClick: () => setExpanded(true),
+        onClick: expand,
         onKeyDown: (event: ReactKeyboardEvent) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            setExpanded(true);
+            expand();
           }
         },
       };

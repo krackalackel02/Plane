@@ -15,11 +15,11 @@
   overflow: hidden;
   z-index: 20;
   cursor: pointer;
-  transition:
-    width 0.25s ease,
-    height 0.25s ease,
-    border-radius 0.25s ease,
-    box-shadow 0.25s ease;
+  /* Only `transform` animates - width/height/position flip to their new
+     values instantly, and the FLIP dance in index.tsx cancels that jump
+     out with an inline transform then releases it on this transition, so
+     the whole toggle reads as one circle growing/shrinking in place. */
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .minimap:focus-visible {
@@ -80,10 +80,12 @@
 }
 
 .minimap.minimap-expanded {
-  top: 50%;
-  left: 50%;
-  bottom: auto;
-  transform: translate(-50%, -50%);
+  /* Centered via inset + margin, not a resting translate(-50%, -50%) -
+     the FLIP effect in index.tsx drives `transform` directly during the
+     toggle, and a CSS transform here would fight with that rather than
+     compose with it. */
+  inset: 0;
+  margin: auto;
   width: min(70vmin, 480px);
   height: min(70vmin, 480px);
   border-radius: 50%;
