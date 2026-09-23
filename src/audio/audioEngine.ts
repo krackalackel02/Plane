@@ -250,11 +250,12 @@ class AudioEngine {
     bus.connect(delay);
     delay.connect(delayWet).connect(musicGain);
 
-    // Slow, evolving Cmaj9-ish pad built from detuned sine/triangle voices.
+    // Slow, evolving Cmaj9-ish pad - plain sine voices (no triangle) and a
+    // gentle swell keep this a soft bed rather than a buzzy drone.
     const chord = [130.81, 164.81, 196.0, 246.94, 293.66]; // C3 E3 G3 B3 D4
     chord.forEach((freq, i) => {
       const osc = ctx.createOscillator();
-      osc.type = i % 2 === 0 ? "sine" : "triangle";
+      osc.type = "sine";
       osc.frequency.value = freq;
 
       const gain = ctx.createGain();
@@ -263,7 +264,7 @@ class AudioEngine {
       const lfo = ctx.createOscillator();
       lfo.frequency.value = 0.05 + i * 0.015;
       const lfoGain = ctx.createGain();
-      lfoGain.gain.value = 0.03;
+      lfoGain.gain.value = 0.015;
       lfo.connect(lfoGain).connect(gain.gain);
 
       osc.connect(gain).connect(bus);
@@ -271,7 +272,7 @@ class AudioEngine {
       lfo.start();
 
       const now = ctx.currentTime;
-      const restingGain = i === 4 ? 0.02 : 0.04;
+      const restingGain = i === 4 ? 0.012 : 0.024;
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(restingGain, now + 4 + i);
     });
@@ -303,9 +304,9 @@ class AudioEngine {
   private scheduleTwinkle() {
     const fire = () => {
       this.playTwinkle();
-      window.setTimeout(fire, 1200 + Math.random() * 2000);
+      window.setTimeout(fire, 500 + Math.random() * 900);
     };
-    window.setTimeout(fire, 900);
+    window.setTimeout(fire, 400);
   }
 
   /** One "bleep" (bright, rising) or "bloop" (soft, falling) star sparkle. */
