@@ -37,6 +37,15 @@ const FINISH_SPIN_MS = 220;
 // treat it as done after this grace period rather than waiting forever.
 const NOTHING_TO_LOAD_GRACE_MS = 400;
 
+// Assets that only get requested once something else finishes loading first
+// (e.g. a board's shared material textures live behind its own thumbnail
+// texture in the component tree, so they don't get requested until that
+// thumbnail's Suspense boundary resolves) mean the manager can look
+// momentarily idle between waves rather than only once at the very end.
+// Require it to stay idle for this long, with nothing new starting, before
+// treating loading as actually finished.
+const SETTLE_MS = 200;
+
 /**
  * Tracks asset loading (three's DefaultLoadingManager, via drei's
  * useProgress) and exposes a single `ready` flag once loading has settled.
@@ -54,11 +63,20 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
   const startedRef = useRef(false);
   const doneRef = useRef(false);
 
-  // Assets are actually done once the manager has both started and settled.
+  // Assets are actually done once the manager has both started and settled -
+  // i.e. gone idle and STAYED idle for SETTLE_MS, rather than merely looking
+  // idle for one snapshot (see SETTLE_MS above for why: loading happens in
+  // waves here, not one flat burst). If a new wave starts before the timer
+  // fires, this effect reruns with active=true, and React's effect-cleanup
+  // ordering cancels the pending timer automatically before that happens.
   useEffect(() => {
     if (active) startedRef.current = true;
-    if (startedRef.current && !active && total > 0 && loaded >= total) {
-      doneRef.current = true;
+
+    if (!active && startedRef.current && total > 0 && loaded >= total) {
+      const timer = setTimeout(() => {
+        doneRef.current = true;
+      }, SETTLE_MS);
+      return () => clearTimeout(timer);
     }
   }, [active, loaded, total]);
 
