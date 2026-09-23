@@ -6,7 +6,11 @@ const GLITCH_CHARS = "!<>-_\\/[]{}=+*^#$%&01";
 
 interface GlitchTextProps {
   text: string;
-  as?: keyof JSX.IntrinsicElements;
+  // Narrowed to the tags actually used (rather than the full
+  // `keyof JSX.IntrinsicElements`) - the latter makes TS intersect prop
+  // types across every possible HTML tag, including ones like `<object>`
+  // that require props no caller here would ever pass.
+  as?: "span" | "p" | "h2";
   className?: string;
   // Roughly how long each character takes to lock in, left to right.
   charDelayMs?: number;

@@ -1,18 +1,28 @@
 import React, { createContext, useContext } from "react";
 
-/* 
-  Configuration based on environment:
-  - VITE_SHOW_CAMERA: Show camera helper
-  - VITE_SHOW_STATS: Show performance stats
-  - VITE_SHOW_SHIP: Show ship model
-  - VITE_SHOW_DEBUG: Enable debug mode
+/*
+  Configuration based on environment. See README.md "Environment variables"
+  for what each flag does and how to override it locally.
+
+  These VITE_SHOW_* vars normally come from .env.development / .env.production,
+  but those files are gitignored (local-only), so they don't exist in a fresh
+  clone or worktree. When a var is unset, fall back to the value it has in
+  .env.production, so behavior is consistent everywhere unless a dev
+  explicitly opts into debug tooling via their own .env.development/.env.local.
+  An explicit "true"/"false" in the env always wins over the fallback.
 */
+const readBoolEnv = (value: string | undefined, fallback: boolean): boolean => {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+};
+
 export const config = {
-  showCameraHelper: import.meta.env.VITE_SHOW_CAMERA === "true",
-  showStats: import.meta.env.VITE_SHOW_STATS === "true",
-  showShip: import.meta.env.VITE_SHOW_SHIP === "true",
-  showDebug: import.meta.env.VITE_SHOW_DEBUG === "true",
-  showSpheres: import.meta.env.VITE_SHOW_SPHERES === "true",
+  showCameraHelper: readBoolEnv(import.meta.env.VITE_SHOW_CAMERA, false),
+  showStats: readBoolEnv(import.meta.env.VITE_SHOW_STATS, false),
+  showShip: readBoolEnv(import.meta.env.VITE_SHOW_SHIP, true),
+  showDebug: readBoolEnv(import.meta.env.VITE_SHOW_DEBUG, false),
+  showSpheres: readBoolEnv(import.meta.env.VITE_SHOW_SPHERES, false),
 };
 
 // Create the context with default values based on the environment

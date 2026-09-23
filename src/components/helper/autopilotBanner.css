@@ -5,6 +5,9 @@
   transform: translateX(-50%);
   z-index: 20;
   pointer-events: none;
+  max-width: 92vw;
+  box-sizing: border-box;
+  text-align: center;
 
   font-family: "Orbitron", sans-serif;
   font-weight: 900;
@@ -19,6 +22,20 @@
   white-space: nowrap;
 
   animation: autopilot-flash 0.9s steps(2, jump-none) infinite;
+}
+
+@media (max-width: 768px) {
+  #autopilot-banner {
+    top: 32px;
+    font-size: clamp(0.85rem, 5.5vw, 1.4rem);
+    letter-spacing: clamp(0.1rem, 1.5vw, 0.25rem);
+  }
+}
+
+@media (max-width: 360px) {
+  #autopilot-banner {
+    white-space: normal;
+  }
 }
 
 @keyframes autopilot-flash {
