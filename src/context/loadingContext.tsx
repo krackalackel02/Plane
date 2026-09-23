@@ -35,9 +35,20 @@ const MIN_SPLASH_MS = 900;
 export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { active, progress } = useProgress();
+  const { active, loaded, total } = useProgress();
   const [ready, setReady] = useState(false);
+  const [progress, setProgress] = useState(0);
   const mountedAtRef = useRef(Date.now());
+
+  // drei's own `progress` field rescales its 0-100 baseline every time a new
+  // batch of assets starts loading (e.g. board thumbnails kicking off after
+  // the ship model finishes), which makes it visibly jump backwards. Derive
+  // our own from the manager's raw cumulative counts instead, and never let
+  // it decrease, so the bar only ever climbs from 0 to 100.
+  useEffect(() => {
+    const raw = total > 0 ? (loaded / total) * 100 : 0;
+    setProgress((prev) => Math.max(prev, raw));
+  }, [loaded, total]);
 
   useEffect(() => {
     if (ready || active) return;
@@ -58,7 +69,9 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <LoadingContext.Provider value={{ ready, progress }}>
+    <LoadingContext.Provider
+      value={{ ready, progress: ready ? 100 : progress }}
+    >
       {children}
     </LoadingContext.Provider>
   );
