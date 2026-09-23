@@ -31,6 +31,7 @@ class AudioEngine {
   private engineActive = false;
 
   private musicStarted = false;
+  private musicBus: GainNode | null = null;
 
   private muted = false;
   private listeners = new Set<(muted: boolean) => void>();
@@ -58,7 +59,7 @@ class AudioEngine {
     this.masterGain = master;
 
     const music = ctx.createGain();
-    music.gain.value = 0.06; // always-on background, kept deliberately quiet
+    music.gain.value = 0.04; // always-on background, kept deliberately quiet
     music.connect(master);
     this.musicGain = music;
 
@@ -217,28 +218,40 @@ class AudioEngine {
     });
   }
 
-  /** Low, always-on ambient pad plus sparse "starry" twinkle blips. */
+  /**
+   * Low, always-on ambient bed: an evolving pad, a faint continuous
+   * high-register shimmer, and sparse "bleep"/"bloop" starry sparkles -
+   * all sharing one spacious reverb-like send so they feel like one place
+   * rather than separate sounds.
+   */
   private startMusic() {
     const ctx = this.ensureContext();
     if (!this.musicGain) return;
     const musicGain = this.musicGain;
 
+    // Every voice (pad, shimmer, sparkles) feeds this bus, which splits
+    // into a filtered dry path and a wide feedback-delay "space" path.
+    const bus = ctx.createGain();
+    bus.gain.value = 1;
+    this.musicBus = bus;
+
     const filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.value = 1400;
+    filter.frequency.value = 2200;
+    bus.connect(filter).connect(musicGain);
 
-    // Simple feedback delay to give the pad a wide, spacious echo.
-    const delay = ctx.createDelay(2);
-    delay.delayTime.value = 0.6;
+    const delay = ctx.createDelay(2.5);
+    delay.delayTime.value = 0.55;
     const feedback = ctx.createGain();
-    feedback.gain.value = 0.28;
+    feedback.gain.value = 0.32;
+    const delayWet = ctx.createGain();
+    delayWet.gain.value = 0.5;
     delay.connect(feedback).connect(delay);
-    filter.connect(delay);
-    delay.connect(musicGain);
-    filter.connect(musicGain);
+    bus.connect(delay);
+    delay.connect(delayWet).connect(musicGain);
 
     // Slow, evolving Cmaj9-ish pad built from detuned sine/triangle voices.
-    const chord = [130.81, 164.81, 196.0, 246.94]; // C3 E3 G3 B3
+    const chord = [130.81, 164.81, 196.0, 246.94, 293.66]; // C3 E3 G3 B3 D4
     chord.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       osc.type = i % 2 === 0 ? "sine" : "triangle";
@@ -250,16 +263,38 @@ class AudioEngine {
       const lfo = ctx.createOscillator();
       lfo.frequency.value = 0.05 + i * 0.015;
       const lfoGain = ctx.createGain();
-      lfoGain.gain.value = 0.035;
+      lfoGain.gain.value = 0.03;
       lfo.connect(lfoGain).connect(gain.gain);
 
-      osc.connect(gain).connect(filter);
+      osc.connect(gain).connect(bus);
       osc.start();
       lfo.start();
 
       const now = ctx.currentTime;
+      const restingGain = i === 4 ? 0.02 : 0.04;
       gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.05, now + 4 + i);
+      gain.gain.linearRampToValueAtTime(restingGain, now + 4 + i);
+    });
+
+    // Faint, ever-present high shimmer - the "starry" wash that sits under
+    // the occasional bleep/bloop sparkles.
+    [783.99, 987.77].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+
+      const gain = ctx.createGain();
+      gain.gain.value = 0.008;
+
+      const tremolo = ctx.createOscillator();
+      tremolo.frequency.value = 0.06 + i * 0.02;
+      const tremoloGain = ctx.createGain();
+      tremoloGain.gain.value = 0.006;
+      tremolo.connect(tremoloGain).connect(gain.gain);
+
+      osc.connect(gain).connect(bus);
+      osc.start();
+      tremolo.start();
     });
 
     this.scheduleTwinkle();
@@ -268,36 +303,62 @@ class AudioEngine {
   private scheduleTwinkle() {
     const fire = () => {
       this.playTwinkle();
-      window.setTimeout(fire, 3500 + Math.random() * 6000);
+      window.setTimeout(fire, 1200 + Math.random() * 2000);
     };
-    window.setTimeout(fire, 2000);
+    window.setTimeout(fire, 900);
   }
 
+  /** One "bleep" (bright, rising) or "bloop" (soft, falling) star sparkle. */
   private playTwinkle() {
-    if (!this.ctx || !this.musicGain) return;
+    if (!this.ctx || !this.musicBus) return;
     const ctx = this.ctx;
-    const musicGain = this.musicGain;
+    const bus = this.musicBus;
     const now = ctx.currentTime;
 
-    // Pentatonic-ish scale for a pleasant, "magical" twinkle.
-    const scale = [523.25, 587.33, 659.25, 783.99, 880, 1046.5];
-    const freq = scale[Math.floor(Math.random() * scale.length)];
-
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = freq;
+    const isBleep = Math.random() > 0.45;
+    // Major-pentatonic-ish tones that sit comfortably over the Cmaj9 pad.
+    const highScale = [523.25, 587.33, 659.25, 783.99, 880, 987.77, 1046.5];
+    const lowScale = highScale.map((f) => f / 2);
+    const freq = (isBleep ? highScale : lowScale)[
+      Math.floor(Math.random() * highScale.length)
+    ];
+    const duration = isBleep ? 1.1 : 2.0;
 
     const gain = ctx.createGain();
+    const peak = isBleep ? 0.05 : 0.045;
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.05, now + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.6);
+    gain.gain.linearRampToValueAtTime(peak, now + (isBleep ? 0.012 : 0.03));
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    // Fundamental, with a gentle pitch drift for "bleep" (rises) vs
+    // "bloop" (sinks), like a soft magic droplet.
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(
+      isBleep ? freq * 1.08 : freq * 0.82,
+      now + duration,
+    );
+
+    // A quiet bell-like overtone gives the sparkle some shimmer instead of
+    // a flat sine beep.
+    const overtone = ctx.createOscillator();
+    overtone.type = "sine";
+    overtone.frequency.value = freq * (isBleep ? 2 : 1.5);
+    const overtoneGain = ctx.createGain();
+    overtoneGain.gain.value = 0.35;
 
     const panner = ctx.createStereoPanner();
     panner.pan.value = Math.random() * 1.6 - 0.8;
 
-    osc.connect(gain).connect(panner).connect(musicGain);
+    osc.connect(gain);
+    overtone.connect(overtoneGain).connect(gain);
+    gain.connect(panner).connect(bus);
+
     osc.start(now);
-    osc.stop(now + 1.7);
+    overtone.start(now);
+    osc.stop(now + duration + 0.1);
+    overtone.stop(now + duration + 0.1);
   }
 }
 
