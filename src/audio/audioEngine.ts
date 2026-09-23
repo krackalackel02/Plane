@@ -16,8 +16,10 @@ const MUTE_STORAGE_KEY = "plane:audio-muted";
 
 interface EngineNodes {
   noiseSource: AudioBufferSourceNode;
-  toneOsc: OscillatorNode;
-  wobbleLfo: OscillatorNode;
+  thrumOsc: OscillatorNode;
+  whineOsc: OscillatorNode;
+  idleLfo: OscillatorNode;
+  flangeLfo: OscillatorNode;
 }
 
 class AudioEngine {
@@ -137,19 +139,28 @@ class AudioEngine {
     const now = ctx.currentTime;
     this.engineGain.gain.cancelScheduledValues(now);
     this.engineGain.gain.setTargetAtTime(
-      active ? 0.22 : 0,
+      active ? 0.13 : 0,
       now,
-      active ? 0.35 : 0.6,
+      active ? 0.4 : 0.6,
     );
 
-    this.engine.toneOsc.frequency.cancelScheduledValues(now);
-    this.engine.toneOsc.frequency.setTargetAtTime(active ? 95 : 70, now, 0.5);
+    // Both tonal layers climb together on spool-up, like an X-wing engine
+    // winding from idle to full power.
+    this.engine.thrumOsc.frequency.cancelScheduledValues(now);
+    this.engine.thrumOsc.frequency.setTargetAtTime(active ? 72 : 52, now, 0.55);
+    this.engine.whineOsc.frequency.cancelScheduledValues(now);
+    this.engine.whineOsc.frequency.setTargetAtTime(
+      active ? 640 : 300,
+      now,
+      0.5,
+    );
   }
 
   private buildEngine(ctx: AudioContext) {
     if (!this.engineGain) return;
+    const engineGain = this.engineGain;
 
-    // Filtered noise gives the airy "whirr" body of a space engine.
+    // Filtered noise - the blowing "wind" body of the engine.
     const noiseSource = ctx.createBufferSource();
     noiseSource.buffer = this.noiseBuffer(ctx);
     noiseSource.loop = true;
@@ -160,39 +171,67 @@ class AudioEngine {
     noiseFilter.Q.value = 0.7;
 
     const noiseGain = ctx.createGain();
-    noiseGain.gain.value = 0.6;
+    noiseGain.gain.value = 0.55;
 
-    noiseSource
-      .connect(noiseFilter)
-      .connect(noiseGain)
-      .connect(this.engineGain);
+    noiseSource.connect(noiseFilter).connect(noiseGain).connect(engineGain);
 
-    // Low sawtooth carries the engine's tonal body.
-    const toneOsc = ctx.createOscillator();
-    toneOsc.type = "sawtooth";
-    toneOsc.frequency.value = 70;
+    // Tonal voice: a low mechanical thrum plus a thin metallic whine,
+    // mixed together and pushed through a slow modulated delay ("flange")
+    // for a swirling, hollow, Doppler-like quality - the sense of a big
+    // engine displacing air, X-wing/TIE-fighter style.
+    const toneBus = ctx.createGain();
+    toneBus.gain.value = 0.85;
 
-    const toneFilter = ctx.createBiquadFilter();
-    toneFilter.type = "lowpass";
-    toneFilter.frequency.value = 260;
+    const thrumOsc = ctx.createOscillator();
+    thrumOsc.type = "sawtooth";
+    thrumOsc.frequency.value = 55;
+    const thrumFilter = ctx.createBiquadFilter();
+    thrumFilter.type = "lowpass";
+    thrumFilter.frequency.value = 180;
+    const thrumGain = ctx.createGain();
+    thrumGain.gain.value = 0.4;
+    thrumOsc.connect(thrumFilter).connect(thrumGain).connect(toneBus);
 
-    const toneGain = ctx.createGain();
-    toneGain.gain.value = 0.5;
+    const whineOsc = ctx.createOscillator();
+    whineOsc.type = "sawtooth";
+    whineOsc.frequency.value = 320;
+    const whineFilter = ctx.createBiquadFilter();
+    whineFilter.type = "bandpass";
+    whineFilter.frequency.value = 500;
+    whineFilter.Q.value = 4;
+    const whineGain = ctx.createGain();
+    whineGain.gain.value = 0.16;
+    whineOsc.connect(whineFilter).connect(whineGain).connect(toneBus);
 
-    toneOsc.connect(toneFilter).connect(toneGain).connect(this.engineGain);
+    // Slow breathing so the idle feels alive rather than static - much
+    // slower and shallower than the old pitch wobble, so it reads as a
+    // throb rather than a spring.
+    const idleLfo = ctx.createOscillator();
+    idleLfo.frequency.value = 0.6;
+    const idleLfoGain = ctx.createGain();
+    idleLfoGain.gain.value = 0.12;
+    idleLfo.connect(idleLfoGain).connect(toneBus.gain);
 
-    // Slow LFO wobbling the tone pitch for a throbbing "space engine" feel.
-    const wobbleLfo = ctx.createOscillator();
-    wobbleLfo.frequency.value = 5.5;
-    const wobbleLfoGain = ctx.createGain();
-    wobbleLfoGain.gain.value = 6;
-    wobbleLfo.connect(wobbleLfoGain).connect(toneOsc.frequency);
+    const flangeDelay = ctx.createDelay(0.02);
+    flangeDelay.delayTime.value = 0.006;
+    const flangeLfo = ctx.createOscillator();
+    flangeLfo.frequency.value = 0.15;
+    const flangeLfoGain = ctx.createGain();
+    flangeLfoGain.gain.value = 0.004;
+    flangeLfo.connect(flangeLfoGain).connect(flangeDelay.delayTime);
+    const flangeWet = ctx.createGain();
+    flangeWet.gain.value = 0.35;
+
+    toneBus.connect(engineGain);
+    toneBus.connect(flangeDelay).connect(flangeWet).connect(engineGain);
 
     noiseSource.start();
-    toneOsc.start();
-    wobbleLfo.start();
+    thrumOsc.start();
+    whineOsc.start();
+    idleLfo.start();
+    flangeLfo.start();
 
-    this.engine = { noiseSource, toneOsc, wobbleLfo };
+    this.engine = { noiseSource, thrumOsc, whineOsc, idleLfo, flangeLfo };
   }
 
   /** Short two-note rising chime for a successful activation-zone entry. */
