@@ -13,8 +13,21 @@ vi.mock("react-device-detect", () => ({
 }));
 
 import WelcomeOverlay from "./welcomeOverlay";
+import HelpButton from "./helpButton";
+import { WelcomeProvider } from "./welcomeContext";
 import { INTRO_ANIMATION_DURATION_MS } from "../camera/animate";
 import { GLITCH_EXIT_MS } from "./glitchTiming";
+
+// Mirrors how scene.tsx composes these: WelcomeOverlay (intro alert + help
+// modal) and HelpButton (the persistent "?" toggle) are DOM siblings, kept
+// in sync via WelcomeContext rather than one containing the other.
+const renderWelcome = () =>
+  render(
+    <WelcomeProvider>
+      <WelcomeOverlay />
+      <HelpButton />
+    </WelcomeProvider>,
+  );
 
 const settle = () =>
   act(() => {
@@ -28,7 +41,7 @@ const finishExit = () =>
     vi.advanceTimersByTime(GLITCH_EXIT_MS);
   });
 
-describe("WelcomeOverlay", () => {
+describe("WelcomeOverlay + HelpButton", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     deviceState.isMobile = false;
@@ -39,7 +52,7 @@ describe("WelcomeOverlay", () => {
   });
 
   it("renders nothing until the intro camera animation has settled", () => {
-    render(<WelcomeOverlay />);
+    renderWelcome();
     expect(screen.queryByRole("dialog")).toBeNull();
 
     act(() => {
@@ -49,7 +62,7 @@ describe("WelcomeOverlay", () => {
   });
 
   it("shows the welcome alert once the camera settles, and a help button appears only after it's dismissed", () => {
-    render(<WelcomeOverlay />);
+    renderWelcome();
     settle();
 
     expect(screen.getByRole("dialog", { name: "Welcome" })).toBeTruthy();
@@ -57,7 +70,7 @@ describe("WelcomeOverlay", () => {
   });
 
   it("dismisses on close-button click and reveals the help button", () => {
-    render(<WelcomeOverlay />);
+    renderWelcome();
     settle();
 
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
@@ -68,7 +81,7 @@ describe("WelcomeOverlay", () => {
   });
 
   it("dismisses on backdrop click but not on clicks inside the alert", () => {
-    render(<WelcomeOverlay />);
+    renderWelcome();
     settle();
 
     fireEvent.click(screen.getByRole("dialog", { name: "Welcome" }));
@@ -82,7 +95,7 @@ describe("WelcomeOverlay", () => {
   });
 
   it("auto-dismisses after the estimated read time plus grace period", () => {
-    render(<WelcomeOverlay />);
+    renderWelcome();
     settle();
     expect(screen.getByRole("dialog", { name: "Welcome" })).toBeTruthy();
 
@@ -95,7 +108,7 @@ describe("WelcomeOverlay", () => {
   });
 
   it("opens the help modal with PC controls on desktop", () => {
-    render(<WelcomeOverlay />);
+    renderWelcome();
     settle();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     finishExit();
@@ -108,7 +121,7 @@ describe("WelcomeOverlay", () => {
 
   it("opens the help modal with joystick controls on mobile", () => {
     deviceState.isMobile = true;
-    render(<WelcomeOverlay />);
+    renderWelcome();
     settle();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     finishExit();
@@ -119,7 +132,7 @@ describe("WelcomeOverlay", () => {
   });
 
   it("closes the help modal via its close button", () => {
-    render(<WelcomeOverlay />);
+    renderWelcome();
     settle();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     finishExit();

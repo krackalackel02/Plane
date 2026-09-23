@@ -1,0 +1,76 @@
+.hud-corner {
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(10, 14, 26, 0.65);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* Shared icon-button look for everything docked inside .hud-corner (mute,
+   help, ...) - the group provides the outer chrome, so each button is just
+   an icon plus a hover state, not its own separately-styled circle. */
+.hud-icon-button {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: "Orbitron", sans-serif;
+  font-weight: 900;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.15s;
+}
+
+.hud-icon-button:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  transform: scale(1.06);
+}
+
+.hud-icon-button:focus-visible {
+  outline: 2px solid #fff200;
+  outline-offset: 2px;
+}
+
+/* Used by the help "?" button to keep its usual brand-yellow accent even
+   though it no longer carries its own background/border. */
+.hud-icon-button--accent {
+  color: #fff200;
+}
+
+.hud-icon-button--accent:hover {
+  color: #fff9b0;
+}
+
+@media (max-width: 768px) {
+  .hud-corner {
+    top: calc(12px + env(safe-area-inset-top));
+    right: calc(12px + env(safe-area-inset-right));
+    gap: 0;
+    padding: 3px;
+  }
+
+  .hud-icon-button {
+    width: 32px;
+    height: 32px;
+    font-size: 0.92rem;
+  }
+}

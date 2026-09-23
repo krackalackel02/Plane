@@ -13,6 +13,7 @@ Display/debug flags are read in `src/context/envContext.tsx` via Vite's `import.
 | `VITE_SHOW_STATS` | Renders the three.js perf stats panel (FPS counter) | `false` |
 | `VITE_SHOW_DEBUG` | Enables `print()` debug console logging (`src/utils/common.ts`) | `false` |
 | `VITE_SHOW_SPHERES` | Renders debug axis-helper spheres | `false` |
+| `VITE_MUSIC_ENABLED` | Plays the ambient background music | `true` |
 
 To opt into any of these locally (e.g. for perf debugging), set `VITE_SHOW_STATS=true` etc. in your own `.env.development` or `.env.local` — Vite loads `.env.local`/`.env.development.local` automatically and they're gitignored too, so they won't affect anyone else.
 
