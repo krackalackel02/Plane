@@ -240,7 +240,6 @@
   border-radius: 999px;
   background: linear-gradient(90deg, #ff8800, #ffb300, #fff200);
   box-shadow: 0 0 10px rgba(255, 179, 0, 0.7);
-  transition: width 0.2s ease-out;
 }
 
 .loading-screen__percent {
