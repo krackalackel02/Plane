@@ -33,7 +33,7 @@
   overflow-y: auto;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  font-family: sans-serif;
+  font-family: "Orbitron", sans-serif;
   animation: fadeIn 0.25s ease-out;
   display: flex;
   flex-direction: column;
