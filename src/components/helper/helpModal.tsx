@@ -1,4 +1,7 @@
+import { useRef, useState } from "react";
 import { isMobile } from "react-device-detect";
+import { Keycap, JoystickIcon } from "./controlIcons";
+import { GLITCH_EXIT_MS } from "./glitchTiming";
 import "./helpModal.css";
 
 /* eslint-disable react/prop-types -- TS interfaces already cover this */
@@ -6,16 +9,6 @@ import "./helpModal.css";
 interface HelpModalProps {
   onClose: () => void;
 }
-
-interface KeycapProps {
-  label: string;
-  wide?: boolean;
-}
-
-// A single cartoony beveled keyboard key.
-const Keycap: React.FC<KeycapProps> = ({ label, wide = false }) => (
-  <span className={`keycap${wide ? " keycap--wide" : ""}`}>{label}</span>
-);
 
 const PcControls = () => (
   <div className="help-controls">
@@ -72,13 +65,7 @@ const PcControls = () => (
 const MobileControls = () => (
   <div className="help-controls">
     <div className="help-row">
-      <div className="help-joystick" aria-hidden="true">
-        <span className="help-joystick-hint help-joystick-hint--top">▲</span>
-        <span className="help-joystick-hint help-joystick-hint--bottom">▼</span>
-        <span className="help-joystick-hint help-joystick-hint--left">↺</span>
-        <span className="help-joystick-hint help-joystick-hint--right">↻</span>
-        <span className="help-joystick-knob" />
-      </div>
+      <JoystickIcon />
       <p className="help-copy">Drag the joystick to throttle and turn</p>
     </div>
 
@@ -96,26 +83,42 @@ const MobileControls = () => (
 
 // Full controls reference, reopenable via the persistent "?" button. Content
 // branches on device so touch users never see a keyboard diagram, and desktop
-// users never see a joystick.
-const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => (
-  <div className="welcome-backdrop" onClick={onClose}>
-    <div
-      className="welcome-alert help-modal"
-      role="dialog"
-      aria-label="Controls"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <button
-        className="welcome-alert-close"
-        onClick={onClose}
-        aria-label="Close"
+// users never see a joystick. Shares the welcome popup's glitchy HUD-panel
+// styling (welcome-alert) and exit transition so the two feel like one system.
+const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
+  const [closing, setClosing] = useState(false);
+  const closingRef = useRef(false);
+
+  const requestClose = () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosing(true);
+    setTimeout(() => {
+      closingRef.current = false;
+      onClose();
+    }, GLITCH_EXIT_MS);
+  };
+
+  return (
+    <div className="welcome-backdrop" onClick={requestClose}>
+      <div
+        className={`welcome-alert help-modal${closing ? " welcome-alert--closing" : ""}`}
+        role="dialog"
+        aria-label="Controls"
+        onClick={(event) => event.stopPropagation()}
       >
-        &times;
-      </button>
-      <h2 className="welcome-alert-title">Controls</h2>
-      {isMobile ? <MobileControls /> : <PcControls />}
+        <button
+          className="welcome-alert-close"
+          onClick={requestClose}
+          aria-label="Close"
+        >
+          &times;
+        </button>
+        <h2 className="welcome-alert-title">Controls</h2>
+        {isMobile ? <MobileControls /> : <PcControls />}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default HelpModal;

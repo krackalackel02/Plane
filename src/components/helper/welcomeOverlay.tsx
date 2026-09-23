@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isMobile } from "react-device-detect";
 import { INTRO_ANIMATION_DURATION_MS } from "../camera/animate";
 import HelpModal from "./helpModal";
+import GlitchText from "./glitchText";
+import { Keycap, JoystickIcon } from "./controlIcons";
+import { GLITCH_EXIT_MS } from "./glitchTiming";
 import "./welcomeOverlay.css";
 
 // Give the camera a beat after the flythrough lands before popping the
@@ -31,8 +34,10 @@ const estimateReadMs = (text: string) => {
 // introDismissed handoff without extra context plumbing).
 const WelcomeOverlay = () => {
   const [showIntro, setShowIntro] = useState(false);
+  const [closingIntro, setClosingIntro] = useState(false);
   const [introDismissed, setIntroDismissed] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const closingRef = useRef(false);
 
   const body = isMobile ? WELCOME_BODY.mobile : WELCOME_BODY.pc;
   const autoDismissMs = useMemo(
@@ -54,9 +59,18 @@ const WelcomeOverlay = () => {
     return () => clearTimeout(timer);
   }, [showIntro, autoDismissMs]);
 
+  // Plays the CSS "glitch-out" collapse before actually unmounting, rather
+  // than snapping the alert away the instant it's dismissed.
   const dismissIntro = () => {
-    setShowIntro(false);
-    setIntroDismissed(true);
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosingIntro(true);
+    setTimeout(() => {
+      setShowIntro(false);
+      setClosingIntro(false);
+      setIntroDismissed(true);
+      closingRef.current = false;
+    }, GLITCH_EXIT_MS);
   };
 
   return (
@@ -64,7 +78,7 @@ const WelcomeOverlay = () => {
       {showIntro && (
         <div className="welcome-backdrop" onClick={dismissIntro}>
           <div
-            className="welcome-alert"
+            className={`welcome-alert${closingIntro ? " welcome-alert--closing" : ""}`}
             role="dialog"
             aria-label="Welcome"
             onClick={(event) => event.stopPropagation()}
@@ -76,8 +90,34 @@ const WelcomeOverlay = () => {
             >
               &times;
             </button>
-            <h2 className="welcome-alert-title">🚀 Welcome aboard</h2>
-            <p className="welcome-alert-body">{body}</p>
+            <h2 className="welcome-alert-title">
+              🚀 <GlitchText as="span" text="Welcome aboard" charDelayMs={28} />
+            </h2>
+            <GlitchText
+              as="p"
+              className="welcome-alert-body"
+              text={body}
+              charDelayMs={9}
+            />
+            <div className="welcome-icons">
+              {isMobile ? (
+                <JoystickIcon compact />
+              ) : (
+                <>
+                  <div className="welcome-icons-cluster">
+                    <div className="keycap-row">
+                      <Keycap label="W" compact />
+                    </div>
+                    <div className="keycap-row">
+                      <Keycap label="A" compact />
+                      <Keycap label="S" compact />
+                      <Keycap label="D" compact />
+                    </div>
+                  </div>
+                  <Keycap label="Space" wide compact />
+                </>
+              )}
+            </div>
             <p className="welcome-alert-hint">
               Tap the <strong>?</strong> button anytime for full controls.
             </p>

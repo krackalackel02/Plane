@@ -14,10 +14,18 @@ vi.mock("react-device-detect", () => ({
 
 import WelcomeOverlay from "./welcomeOverlay";
 import { INTRO_ANIMATION_DURATION_MS } from "../camera/animate";
+import { GLITCH_EXIT_MS } from "./glitchTiming";
 
 const settle = () =>
   act(() => {
     vi.advanceTimersByTime(INTRO_ANIMATION_DURATION_MS + 501);
+  });
+
+// The exit ("glitch-out") animation keeps a dismissed popup mounted for a
+// beat before it's actually removed - advance past that before asserting.
+const finishExit = () =>
+  act(() => {
+    vi.advanceTimersByTime(GLITCH_EXIT_MS);
   });
 
 describe("WelcomeOverlay", () => {
@@ -53,6 +61,7 @@ describe("WelcomeOverlay", () => {
     settle();
 
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    finishExit();
 
     expect(screen.queryByRole("dialog", { name: "Welcome" })).toBeNull();
     expect(screen.getByRole("button", { name: "Show controls" })).toBeTruthy();
@@ -68,6 +77,7 @@ describe("WelcomeOverlay", () => {
     fireEvent.click(
       screen.getByRole("dialog", { name: "Welcome" }).parentElement!,
     );
+    finishExit();
     expect(screen.queryByRole("dialog", { name: "Welcome" })).toBeNull();
   });
 
@@ -88,6 +98,7 @@ describe("WelcomeOverlay", () => {
     render(<WelcomeOverlay />);
     settle();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    finishExit();
     fireEvent.click(screen.getByRole("button", { name: "Show controls" }));
 
     expect(screen.getByRole("dialog", { name: "Controls" })).toBeTruthy();
@@ -100,6 +111,7 @@ describe("WelcomeOverlay", () => {
     render(<WelcomeOverlay />);
     settle();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    finishExit();
     fireEvent.click(screen.getByRole("button", { name: "Show controls" }));
 
     expect(screen.getByRole("dialog", { name: "Controls" })).toBeTruthy();
@@ -110,9 +122,11 @@ describe("WelcomeOverlay", () => {
     render(<WelcomeOverlay />);
     settle();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    finishExit();
     fireEvent.click(screen.getByRole("button", { name: "Show controls" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    finishExit();
     expect(screen.queryByRole("dialog", { name: "Controls" })).toBeNull();
   });
 });
