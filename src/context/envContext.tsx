@@ -10,6 +10,9 @@ import React, { createContext, useContext } from "react";
   .env.production, so behavior is consistent everywhere unless a dev
   explicitly opts into debug tooling via their own .env.development/.env.local.
   An explicit "true"/"false" in the env always wins over the fallback.
+
+  VITE_MUSIC_ENABLED follows the same pattern but defaults on: set it to
+  "false" to opt the ambient background music out.
 */
 const readBoolEnv = (value: string | undefined, fallback: boolean): boolean => {
   if (value === "true") return true;
@@ -23,6 +26,7 @@ export const config = {
   showShip: readBoolEnv(import.meta.env.VITE_SHOW_SHIP, true),
   showDebug: readBoolEnv(import.meta.env.VITE_SHOW_DEBUG, false),
   showSpheres: readBoolEnv(import.meta.env.VITE_SHOW_SPHERES, false),
+  musicEnabled: readBoolEnv(import.meta.env.VITE_MUSIC_ENABLED, true),
 };
 
 // Create the context with default values based on the environment
