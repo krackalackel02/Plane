@@ -26,7 +26,7 @@ const LoadingContext = createContext<LoadingContextValue>({
 // slow one there's just one or two big jumps. Instead, assume loading takes
 // about this long and climb toward 99% over that time; if it's not actually
 // done yet, hold at 99% until it is, then snap the rest of the way to 100.
-const AVG_LOAD_MS = 2200;
+const AVG_LOAD_MS = 1000;
 const HOLD_AT_PERCENT = 99;
 
 // Once assets are actually done, animate the remaining distance to 100 over

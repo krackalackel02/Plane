@@ -70,13 +70,13 @@ describe("LoadingProvider progress", () => {
     setProgress({ active: true, loaded: 2, total: 9 });
     rerender(<Scene />);
 
-    advance(1100); // half of the ~2.2s average-load estimate
+    advance(500); // half of the ~1s average-load estimate
     const halfway = last().progress;
     expect(halfway).toBeGreaterThan(30);
     expect(halfway).toBeLessThan(70);
 
     // Well past the estimate, but the (mocked) manager never reported done.
-    advance(3000);
+    advance(2000);
     expect(last().progress).toBeCloseTo(99, 5);
     expect(last().ready).toBe(false);
 
