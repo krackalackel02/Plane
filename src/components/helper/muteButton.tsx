@@ -1,14 +1,15 @@
 import { useAudioContext } from "../../context/audioContext";
-import "./muteButton.css";
 
-// Small fixed icon button (top-right, HUD-style) that toggles all app
-// sound - engine hum, activation-zone bleep, and the ambient pad.
+// Icon button that toggles all app sound - engine hum, activation-zone
+// bleep, and the ambient pad. Docked inside HudCorner (see scene.tsx), which
+// owns the shared top-right positioning/background for the whole button
+// group; this is just the icon and its hover state (.hud-icon-button).
 const MuteButton = () => {
   const { muted, toggleMute } = useAudioContext();
 
   return (
     <button
-      id="mute-button"
+      className="hud-icon-button"
       type="button"
       onClick={toggleMute}
       aria-label={muted ? "Unmute sound" : "Mute sound"}

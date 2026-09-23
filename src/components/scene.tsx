@@ -24,6 +24,10 @@ import Sphere from "./helper/sphere";
 import MobileControls from "./controls/mobileControls";
 import Minimap from "./minimap";
 import Highlight from "./timeline/highlight";
+import WelcomeOverlay from "./helper/welcomeOverlay";
+import { WelcomeProvider } from "./helper/welcomeContext";
+import HelpButton from "./helper/helpButton";
+import HudCorner from "./helper/hudCorner";
 import MuteButton from "./helper/muteButton";
 import LoadingScreen from "./helper/loadingScreen";
 
@@ -72,61 +76,69 @@ const Scene = () => {
               {/* Provide autopilot flight-request context */}
               <AudioProvider>
                 {/* Provide engine hum / activation bleep / ambient audio */}
-                <Canvas id="threejs-canvas">
-                  {/** 3D rendering canvas */}
-                  {/*
-                    Camera Setup
-                    - Ship-following camera component
-                  */}
-                  {/* Camera */}
-                  <Camera />
-                  {/*
-                    Lighting Setup
-                    - Scene lights configuration
-                  */}
-                  <Lights />
-                  {/*
-                    Objects Setup
-                    - Scene objects configuration
-                    Galaxy has nothing to load, so it's kept outside the
-                    suspending subtrees below and paints on the very first
-                    frame instead of waiting on the ship model/board textures.
-                  */}
-                  <Galaxy />
-                  {/* Background galaxy component */}
-                  {/* Ship and Timeline each get their own Suspense boundary
-                      so a slow board texture doesn't hold back the ship (or
-                      vice versa) - the scene fills in progressively. */}
-                  <Suspense fallback={null}>
-                    <Ship />
-                    {/* Main ship component */}
-                  </Suspense>
-                  <Sphere position={[0, 0, 0]} label="Origin" />
-                  {/* Origin sphere */}
-                  <Suspense fallback={null}>
-                    <Timeline /> {/* CV Timeline Objects Path Component */}
-                  </Suspense>
-                  {/* Performance Stats */}
-                  <Stats />
-                </Canvas>
-                <LoadingScreen hidden={ready} />
-                {/* DOM chrome held back until the 3D scene is ready, then
-                    faded in together instead of appearing before it. */}
-                <div
-                  className={`scene-chrome${ready ? " scene-chrome--visible" : ""}`}
-                >
-                  {/* Camera Helper */}
-                  <Overlay /> {/* Overlay for camera helper and HUD */}
-                  <AutopilotBanner />
-                  {/* Bottom-left GTA5-style minimap */}
-                  <Minimap />
-                  {/* Touch controls */}
-                  <MobileControls />
-                  {/* Project details modal, shown when the ship activates a board */}
-                  <Highlight />
-                  {/* Top-right mute toggle for all app audio */}
-                  <MuteButton />
-                </div>
+                <WelcomeProvider>
+                  {/* Provide intro-popup + reopenable-help-modal state */}
+                  <Canvas id="threejs-canvas">
+                    {/** 3D rendering canvas */}
+                    {/*
+                      Camera Setup
+                      - Ship-following camera component
+                    */}
+                    {/* Camera */}
+                    <Camera />
+                    {/*
+                      Lighting Setup
+                      - Scene lights configuration
+                    */}
+                    <Lights />
+                    {/*
+                      Objects Setup
+                      - Scene objects configuration
+                      Galaxy has nothing to load, so it's kept outside the
+                      suspending subtrees below and paints on the very first
+                      frame instead of waiting on the ship model/board textures.
+                    */}
+                    <Galaxy />
+                    {/* Background galaxy component */}
+                    {/* Ship and Timeline each get their own Suspense boundary
+                        so a slow board texture doesn't hold back the ship (or
+                        vice versa) - the scene fills in progressively. */}
+                    <Suspense fallback={null}>
+                      <Ship />
+                      {/* Main ship component */}
+                    </Suspense>
+                    <Sphere position={[0, 0, 0]} label="Origin" />
+                    {/* Origin sphere */}
+                    <Suspense fallback={null}>
+                      <Timeline /> {/* CV Timeline Objects Path Component */}
+                    </Suspense>
+                    {/* Performance Stats */}
+                    <Stats />
+                  </Canvas>
+                  <LoadingScreen hidden={ready} />
+                  {/* DOM chrome held back until the 3D scene is ready, then
+                      faded in together instead of appearing before it. */}
+                  <div
+                    className={`scene-chrome${ready ? " scene-chrome--visible" : ""}`}
+                  >
+                    {/* Camera Helper */}
+                    <Overlay /> {/* Overlay for camera helper and HUD */}
+                    <AutopilotBanner />
+                    {/* Bottom-left GTA5-style minimap */}
+                    <Minimap />
+                    {/* Touch controls */}
+                    <MobileControls />
+                    {/* Project details modal, shown when the ship activates a board */}
+                    <Highlight />
+                    {/* Shared top-right HUD group: sound + help */}
+                    <HudCorner>
+                      <MuteButton />
+                      <HelpButton />
+                    </HudCorner>
+                    {/* Intro alert + reopenable controls reference */}
+                    <WelcomeOverlay />
+                  </div>
+                </WelcomeProvider>
               </AudioProvider>
             </AutopilotProvider>
           </ProjectProvider>

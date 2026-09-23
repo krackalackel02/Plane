@@ -1,0 +1,300 @@
+.welcome-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Deliberately light - a corrupted-transmission overlay, not an opaque
+     modal, so the ship and scene stay visible behind it. */
+  background: rgba(4, 8, 20, 0.32);
+  animation: welcome-fade-in 0.35s ease-out;
+}
+
+.welcome-alert {
+  position: relative;
+  width: min(420px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 28px 24px 22px;
+  border-radius: 10px;
+  background: linear-gradient(
+    160deg,
+    rgba(10, 15, 32, 0.92),
+    rgba(5, 7, 16, 0.95)
+  );
+  border: 1px solid rgba(120, 220, 255, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(120, 220, 255, 0.08) inset,
+    0 0 24px rgba(80, 200, 255, 0.25),
+    0 12px 40px rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.92);
+  /* One family for the whole panel (matches the title) - hierarchy comes
+     from weight/size/color, not from switching typefaces. */
+  font-family: "Orbitron", sans-serif;
+  animation:
+    glitch-in 0.4s steps(10, end) both,
+    glitch-ambient 5.5s ease-in-out 0.4s infinite;
+}
+
+/* Scanlines drifting slowly down the panel. */
+.welcome-alert::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.05) 0px,
+    rgba(255, 255, 255, 0.05) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  background-size: 100% 6px;
+  mix-blend-mode: overlay;
+  opacity: 0.5;
+  animation: scanline-drift 4s linear infinite;
+  z-index: 1;
+}
+
+/* Corner "corruption" blocks - flick on at rare, irregular intervals rather
+   than looping smoothly, so the panel reads as glitching, not decorating. */
+.welcome-alert::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(80, 220, 255, 0.2) 0%, transparent 40%) top
+      left / 46% 8px no-repeat,
+    linear-gradient(270deg, rgba(255, 60, 180, 0.18) 0%, transparent 40%) bottom
+      right / 38% 6px no-repeat;
+  opacity: 0;
+  animation: glitch-corners 5.5s steps(1, end) infinite;
+  z-index: 1;
+}
+
+.welcome-alert > * {
+  position: relative;
+  z-index: 2;
+}
+
+.welcome-alert-title {
+  margin: 0 0 10px;
+  font-family: "Orbitron", sans-serif;
+  font-weight: 900;
+  font-size: 1.3rem;
+  letter-spacing: 0.06em;
+  color: #fff200;
+  text-shadow:
+    0 0 6px rgba(255, 242, 0, 0.6),
+    0 0 18px rgba(255, 136, 0, 0.35),
+    -1px 0 rgba(80, 220, 255, 0.4),
+    1px 0 rgba(255, 60, 180, 0.35);
+}
+
+.welcome-alert-body {
+  margin: 0 0 12px;
+  font-weight: 500;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.88);
+  /* Prevents the per-frame scrambled glyphs from reflowing the paragraph
+     as they resolve to the (differently-shaped) final characters. */
+  font-variant-numeric: tabular-nums;
+}
+
+.welcome-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 4px 0 14px;
+}
+
+.welcome-icons-cluster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.welcome-alert-hint {
+  margin: 0;
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
+  color: rgba(140, 220, 255, 0.85);
+}
+
+.welcome-alert-hint strong {
+  color: #fff200;
+}
+
+.welcome-alert-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.welcome-alert-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+@keyframes welcome-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Initial burst: the panel tears onto screen across horizontal bands
+   instead of a plain fade/scale. */
+@keyframes glitch-in {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+    transform: translate(-3%, -2px) skewX(-3deg);
+  }
+  20% {
+    opacity: 1;
+    clip-path: inset(0 0 55% 0);
+    transform: translate(2%, 1px) skewX(2deg);
+  }
+  35% {
+    clip-path: inset(30% 0 15% 0);
+    transform: translate(-1.5%, -1px);
+  }
+  55% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(1%, 0);
+  }
+  70% {
+    transform: translate(-0.5%, 1px);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translate(0, 0) skewX(0);
+  }
+}
+
+/* Idle hum: the panel is mostly still, with a rare sub-pixel jitter and
+   brief RGB split so it never reads as a perfectly static image - like a
+   display fed by a lossy signal. */
+@keyframes glitch-ambient {
+  0%,
+  92%,
+  100% {
+    transform: translate(0, 0);
+    filter: none;
+  }
+  93% {
+    transform: translate(-1px, 0.5px);
+    filter: drop-shadow(-1px 0 rgba(80, 220, 255, 0.5))
+      drop-shadow(1px 0 rgba(255, 60, 180, 0.4));
+  }
+  94% {
+    transform: translate(1px, -0.5px);
+  }
+  95% {
+    transform: translate(-0.5px, 0);
+    filter: none;
+  }
+}
+
+@keyframes glitch-corners {
+  0%,
+  96%,
+  100% {
+    opacity: 0;
+  }
+  97% {
+    opacity: 1;
+  }
+  98% {
+    opacity: 0.4;
+  }
+  99% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes scanline-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 6px;
+  }
+}
+
+/* Disappearance: instead of a clean close, the panel implodes into a
+   bright horizontal line with a burst of static. */
+.welcome-alert--closing {
+  animation: glitch-out 0.4s steps(6, end) forwards !important;
+  pointer-events: none;
+}
+
+@keyframes glitch-out {
+  0% {
+    opacity: 1;
+    transform: scaleY(1);
+    clip-path: inset(0 0 0 0);
+  }
+  30% {
+    opacity: 1;
+    transform: scaleY(1) translateX(2%);
+    clip-path: inset(20% 0 20% 0);
+  }
+  60% {
+    transform: scaleY(0.08) translateX(-1%);
+    clip-path: inset(46% 0 46% 0);
+    box-shadow: 0 0 40px rgba(120, 220, 255, 0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleY(0.01);
+    clip-path: inset(50% 0 50% 0);
+  }
+}
+
+@media (max-width: 480px) {
+  .welcome-alert {
+    padding: 22px 18px 18px;
+  }
+
+  .welcome-alert-title {
+    font-size: 1.1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-backdrop,
+  .welcome-alert,
+  .welcome-alert::before,
+  .welcome-alert::after,
+  .welcome-alert--closing {
+    animation: none;
+  }
+}
