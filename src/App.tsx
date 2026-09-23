@@ -3,7 +3,6 @@ import "./App.css";
 
 // Scene Component
 import Scene from "./components/scene";
-import LoadingScreen from "./components/helper/loadingScreen";
 import { LoadingProvider } from "./context/loadingContext";
 
 /**
@@ -13,7 +12,6 @@ import { LoadingProvider } from "./context/loadingContext";
 function App() {
   return (
     <LoadingProvider>
-      <LoadingScreen />
       <Scene />
     </LoadingProvider>
   );

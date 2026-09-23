@@ -12,7 +12,7 @@ import { useProgress } from "@react-three/drei";
  */
 interface LoadingContextValue {
   ready: boolean; // Whether every tracked asset (GLTF models, textures) has finished loading
-  progress: number; // 0-100, see the climb/finish curve described below
+  progress: number; // 0-100, the real completion ratio
 }
 
 const LoadingContext = createContext<LoadingContextValue>({
@@ -20,30 +20,17 @@ const LoadingContext = createContext<LoadingContextValue>({
   progress: 0,
 });
 
-// three's LoadingManager only reports progress when an item *finishes*, not
-// as bytes arrive, so it can't drive a smooth bar on its own - on a fast/
-// local/cached load every asset can finish within the same tick, and on a
-// slow one there's just one or two big jumps. Instead, assume loading takes
-// about this long and climb toward 99% over that time; if it's not actually
-// done yet, hold at 99% until it is, then snap the rest of the way to 100.
-const AVG_LOAD_MS = 1000;
-const HOLD_AT_PERCENT = 99;
-
-// Once assets are actually done, animate the remaining distance to 100 over
-// this long instead of an abrupt cut.
-const FINISH_SPIN_MS = 220;
-
 // If nothing ever starts loading (e.g. everything was already resident),
 // treat it as done after this grace period rather than waiting forever.
 const NOTHING_TO_LOAD_GRACE_MS = 400;
 
-// Assets that only get requested once something else finishes loading first
-// (e.g. a board's shared material textures live behind its own thumbnail
-// texture in the component tree, so they don't get requested until that
-// thumbnail's Suspense boundary resolves) mean the manager can look
-// momentarily idle between waves rather than only once at the very end.
-// Require it to stay idle for this long, with nothing new starting, before
-// treating loading as actually finished.
+// A board's shared material textures live behind its own thumbnail texture
+// in the component tree (Material is a child of Board, and a suspending
+// component's render aborts before its children ever get evaluated), so
+// they aren't requested until each board's own thumbnail has resolved.
+// Loading here happens in waves, not one flat burst, and the manager can go
+// idle between waves - so "done" requires it to STAY idle for this long with
+// nothing new starting, not just look idle for one snapshot.
 const SETTLE_MS = 200;
 
 /**
@@ -52,6 +39,21 @@ const SETTLE_MS = 200;
  * Consumed by the loading screen (to know when to fade out) and by the
  * camera (to know when it's safe to start the intro flythrough) so both stay
  * in sync off one source of truth.
+ *
+ * `progress` is the manager's raw cumulative loaded/total ratio - not drei's
+ * own `progress` field, which rescales its 0-100 baseline every time a new
+ * wave of assets starts and visibly jumps backwards, and deliberately not
+ * clamped to only increase either: waves here mean the denominator can
+ * legitimately grow before the numerator catches up (more work was just
+ * discovered), and hiding that behind a frozen high number would be
+ * actively misleading rather than "smooth". It also doesn't try to fake a
+ * smooth animated curve in JS - this app does synchronous, main-thread-
+ * blocking work while loading (CSG boolean ops building the board frames,
+ * GLTF parsing, image decode), during which no JS-driven per-frame update
+ * can paint anyway. Instead, the loading screen renders this value with a
+ * CSS `transition` on `transform`, which the browser's compositor keeps
+ * animating smoothly - including through the occasional real dip - even
+ * while the main thread is busy. See loadingScreen.css.
  * @returns JSX.Element
  */
 export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -59,23 +61,22 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const { active, loaded, total } = useProgress();
   const [ready, setReady] = useState(false);
-  const [display, setDisplay] = useState(0);
   const startedRef = useRef(false);
-  const doneRef = useRef(false);
 
-  // Assets are actually done once the manager has both started and settled -
-  // i.e. gone idle and STAYED idle for SETTLE_MS, rather than merely looking
-  // idle for one snapshot (see SETTLE_MS above for why: loading happens in
-  // waves here, not one flat burst). If a new wave starts before the timer
-  // fires, this effect reruns with active=true, and React's effect-cleanup
-  // ordering cancels the pending timer automatically before that happens.
+  const progress = total > 0 ? (loaded / total) * 100 : 0;
+
   useEffect(() => {
     if (active) startedRef.current = true;
+  }, [active]);
 
+  // Assets are actually done once the manager has both started and settled -
+  // i.e. gone idle and STAYED idle for SETTLE_MS. If a new wave starts
+  // before the timer fires, this effect reruns with active=true, and
+  // React's effect-cleanup ordering cancels the pending timer automatically
+  // before that happens.
+  useEffect(() => {
     if (!active && startedRef.current && total > 0 && loaded >= total) {
-      const timer = setTimeout(() => {
-        doneRef.current = true;
-      }, SETTLE_MS);
+      const timer = setTimeout(() => setReady(true), SETTLE_MS);
       return () => clearTimeout(timer);
     }
   }, [active, loaded, total]);
@@ -84,50 +85,9 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (startedRef.current) return;
     const grace = setTimeout(() => {
-      if (!startedRef.current) doneRef.current = true;
+      if (!startedRef.current) setReady(true);
     }, NOTHING_TO_LOAD_GRACE_MS);
     return () => clearTimeout(grace);
-  }, []);
-
-  // Drives the whole climb/finish curve off requestAnimationFrame, tied to
-  // real wall-clock time rather than React's render cadence.
-  useEffect(() => {
-    let raf: number;
-    let current = 0;
-    let startTime: number | null = null;
-    let finishStartTime: number | null = null;
-    let finishFrom = 0;
-
-    const tick = (now: number) => {
-      if (startTime === null) startTime = now;
-
-      if (!doneRef.current) {
-        const t = Math.min(1, (now - startTime) / AVG_LOAD_MS);
-        current = t * HOLD_AT_PERCENT;
-        setDisplay(current);
-        raf = requestAnimationFrame(tick);
-        return;
-      }
-
-      if (finishStartTime === null) {
-        finishStartTime = now;
-        finishFrom = current;
-      }
-
-      const t = Math.min(1, (now - finishStartTime) / FINISH_SPIN_MS);
-      current = finishFrom + (100 - finishFrom) * t;
-      setDisplay(current);
-
-      if (t >= 1) {
-        setReady(true);
-        return;
-      }
-
-      raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
   }, []);
 
   // Safety net: never let the splash block the app forever if loading stalls.
@@ -137,7 +97,9 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <LoadingContext.Provider value={{ ready, progress: ready ? 100 : display }}>
+    <LoadingContext.Provider
+      value={{ ready, progress: ready ? 100 : progress }}
+    >
       {children}
     </LoadingContext.Provider>
   );

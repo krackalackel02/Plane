@@ -24,13 +24,6 @@ const Probe = () => {
   return null;
 };
 
-const renderProvider = () =>
-  render(
-    <LoadingProvider>
-      <Probe />
-    </LoadingProvider>,
-  );
-
 const Scene = () => (
   <LoadingProvider>
     <Probe />
@@ -38,65 +31,37 @@ const Scene = () => (
 );
 
 const last = () => captured[captured.length - 1];
-const progressValues = () => captured.map((s) => s.progress);
 const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
-describe("LoadingProvider progress", () => {
+describe("LoadingProvider", () => {
   beforeEach(() => {
     captured.length = 0;
     setProgress({ active: false, loaded: 0, total: 0 });
-    // Fake both setTimeout (the settle debounce) and requestAnimationFrame
-    // (the climb/finish animation) so a single vi.advanceTimersByTime call
-    // deterministically drives the whole curve.
-    vi.useFakeTimers({
-      toFake: [
-        "setTimeout",
-        "clearTimeout",
-        "requestAnimationFrame",
-        "cancelAnimationFrame",
-      ],
-    });
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  test("climbs toward 99% over the average-load estimate and holds there while still loading", () => {
-    const { rerender } = renderProvider();
+  test("progress reflects the manager's real loaded/total ratio", () => {
+    const { rerender } = render(<Scene />);
 
-    // Genuinely in-progress loading, so the "nothing ever started" fallback
-    // doesn't kick in and short-circuit this test.
-    setProgress({ active: true, loaded: 2, total: 9 });
+    setProgress({ active: true, loaded: 3, total: 9 });
     rerender(<Scene />);
+    expect(last().progress).toBeCloseTo((3 / 9) * 100, 5);
 
-    advance(500); // half of the ~1s average-load estimate
-    const halfway = last().progress;
-    expect(halfway).toBeGreaterThan(30);
-    expect(halfway).toBeLessThan(70);
-
-    // Well past the estimate, but the (mocked) manager never reported done.
-    advance(2000);
-    expect(last().progress).toBeCloseTo(99, 5);
+    setProgress({ active: true, loaded: 6, total: 9 });
+    rerender(<Scene />);
+    expect(last().progress).toBeCloseTo((6 / 9) * 100, 5);
     expect(last().ready).toBe(false);
-
-    // Keeps holding at 99% rather than creeping past it while still loading.
-    advance(1000);
-    expect(last().progress).toBeCloseTo(99, 5);
-
-    const values = progressValues();
-    for (let i = 1; i < values.length; i++) {
-      expect(values[i]).toBeGreaterThanOrEqual(values[i - 1]);
-    }
   });
 
-  test("spins to 100 and becomes ready once assets settle as done", () => {
-    const { rerender } = renderProvider();
+  test("becomes ready once assets settle as done, and reports 100 once ready", () => {
+    const { rerender } = render(<Scene />);
 
     setProgress({ active: true, loaded: 0, total: 9 });
     rerender(<Scene />);
-    advance(500);
-    expect(last().progress).toBeLessThan(99);
     expect(last().ready).toBe(false);
 
     setProgress({ active: false, loaded: 9, total: 9 });
@@ -106,15 +71,10 @@ describe("LoadingProvider progress", () => {
     advance(100);
     expect(last().ready).toBe(false);
 
-    // Past the settle window, with time for the finish spin too.
-    advance(500);
-    expect(last().progress).toBe(100);
+    // Past the settle window.
+    advance(200);
     expect(last().ready).toBe(true);
-
-    const values = progressValues();
-    for (let i = 1; i < values.length; i++) {
-      expect(values[i]).toBeGreaterThanOrEqual(values[i - 1]);
-    }
+    expect(last().progress).toBe(100);
   });
 
   // Regression test for the real bug this was built to catch: a board's
@@ -125,7 +85,7 @@ describe("LoadingProvider progress", () => {
   // The loading manager goes idle between waves, not just once at the very
   // end, so a single "went idle" snapshot would report done far too early.
   test("does not finish while a later wave of assets is still loading", () => {
-    const { rerender } = renderProvider();
+    const { rerender } = render(<Scene />);
 
     // First wave: ship model + board thumbnails.
     setProgress({ active: true, loaded: 0, total: 9 });
@@ -151,9 +111,17 @@ describe("LoadingProvider progress", () => {
     // Second wave finishes and this time truly stays settled.
     setProgress({ active: false, loaded: 13, total: 13 });
     rerender(<Scene />);
-    advance(500);
+    advance(200);
 
+    expect(last().ready).toBe(true);
     expect(last().progress).toBe(100);
+  });
+
+  test("treats nothing-to-load as done after a short grace period", () => {
+    render(<Scene />);
+
+    expect(last().ready).toBe(false);
+    advance(400);
     expect(last().ready).toBe(true);
   });
 });

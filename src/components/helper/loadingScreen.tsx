@@ -81,10 +81,14 @@ const LoadingScreen = () => {
         Charting a course through the portfolio&hellip;
       </div>
 
+      {/* transform (not width) so this keeps animating smoothly via the
+          compositor even while the main thread is busy elsewhere (CSG
+          boolean ops building the board frames, GLTF/image decode, etc.) -
+          see loadingScreen.css for the transition. */}
       <div className="loading-screen__bar">
         <div
           className="loading-screen__bar-fill"
-          style={{ width: `${percent}%` }}
+          style={{ transform: `scaleX(${percent / 100})` }}
         />
       </div>
       <div className="loading-screen__percent">{percent}%</div>

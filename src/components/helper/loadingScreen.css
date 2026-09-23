@@ -235,10 +235,19 @@
   overflow: hidden;
 }
 
+/* transform (not width) so the browser's compositor can keep this animating
+   smoothly even while the main thread is busy elsewhere (CSG boolean ops
+   building the board frames, GLTF/image decode, etc.) - a width transition
+   would stall along with everything else on the main thread. The parent
+   above supplies the rounded/clipped track, so this is a plain rectangle:
+   its own border-radius would stretch elliptically as it scales. */
 .loading-screen__bar-fill {
   position: relative;
+  width: 100%;
   height: 100%;
-  border-radius: 999px;
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 0.25s ease;
   background: linear-gradient(90deg, #ff8800, #ffb300, #fff200);
   background-size: 200% 100%;
   animation: loading-screen-bar-glow 1.6s ease-in-out infinite;
@@ -249,7 +258,6 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: inherit;
   background: linear-gradient(
     90deg,
     transparent,
