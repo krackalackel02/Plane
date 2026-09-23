@@ -21,6 +21,7 @@ import Sphere from "./helper/sphere";
 import MobileControls from "./controls/mobileControls";
 import Minimap from "./minimap";
 import Highlight from "./timeline/highlight";
+import WelcomeOverlay from "./helper/welcomeOverlay";
 
 /**
  * 3D Scene component
@@ -74,6 +75,8 @@ const Scene = () => {
               <MobileControls />
               {/* Project details modal, shown when the ship activates a board */}
               <Highlight />
+              {/* Intro alert + reopenable controls reference */}
+              <WelcomeOverlay />
             </AutopilotProvider>
           </ProjectProvider>
         </SceneProvider>
