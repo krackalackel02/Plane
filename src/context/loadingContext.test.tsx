@@ -13,10 +13,11 @@ vi.mock("@react-three/drei", () => ({
 
 import { LoadingProvider, useLoading } from "./loadingContext";
 
-const captured: number[] = [];
+type Sample = { ready: boolean; progress: number };
+const captured: Sample[] = [];
 const Probe = () => {
-  const { progress } = useLoading();
-  captured.push(progress);
+  const { ready, progress } = useLoading();
+  captured.push({ ready, progress });
   return null;
 };
 
@@ -49,49 +50,83 @@ describe("LoadingProvider progress", () => {
     });
   };
 
-  // Regression test: three's LoadingManager only reports progress when an
-  // item *finishes*, and on a fast/local/cached load every item can finish
-  // within the same manager tick - so the real ratio jumps straight from 0
-  // to 100 with no elapsed time in between. The displayed number should
-  // still be seen climbing gradually rather than snapping instantly.
-  test("eases a same-tick 0->100 jump over real time instead of snapping, and never decreases", () => {
+  const progressValues = () => captured.map((s) => s.progress);
+
+  test("climbs toward 99% over the average-load estimate and holds there while still loading", () => {
     captured.length = 0;
     Object.assign(progressState, { active: false, loaded: 0, total: 0 });
+
+    render(
+      <LoadingProvider>
+        <Probe />
+      </LoadingProvider>,
+    );
+
+    advanceFrame(0); // primes the loop's internal timestamp baseline
+
+    // Half of the ~2.2s average-load estimate: partway up the climb.
+    advanceFrame(1100);
+    const halfway = captured[captured.length - 1].progress;
+    expect(halfway).toBeGreaterThan(30);
+    expect(halfway).toBeLessThan(70);
+
+    // Well past the estimate, but the (mocked) manager still says loading.
+    advanceFrame(3000);
+    const held = captured[captured.length - 1].progress;
+    expect(held).toBeCloseTo(99, 5);
+    expect(captured[captured.length - 1].ready).toBe(false);
+
+    // Keeps holding at 99% rather than creeping past it while still loading.
+    advanceFrame(1000);
+    expect(captured[captured.length - 1].progress).toBeCloseTo(99, 5);
+
+    const values = progressValues();
+    for (let i = 1; i < values.length; i++) {
+      expect(values[i]).toBeGreaterThanOrEqual(values[i - 1]);
+    }
+  });
+
+  test("spins the rest of the way to 100 and becomes ready once assets actually finish", () => {
+    captured.length = 0;
 
     const { rerender } = render(
       <LoadingProvider>
         <Probe />
       </LoadingProvider>,
     );
-
-    // Prime the rAF loop's first frame (establishes its internal
-    // last-timestamp baseline; no visible advancement from this alone).
     advanceFrame(0);
 
-    // Everything finishes in the same manager tick, as it does locally.
-    Object.assign(progressState, { active: true, loaded: 9, total: 9 });
+    Object.assign(progressState, { active: true, loaded: 0, total: 9 });
+    rerender(
+      <LoadingProvider>
+        <Probe />
+      </LoadingProvider>,
+    );
+    advanceFrame(500);
+    expect(captured[captured.length - 1].progress).toBeLessThan(99);
+    expect(captured[captured.length - 1].ready).toBe(false);
+
+    // The manager reports everything has finished.
+    Object.assign(progressState, { active: false, loaded: 9, total: 9 });
     rerender(
       <LoadingProvider>
         <Probe />
       </LoadingProvider>,
     );
 
-    const justAfterJump = captured[captured.length - 1];
-    expect(justAfterJump).toBeLessThan(100);
+    // First tick after "done" just establishes the finish-spin's start time
+    // (mirrors how a real frame's timestamp seeds the ramp); subsequent
+    // frames are what actually advance it.
+    advanceFrame(0);
+    advanceFrame(300); // > FINISH_SPIN_MS, so the ramp completes
 
-    // Half a second in, it should be partway there - not still at the
-    // instant-jump value and not yet fully caught up.
-    advanceFrame(500);
-    const midway = captured[captured.length - 1];
-    expect(midway).toBeGreaterThan(justAfterJump);
-    expect(midway).toBeLessThan(100);
+    const last = captured[captured.length - 1];
+    expect(last.progress).toBe(100);
+    expect(last.ready).toBe(true);
 
-    // Give it enough real time to fully catch up to the target.
-    advanceFrame(2000);
-    expect(captured[captured.length - 1]).toBe(100);
-
-    for (let i = 1; i < captured.length; i++) {
-      expect(captured[i]).toBeGreaterThanOrEqual(captured[i - 1]);
+    const values = progressValues();
+    for (let i = 1; i < values.length; i++) {
+      expect(values[i]).toBeGreaterThanOrEqual(values[i - 1]);
     }
   });
 });

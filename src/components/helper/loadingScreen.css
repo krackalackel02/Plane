@@ -236,10 +236,54 @@
 }
 
 .loading-screen__bar-fill {
+  position: relative;
   height: 100%;
   border-radius: 999px;
   background: linear-gradient(90deg, #ff8800, #ffb300, #fff200);
-  box-shadow: 0 0 10px rgba(255, 179, 0, 0.7);
+  background-size: 200% 100%;
+  animation: loading-screen-bar-glow 1.6s ease-in-out infinite;
+}
+
+/* A thin bright core streaked along the fill, like a neon tube. */
+.loading-screen__bar-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.8),
+    transparent
+  );
+  background-size: 60px 100%;
+  background-repeat: no-repeat;
+  animation: loading-screen-bar-sheen 1.8s linear infinite;
+}
+
+@keyframes loading-screen-bar-glow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+    box-shadow:
+      0 0 6px rgba(255, 179, 0, 0.6),
+      0 0 14px rgba(255, 179, 0, 0.35);
+  }
+  50% {
+    background-position: 100% 50%;
+    box-shadow:
+      0 0 12px rgba(255, 210, 100, 1),
+      0 0 26px rgba(255, 179, 0, 0.65);
+  }
+}
+
+@keyframes loading-screen-bar-sheen {
+  0% {
+    background-position: -60px 0;
+  }
+  100% {
+    background-position: 280px 0;
+  }
 }
 
 .loading-screen__percent {
