@@ -90,6 +90,18 @@ export const computeScale = (
 export const deg2rad = (deg: number) => (deg * Math.PI) / 180;
 
 /**
+ * Smoothly interpolate between two edges (Hermite easing), clamped to 0-1.
+ * @param edge0 - Value below which the result is 0.
+ * @param edge1 - Value above which the result is 1.
+ * @param x - The value to ease.
+ * @returns The eased value in [0, 1].
+ */
+export const smoothstep = (edge0: number, edge1: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+};
+
+/**
  * Lerp between two angles (radians) along the shortest path, so crossing
  * the +-PI boundary doesn't spin the long way around.
  * @param from - Current angle in radians.
