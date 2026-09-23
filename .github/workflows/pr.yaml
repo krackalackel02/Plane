@@ -124,3 +124,6 @@ jobs:
           VITE_SHOW_CAMERA: ${{ secrets.VITE_SHOW_CAMERA}}
           VITE_SHOW_SHIP: ${{ secrets.VITE_SHOW_SHIP}}
         run: npm run build
+
+      - name: Check bundle size budget
+        run: npm run perf:bundle-size

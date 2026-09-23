@@ -11,6 +11,13 @@ export default [
   { files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"] },
   { languageOptions: { globals: globals.browser } },
   {
+    // Node-only scripts (build tooling, CI checks) - not part of the
+    // browser app bundle, so they get Node globals (process, etc.)
+    // instead.
+    files: ["scripts/**/*.{js,mjs,cjs}", "src/scripts/**/*.{js,mjs,cjs}"],
+    languageOptions: { globals: globals.node },
+  },
+  {
     settings: {
       react: {
         version: "detect", // Automatically detect the React version
