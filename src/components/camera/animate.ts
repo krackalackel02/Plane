@@ -5,9 +5,12 @@ import gsap from "gsap";
 const kframe = anim.frames;
 const animate = (
   camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
+  ready: boolean,
 ) => {
   const duration = 1.5;
   useEffect(() => {
+    if (!ready) return;
+
     const timeline = gsap.timeline({ repeat: 0 });
 
     kframe.forEach((frame, index) => {
@@ -51,7 +54,7 @@ const animate = (
     return () => {
       timeline.kill();
     };
-  }, [camera]);
+  }, [camera, ready]);
 };
 
 export default animate;
