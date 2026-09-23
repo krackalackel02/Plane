@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { useControlState } from "../../../context/keyContext"; // Import control state hook
 import { useAutopilot } from "../../../context/autopilotContext";
+import { audioEngine } from "../../../audio/audioEngine";
 
 import Jet from "./jet"; // Import Jet component
 
@@ -21,6 +23,13 @@ const Exhaust: React.FC = () => {
     isLeftJetActive = !isLeftJetActive;
     isRightJetActive = !isRightJetActive;
   }
+
+  // Space-engine "wirr" hum tracks whether either jet is firing.
+  const isEngineActive = isLeftJetActive || isRightJetActive;
+  useEffect(() => {
+    audioEngine.setEngineActive(isEngineActive);
+  }, [isEngineActive]);
+  useEffect(() => () => audioEngine.setEngineActive(false), []);
 
   return (
     <>

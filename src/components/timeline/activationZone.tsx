@@ -18,6 +18,7 @@ import {
 import { useScene } from "../../context/sceneContext";
 import { useProjects } from "../../context/projectContext";
 import { print, useFrameDelay } from "../../utils/common";
+import { audioEngine } from "../../audio/audioEngine";
 import Sphere from "../helper/sphere";
 
 interface ActivationZoneProps {
@@ -142,6 +143,7 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
       setIsHovered(currentlyHovered);
       if (currentlyHovered) {
         setActiveProjectId(id);
+        audioEngine.playBleep();
         print("Entered activation zone for ID:", id);
       } else if (activeProjectId === id) {
         setActiveProjectId(null);
