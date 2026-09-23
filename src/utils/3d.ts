@@ -1,4 +1,3 @@
-import { button } from "leva";
 import { Color, ColorMapEntry, Range } from "../components/types/colourTypes";
 import { Box3, Vector3 } from "three";
 
@@ -119,22 +118,3 @@ export const getBoardMatWorldPosition = (
   new Vector3(-5, -2.5, 0)
     .applyAxisAngle(new Vector3(0, 1, 0), rotationY)
     .add(new Vector3(...position));
-
-/**
- * Create a save button for downloading JSON data.
- * @param data - The data to be saved.
- * @param filename - The name of the file to save.
- * @returns A button component.
- */
-export const createSaveButton = (data: unknown, filename: string) =>
-  button(() => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  });

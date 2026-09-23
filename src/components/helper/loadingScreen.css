@@ -1,0 +1,44 @@
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  background: #050506;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+#loading-screen.loading-screen--hidden {
+  opacity: 0;
+}
+
+#loading-screen .loading-screen__label {
+  font-family: "Orbitron", sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.4rem;
+  color: #fff200;
+  text-shadow:
+    0 0 6px #fff200,
+    0 0 16px #ffb300;
+  text-transform: uppercase;
+}
+
+#loading-screen .loading-screen__bar {
+  width: 160px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+#loading-screen .loading-screen__bar-fill {
+  height: 100%;
+  background: #fff200;
+  box-shadow: 0 0 8px #fff200;
+  transform-origin: left center;
+  transition: transform 0.2s ease;
+}
