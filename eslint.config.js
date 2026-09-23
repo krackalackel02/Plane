@@ -51,6 +51,7 @@ export default [
             "fragmentShader",
             "transparent",
             "depthWrite",
+            "frustumCulled",
           ],
         },
       ],

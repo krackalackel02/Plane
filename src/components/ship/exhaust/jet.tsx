@@ -2,7 +2,7 @@
 import constants from "../../../utils/constants.json"; // Import constants for exhaust configuration
 import { deg2rad } from "../../../utils/3d"; // Utility to convert degrees to radians
 
-import ParticleGenerator from "./particleGenerator"; // Particle generator component
+import ExhaustGenerator from "./generator"; // Mode-dispatching exhaust generator
 
 interface JetProps {
   coneAngle?: number; // Cone angle in radians
@@ -18,11 +18,10 @@ const Jet: React.FC<JetProps> = ({
   reverse,
 }) => {
   return (
-    <ParticleGenerator
+    <ExhaustGenerator
       active={active}
       reverse={reverse}
       position={position}
-      count={200}
       coneAngle={coneAngle}
     />
   );
