@@ -12,7 +12,7 @@ import { useProgress } from "@react-three/drei";
  */
 interface LoadingContextValue {
   ready: boolean; // Whether every tracked asset (GLTF models, textures) has finished loading
-  progress: number; // 0-100, the real completion ratio
+  progress: number; // 0-100, see the display rules described below
 }
 
 const LoadingContext = createContext<LoadingContextValue>({
@@ -33,6 +33,11 @@ const NOTHING_TO_LOAD_GRACE_MS = 400;
 // nothing new starting, not just look idle for one snapshot.
 const SETTLE_MS = 200;
 
+// Cap the DISPLAYED percentage below 100 until `ready` actually flips, so
+// "100%" only ever appears at the exact instant the splash lets you in -
+// never sitting there for the SETTLE_MS wait above with nothing happening.
+const DISPLAY_CAP_BEFORE_READY = 99;
+
 /**
  * Tracks asset loading (three's DefaultLoadingManager, via drei's
  * useProgress) and exposes a single `ready` flag once loading has settled.
@@ -40,20 +45,22 @@ const SETTLE_MS = 200;
  * camera (to know when it's safe to start the intro flythrough) so both stay
  * in sync off one source of truth.
  *
- * `progress` is the manager's raw cumulative loaded/total ratio - not drei's
- * own `progress` field, which rescales its 0-100 baseline every time a new
- * wave of assets starts and visibly jumps backwards, and deliberately not
- * clamped to only increase either: waves here mean the denominator can
- * legitimately grow before the numerator catches up (more work was just
- * discovered), and hiding that behind a frozen high number would be
- * actively misleading rather than "smooth". It also doesn't try to fake a
- * smooth animated curve in JS - this app does synchronous, main-thread-
- * blocking work while loading (CSG boolean ops building the board frames,
- * GLTF parsing, image decode), during which no JS-driven per-frame update
- * can paint anyway. Instead, the loading screen renders this value with a
- * CSS `transition` on `transform`, which the browser's compositor keeps
- * animating smoothly - including through the occasional real dip - even
- * while the main thread is busy. See loadingScreen.css.
+ * `progress` is derived from the manager's raw cumulative loaded/total ratio
+ * - not drei's own `progress` field, which rescales its 0-100 baseline every
+ * time a new wave of assets starts and visibly jumps backwards - and
+ * clamped so it never decreases: loading happens in waves here (a board's
+ * shared material textures only get requested once its own thumbnail has
+ * resolved), so the denominator can legitimately grow before the numerator
+ * catches up, which without clamping shows as the bar sliding backwards
+ * (e.g. 100 -> 93 -> 100) even though nothing actually went wrong.
+ *
+ * It also doesn't try to fake a smooth animated curve in JS - this app does
+ * synchronous, main-thread-blocking work while loading (CSG boolean ops
+ * building the board frames, GLTF parsing, image decode), during which no
+ * JS-driven per-frame update can paint anyway. Instead, the loading screen
+ * renders this value with a CSS `transition` on `transform`, which the
+ * browser's compositor keeps animating smoothly even while the main thread
+ * is busy. See loadingScreen.css.
  * @returns JSX.Element
  */
 export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -61,9 +68,13 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const { active, loaded, total } = useProgress();
   const [ready, setReady] = useState(false);
+  const [maxProgress, setMaxProgress] = useState(0);
   const startedRef = useRef(false);
 
-  const progress = total > 0 ? (loaded / total) * 100 : 0;
+  useEffect(() => {
+    const raw = total > 0 ? (loaded / total) * 100 : 0;
+    setMaxProgress((prev) => Math.max(prev, raw));
+  }, [loaded, total]);
 
   useEffect(() => {
     if (active) startedRef.current = true;
@@ -96,10 +107,12 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => clearTimeout(hardStop);
   }, []);
 
+  const progress = ready
+    ? 100
+    : Math.min(maxProgress, DISPLAY_CAP_BEFORE_READY);
+
   return (
-    <LoadingContext.Provider
-      value={{ ready, progress: ready ? 100 : progress }}
-    >
+    <LoadingContext.Provider value={{ ready, progress }}>
       {children}
     </LoadingContext.Provider>
   );

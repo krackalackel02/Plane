@@ -3,8 +3,10 @@ import { useLoading } from "../../context/loadingContext";
 import "./loadingScreen.css";
 
 // Matches the CSS fade-out transition duration, so the overlay isn't
-// unmounted mid-animation.
-const FADE_OUT_MS = 600;
+// unmounted mid-animation. Kept short and deliberately - once `ready`
+// fires, the bar has already reached exactly 100% (see loadingContext.tsx),
+// so this should read as an immediate hand-off, not a lingering fade.
+const FADE_OUT_MS = 250;
 
 /**
  * Full-screen cartoonish, space-themed splash shown while models/textures

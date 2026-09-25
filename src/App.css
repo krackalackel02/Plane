@@ -13,10 +13,11 @@
 }
 
 /* Held at opacity 0 until the 3D scene is ready, then fades in alongside
-   it instead of appearing before the ship/timeline have loaded. */
+   it instead of appearing before the ship/timeline have loaded. Matches
+   loadingScreen.css's fade-out duration so both happen together. */
 .scene-chrome {
   opacity: 0;
-  transition: opacity 0.6s ease;
+  transition: opacity 0.25s ease;
 }
 
 .scene-chrome--visible {

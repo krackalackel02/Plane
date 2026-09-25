@@ -124,4 +124,58 @@ describe("LoadingProvider", () => {
     advance(400);
     expect(last().ready).toBe(true);
   });
+
+  // Regression test: the first wave (ship model + thumbnails) can hit a
+  // genuine 100% ratio before a second wave (board material textures) is
+  // even discovered, since the manager only knows about items that have
+  // actually started. Without clamping, the displayed number would slide
+  // backwards (e.g. 100 -> 93) as the denominator grows - which reads as
+  // broken even though nothing is actually wrong.
+  test("displayed progress never decreases, even when a later wave grows the total", () => {
+    const { rerender } = render(<Scene />);
+
+    setProgress({ active: true, loaded: 9, total: 9 });
+    rerender(<Scene />);
+    expect(last().progress).toBe(99); // capped below 100 until ready, see next test
+
+    // Second wave discovered: denominator grows past the numerator, so the
+    // raw ratio would drop from 100% to 9/13 ~= 69%.
+    setProgress({ active: true, loaded: 9, total: 13 });
+    rerender(<Scene />);
+    expect(last().progress).toBeGreaterThanOrEqual(99);
+
+    setProgress({ active: false, loaded: 13, total: 13 });
+    rerender(<Scene />);
+    advance(200);
+    expect(last().progress).toBe(100);
+  });
+
+  // Regression test: `ready` (which gates the fade-out and the camera intro)
+  // used to only flip after the bar had already been sitting at a genuine
+  // 100% for the full SETTLE_MS window, reading as a dead pause once
+  // "100%" was already on screen. The bar should never show 100% until the
+  // instant it's actually true - capped at 99% for the entire wait instead.
+  test("never displays 100% before ready - only exactly at the same instant", () => {
+    const { rerender } = render(<Scene />);
+
+    setProgress({ active: true, loaded: 9, total: 9 });
+    rerender(<Scene />);
+
+    setProgress({ active: false, loaded: 9, total: 9 });
+    rerender(<Scene />);
+
+    // Through the entire settle-debounce wait, it must read <100, not 100.
+    advance(100);
+    expect(last().ready).toBe(false);
+    expect(last().progress).toBeLessThan(100);
+
+    advance(50);
+    expect(last().ready).toBe(false);
+    expect(last().progress).toBeLessThan(100);
+
+    // The instant it becomes ready, progress is 100 in that same update.
+    advance(50);
+    expect(last().ready).toBe(true);
+    expect(last().progress).toBe(100);
+  });
 });

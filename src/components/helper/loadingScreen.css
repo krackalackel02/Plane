@@ -21,8 +21,8 @@
   opacity: 1;
   transform: scale(1);
   transition:
-    opacity 0.6s ease,
-    transform 0.6s ease;
+    opacity 0.25s ease,
+    transform 0.25s ease;
 }
 
 .loading-screen--hidden {
