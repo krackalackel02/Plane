@@ -52,6 +52,8 @@ export default [
             "transparent",
             "depthWrite",
             "frustumCulled",
+            "distance",
+            "blending",
           ],
         },
       ],

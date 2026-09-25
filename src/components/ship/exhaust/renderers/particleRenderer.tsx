@@ -18,6 +18,7 @@ const ParticleRenderer: React.FC<ExhaustRendererProps> = ({
   decaySpeed = 0.01,
   speedDecay = 0.98,
   reverse = false,
+  boost = false,
 }) => {
   const particlesRef = useRef<Points>(null);
 
@@ -58,7 +59,7 @@ const ParticleRenderer: React.FC<ExhaustRendererProps> = ({
             itemSize={3}
           />
         </bufferGeometry>
-        <pointsMaterial size={0.05} vertexColors />
+        <pointsMaterial size={boost ? 0.08 : 0.05} vertexColors />
       </points>
     </group>
   );

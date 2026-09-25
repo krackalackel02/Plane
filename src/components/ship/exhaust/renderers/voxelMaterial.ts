@@ -30,7 +30,7 @@ export const voxelFragmentShader = /* glsl */ `
 
     vec3 lightDir = normalize(vec3(-0.4, 0.6, 0.7));
     float diffuse = max(dot(normalize(vNormal), lightDir), 0.0);
-    vec3 shaded = vColor * (0.45 + diffuse * 0.65);
+    vec3 shaded = vColor * (0.62 + diffuse * 0.7);
 
     gl_FragColor = vec4(shaded, vAlpha);
   }

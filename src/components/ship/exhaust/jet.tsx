@@ -9,6 +9,7 @@ interface JetProps {
   position: [number, number, number]; // Position of the jet
   active: boolean; // Whether the jet is active
   reverse: boolean; // Whether the jet is in reverse mode
+  boost?: boolean; // Whether the boost key is held
 }
 
 const Jet: React.FC<JetProps> = ({
@@ -16,6 +17,7 @@ const Jet: React.FC<JetProps> = ({
   position = [0, 0, 0],
   active,
   reverse,
+  boost = false,
 }) => {
   return (
     <ExhaustGenerator
@@ -23,6 +25,7 @@ const Jet: React.FC<JetProps> = ({
       reverse={reverse}
       position={position}
       coneAngle={coneAngle}
+      boost={boost}
     />
   );
 };

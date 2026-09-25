@@ -25,6 +25,7 @@ const CloudRenderer: React.FC<ExhaustRendererProps> = ({
   decaySpeed = 0.01,
   speedDecay = 0.98,
   reverse = false,
+  boost = false,
 }) => {
   const particlesRef = useRef<Points>(null);
   const alphas = useRef(new Float32Array(count));
@@ -55,7 +56,9 @@ const CloudRenderer: React.FC<ExhaustRendererProps> = ({
         const age = 1 - state.lifetimes[i]; // 0 at spawn -> 1 at death
         const blowout = smoothstep(0, 0.3, age);
         const drift = age > 0.3 ? (age - 0.3) / 0.7 : 0;
-        sizes.current[i] = BASE_SIZE * (0.5 + blowout * 0.9 + drift * 1.1);
+        const boostScale = boost ? 1.35 : 1;
+        sizes.current[i] =
+          BASE_SIZE * boostScale * (0.5 + blowout * 0.9 + drift * 1.1);
 
         const fadeIn = smoothstep(0, 0.06, age);
         const fadeOut = 1 - smoothstep(0.4, 1, age);

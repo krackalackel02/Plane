@@ -17,4 +17,7 @@ export interface ExhaustRendererProps {
   decaySpeed?: number;
   speedDecay?: number;
   reverse?: boolean;
+  // True while the boost key is held and the jet is actually firing -
+  // renderers scale their jet up/brighter so boosting reads clearly.
+  boost?: boolean;
 }

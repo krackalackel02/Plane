@@ -1,5 +1,12 @@
 import React, { useRef } from "react";
-import { InstancedMesh, Matrix4, Quaternion, Vector3 } from "three";
+import {
+  AdditiveBlending,
+  InstancedMesh,
+  Matrix4,
+  Points,
+  Quaternion,
+  Vector3,
+} from "three";
 
 import { smoothstep } from "../../../../utils/3d";
 import { useExhaustSimulation } from "../useExhaustSimulation";
@@ -22,9 +29,12 @@ for (let x = -1; x <= 1; x++) {
 }
 const VOXELS_PER_PUFF = LATTICE_OFFSETS.length;
 
-const VOXEL_SIZE = 0.26;
-const CLUSTER_SPACING = 0.22; // > voxel size would leave gaps at spawn; this overlaps them into a solid-looking ball
-const MAX_SPREAD = 4; // how many times wider the lattice gets by end of life
+const VOXEL_SIZE = 0.2;
+const CLUSTER_SPACING = 0.15; // > voxel size would leave gaps at spawn; this overlaps them into a solid-looking ball
+const MAX_SPREAD = 2.6; // how many times wider the lattice gets by end of life - kept modest so the two jets' plumes stay visually separate
+const BOOST_SCALE = 1.35; // extra size while boosting, so the jet visibly grows
+
+const SPARK_COLOR: [number, number, number] = [1, 0.92, 0.7];
 
 // Random direction uniformly distributed on the unit sphere.
 const randomOnSphere = (out: Vector3) => {
@@ -56,7 +66,9 @@ const randomQuaternion = (out: Quaternion) => {
  * cubes (see LATTICE_OFFSETS) rather than a billboarded blob. The whole
  * ball tumbles together and, as it ages, its cubes drift apart (spacing
  * grows) and shrink/fade - "disperse" reads as the ball coming apart and
- * dissolving, not individual embers flying off.
+ * dissolving, not individual embers flying off. A handful of bright,
+ * flickering sparks (additive-blended points) ride along the freshest part
+ * of each puff for a hot-exhaust glint.
  */
 const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
   active,
@@ -66,8 +78,10 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
   decaySpeed = 0.01,
   speedDecay = 0.98,
   reverse = false,
+  boost = false,
 }) => {
   const meshRef = useRef<InstancedMesh>(null);
+  const sparkRef = useRef<Points>(null);
   const totalVoxels = count * VOXELS_PER_PUFF;
 
   // Per-puff rigid-body state, (re)assigned whenever that puff spawns.
@@ -75,9 +89,13 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
   const spinAxes = useRef(new Float32Array(count * 3));
   const spinRates = useRef(new Float32Array(count));
   const sizeJitter = useRef(new Float32Array(count).fill(1));
+  const sparkPhase = useRef(new Float32Array(count));
+  const sparkRate = useRef(new Float32Array(count));
 
   const voxelAlphas = useRef(new Float32Array(totalVoxels));
   const voxelColors = useRef(new Float32Array(totalVoxels * 3));
+  const sparkPositions = useRef(new Float32Array(count * 3));
+  const sparkColors = useRef(new Float32Array(count * 3));
 
   // Scratch objects reused every frame/instance to avoid allocation.
   const tmpAxis = useRef(new Vector3());
@@ -98,7 +116,8 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
     colorMap: matteColorMap,
     onStep: (state, spawnedIndex) => {
       const mesh = meshRef.current;
-      if (!mesh) return;
+      const sparks = sparkRef.current;
+      if (!mesh || !sparks) return;
 
       if (spawnedIndex !== null) {
         randomQuaternion(tmpOrientation.current);
@@ -110,7 +129,12 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
         spinAxes.current.set(tmpAxis.current.toArray(), spawnedIndex * 3);
         spinRates.current[spawnedIndex] = 1.5 + Math.random() * 2;
         sizeJitter.current[spawnedIndex] = 0.85 + Math.random() * 0.3;
+        sparkPhase.current[spawnedIndex] = Math.random() * Math.PI * 2;
+        sparkRate.current[spawnedIndex] = 18 + Math.random() * 14;
       }
+
+      const boostScale = boost ? BOOST_SCALE : 1;
+      const sparkBoost = boost ? 1.6 : 1;
 
       for (let i = 0; i < count; i++) {
         const lifetime = state.lifetimes[i];
@@ -120,6 +144,7 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
           for (let v = 0; v < VOXELS_PER_PUFF; v++) {
             voxelAlphas.current[i * VOXELS_PER_PUFF + v] = 0;
           }
+          sparkColors.current.set([0, 0, 0], puffIdx);
           continue;
         }
 
@@ -127,14 +152,18 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
 
         // Ball inflates ("blown out") then keeps spreading as it fades -
         // the lattice spacing, not individual cube trajectories, is what
-        // disperses.
+        // disperses. Kept modest (MAX_SPREAD) so two jets firing side by
+        // side stay visually distinct instead of merging into one blob.
         const blowout = smoothstep(0, 0.3, age);
         const drift = age > 0.3 ? (age - 0.3) / 0.7 : 0;
         const spacing =
-          CLUSTER_SPACING * (1 + blowout * 0.8 + drift * (MAX_SPREAD - 1.8));
+          CLUSTER_SPACING *
+          boostScale *
+          (1 + blowout * 0.5 + drift * (MAX_SPREAD - 1.5));
 
         const cubeScale =
           VOXEL_SIZE *
+          boostScale *
           sizeJitter.current[i] *
           (1 - smoothstep(0.3, 1, age) * 0.7);
         tmpScale.current.set(cubeScale, cubeScale, cubeScale);
@@ -196,6 +225,33 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
             gi * 3,
           );
         }
+
+        // A bright glint near the hot, freshly-spawned part of the puff -
+        // strongest early in life, gone by mid-life, flickering rather than
+        // a steady glow so it reads as sparking rather than just lit up.
+        const heat =
+          smoothstep(0, 0.05, age) * (1 - smoothstep(0.15, 0.4, age));
+        const flicker = Math.max(
+          0,
+          Math.sin(age * sparkRate.current[i] + sparkPhase.current[i]),
+        );
+        const sparkBrightness = heat * flicker * sparkBoost;
+        sparkPositions.current.set(
+          [
+            state.positions[puffIdx],
+            state.positions[puffIdx + 1],
+            state.positions[puffIdx + 2],
+          ],
+          puffIdx,
+        );
+        sparkColors.current.set(
+          SPARK_COLOR.map((c) => c * sparkBrightness) as [
+            number,
+            number,
+            number,
+          ],
+          puffIdx,
+        );
       }
 
       mesh.instanceMatrix.needsUpdate = true;
@@ -204,6 +260,12 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
       (attributes.voxelColor.array as Float32Array).set(voxelColors.current);
       attributes.voxelAlpha.needsUpdate = true;
       attributes.voxelColor.needsUpdate = true;
+
+      const sparkAttrs = sparks.geometry.attributes;
+      (sparkAttrs.position.array as Float32Array).set(sparkPositions.current);
+      (sparkAttrs.color.array as Float32Array).set(sparkColors.current);
+      sparkAttrs.position.needsUpdate = true;
+      sparkAttrs.color.needsUpdate = true;
     },
   });
 
@@ -235,6 +297,29 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
           depthWrite={false}
         />
       </instancedMesh>
+      <points ref={sparkRef} frustumCulled={false}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            array={new Float32Array(count * 3)}
+            count={count}
+            itemSize={3}
+          />
+          <bufferAttribute
+            attach="attributes-color"
+            array={new Float32Array(count * 3)}
+            count={count}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          size={0.16}
+          vertexColors
+          transparent
+          depthWrite={false}
+          blending={AdditiveBlending}
+        />
+      </points>
     </group>
   );
 };
