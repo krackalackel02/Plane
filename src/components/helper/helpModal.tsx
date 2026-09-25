@@ -59,6 +59,14 @@ const PcControls = () => (
       <div className="help-cluster help-cluster--text">🖱️</div>
       <p className="help-copy">Click a glowing board to fly there</p>
     </div>
+
+    <div className="help-row">
+      <div className="help-cluster help-cluster--text">🗺️</div>
+      <p className="help-copy">
+        Click the map in the corner to expand it, then click a book icon to
+        autopilot straight there
+      </p>
+    </div>
   </div>
 );
 
@@ -77,6 +85,14 @@ const MobileControls = () => (
     <div className="help-row">
       <div className="help-cluster help-cluster--text">✦</div>
       <p className="help-copy">Tap a glowing board to fly there</p>
+    </div>
+
+    <div className="help-row">
+      <div className="help-cluster help-cluster--text">🗺️</div>
+      <p className="help-copy">
+        Tap the map in the corner to expand it, then tap a book icon to
+        autopilot straight there
+      </p>
     </div>
   </div>
 );
