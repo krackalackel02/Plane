@@ -39,7 +39,6 @@ export const createMotion = (
       axis: constants[type].axis as AxisType,
       positiveKey,
       negativeKey,
-      decayFactor: constants[type].decayFactor,
       maxSpeed: constants[type].maxSpeed,
       acceleration: constants[type].acceleration,
     });
@@ -48,7 +47,6 @@ export const createMotion = (
     return new TranslationMotion({
       positiveKey,
       negativeKey,
-      decayFactor: constants[type].decayFactor,
       maxSpeed: constants[type].maxSpeed,
       acceleration: constants[type].acceleration,
     });

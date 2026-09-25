@@ -42,15 +42,13 @@ const defaultMotionParams = {
     axis: "x",
   },
   yaw: {
-    decayFactor: 0.9,
     axis: "y",
-    acceleration: 0.5,
+    acceleration: 4,
     maxSpeed: 5,
   },
   throttle: {
-    acceleration: 0.5,
+    acceleration: 2.5,
     maxSpeed: 2,
-    decayFactor: 0.85,
   },
   autopilot: {
     speed: 12,

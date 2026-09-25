@@ -1,8 +1,8 @@
 import { BaseMotion, BaseMotionConfig } from "../baseMotion";
 
 export interface YawMotionConfig extends BaseMotionConfig {
-  maxSpeed: number; // Maximum yaw speed
-  acceleration: number; // Acceleration for yaw
+  maxSpeed: number; // Maximum yaw speed (rad/s)
+  acceleration: number; // Responsiveness (1/s): how quickly currentRate closes the gap to its target
 }
 
 export class YawMotion extends BaseMotion {
@@ -14,11 +14,10 @@ export class YawMotion extends BaseMotion {
     axis,
     positiveKey,
     negativeKey,
-    acceleration = 0.01,
+    acceleration = 3,
     maxSpeed = 3,
-    decayFactor = 0.95,
   }: YawMotionConfig) {
-    super({ axis, positiveKey, negativeKey, decayFactor });
+    super({ axis, positiveKey, negativeKey });
     this.acceleration = acceleration;
     this.maxSpeed = maxSpeed;
     this.currentRate = 0;
@@ -35,26 +34,28 @@ export class YawMotion extends BaseMotion {
   }
 
   /**
-   * Updates the yaw motion based on active keys.
+   * Updates the yaw motion based on active keys. currentRate chases a
+   * target (+-maxSpeed while a key is held, 0 otherwise) via
+   * BaseMotion.approach - see there for why this makes turning both settle
+   * smoothly into its cap and correct quickly out of a hard turn.
    */
   update(delta: number, activeKeys: Set<string>) {
     if (!this.group) return;
 
-    // Determine direction and apply acceleration
-    if (activeKeys.has(this.positiveKey)) {
-      this.currentRate = Math.min(
-        this.currentRate + this.acceleration * delta,
-        this.maxSpeed,
-      );
-    } else if (activeKeys.has(this.negativeKey)) {
-      this.currentRate = Math.max(
-        this.currentRate - this.acceleration * delta,
-        -this.maxSpeed,
-      );
-    } else {
-      // Apply decay factor if no key is pressed
-      this.currentRate *= this.decayFactor;
-      if (Math.abs(this.currentRate) < 0.01) this.currentRate = 0; // Threshold to stop small oscillations
+    const direction = activeKeys.has(this.positiveKey)
+      ? 1
+      : activeKeys.has(this.negativeKey)
+        ? -1
+        : 0;
+
+    this.currentRate = this.approach(
+      this.currentRate,
+      direction * this.maxSpeed,
+      this.acceleration,
+      delta,
+    );
+    if (direction === 0 && Math.abs(this.currentRate) < 0.001) {
+      this.currentRate = 0; // Threshold to stop small oscillations
     }
 
     // Apply yaw rotation to the group
