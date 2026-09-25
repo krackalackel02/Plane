@@ -33,18 +33,33 @@ export class TranslationMotion extends BaseMotion {
     const yaw = this.group.rotation.y || 0;
 
     const accel = this.acceleration || 0.01;
+    const forwardZ = Math.cos(yaw);
+    const forwardX = Math.sin(yaw);
 
     // Determine movement direction based on active keys
-    if (activeKeys.has(this.negativeKey)) {
-      this.velocity.z -= Math.cos(yaw) * accel * delta;
-      this.velocity.x -= Math.sin(yaw) * accel * delta;
-    } else if (activeKeys.has(this.positiveKey)) {
-      this.velocity.z += Math.cos(yaw) * accel * delta;
-      this.velocity.x += Math.sin(yaw) * accel * delta;
+    const direction = activeKeys.has(this.negativeKey)
+      ? -1
+      : activeKeys.has(this.positiveKey)
+        ? 1
+        : 0;
+
+    if (direction !== 0) {
+      // Ease acceleration off as speed *along the direction being held*
+      // approaches maxSpeed, so cruising settles in smoothly instead of
+      // slamming into the hard clamp below. Only the along-direction
+      // component counts, and it's clamped to >= 0 - a fresh key press, or
+      // reversing out of a drift, still gets full accel rather than being
+      // eased by speed built up in the other direction.
+      const alongSpeed =
+        (this.velocity.z * forwardZ + this.velocity.x * forwardX) * direction;
+      const approachRatio = Math.max(alongSpeed / this.maxSpeed, 0);
+      const easedAccel = accel * (1 - approachRatio * approachRatio) * delta;
+
+      this.velocity.z += forwardZ * direction * easedAccel;
+      this.velocity.x += forwardX * direction * easedAccel;
     } else {
-      // Apply decay factor if no key is pressed
-      this.velocity.z *= this.decayFactor;
-      this.velocity.x *= this.decayFactor;
+      this.velocity.z = this.decay(this.velocity.z, delta);
+      this.velocity.x = this.decay(this.velocity.x, delta);
 
       // Reset velocity if below threshold
       if (Math.abs(this.velocity.z) < 0.001) this.velocity.z = 0;

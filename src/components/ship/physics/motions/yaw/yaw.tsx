@@ -40,20 +40,25 @@ export class YawMotion extends BaseMotion {
   update(delta: number, activeKeys: Set<string>) {
     if (!this.group) return;
 
-    // Determine direction and apply acceleration
+    // Determine direction and apply acceleration, easing off as the rate
+    // approaches maxSpeed in that direction (see TranslationMotion for why)
+    // so turning settles into its cap instead of hitting it abruptly.
     if (activeKeys.has(this.positiveKey)) {
+      const approachRatio = Math.max(this.currentRate / this.maxSpeed, 0);
+      const eased = this.acceleration * (1 - approachRatio * approachRatio);
       this.currentRate = Math.min(
-        this.currentRate + this.acceleration * delta,
+        this.currentRate + eased * delta,
         this.maxSpeed,
       );
     } else if (activeKeys.has(this.negativeKey)) {
+      const approachRatio = Math.max(-this.currentRate / this.maxSpeed, 0);
+      const eased = this.acceleration * (1 - approachRatio * approachRatio);
       this.currentRate = Math.max(
-        this.currentRate - this.acceleration * delta,
+        this.currentRate - eased * delta,
         -this.maxSpeed,
       );
     } else {
-      // Apply decay factor if no key is pressed
-      this.currentRate *= this.decayFactor;
+      this.currentRate = this.decay(this.currentRate, delta);
       if (Math.abs(this.currentRate) < 0.01) this.currentRate = 0; // Threshold to stop small oscillations
     }
 

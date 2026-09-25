@@ -32,6 +32,19 @@ export class BaseMotion {
     this.group = group;
   }
 
+  // decayFactor is tuned as the per-frame multiplier at this reference
+  // rate. Raising it to (delta * DECAY_REFERENCE_FPS) reproduces that same
+  // tuned coast-down feel at any frame rate, instead of the old
+  // `value *= decayFactor` which drained velocity once per *rendered
+  // frame* - roughly 2.4x faster per second on a 144Hz display than on 60Hz.
+  private static readonly DECAY_REFERENCE_FPS = 60;
+
+  protected decay(value: number, delta: number): number {
+    return (
+      value * Math.pow(this.decayFactor, delta * BaseMotion.DECAY_REFERENCE_FPS)
+    );
+  }
+
   update(delta: number, activeKeys: Set<string>) {
     print("BaseMotion update", delta, activeKeys);
   }
