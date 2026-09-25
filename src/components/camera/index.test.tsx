@@ -33,6 +33,10 @@ vi.mock("../../context/autopilotContext", () => ({
   useAutopilot: () => ({ isFlying: false }),
 }));
 
+vi.mock("../../context/loadingContext", () => ({
+  useLoading: () => ({ ready: true, progress: 100 }),
+}));
+
 import Camera from "./index";
 
 describe("Camera intro animation wiring", () => {

@@ -1,7 +1,6 @@
 /// 3js/fiber for rendering 3D content
 import { Canvas } from "@react-three/fiber";
-import { useProgress } from "@react-three/drei";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense } from "react";
 
 /// Context Providers
 import { EnvironmentProvider } from "../context/envContext";
@@ -9,6 +8,7 @@ import { KeyProvider } from "../context/keyContext";
 import { SceneProvider } from "../context/sceneContext";
 import { ProjectProvider } from "../context/projectContext";
 import { AutopilotProvider } from "../context/autopilotContext";
+import { useLoading } from "../context/loadingContext";
 import { AudioProvider } from "../context/audioContext";
 import Stats from "./helper/stats";
 
@@ -31,37 +31,16 @@ import HudCorner from "./helper/hudCorner";
 import MuteButton from "./helper/muteButton";
 import LoadingScreen from "./helper/loadingScreen";
 
-// Tracks when the scene's actual async payload (ship model + board
-// textures) has finished loading, so the DOM chrome (minimap, joystick,
-// HUD) can be held back and revealed together with the 3D content instead
-// of popping in first. Falls back to "ready" after a timeout so a stalled
-// or failed asset never leaves the UI permanently hidden.
-const useSceneReady = () => {
-  const { active, progress } = useProgress();
-  const [ready, setReady] = useState(false);
-  const startedRef = useRef(false);
-
-  useEffect(() => {
-    if (active) startedRef.current = true;
-    if (!active && (startedRef.current || progress === 100)) {
-      setReady(true);
-    }
-  }, [active, progress]);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => setReady(true), 8000);
-    return () => clearTimeout(timeout);
-  }, []);
-
-  return ready;
-};
-
 /**
  * 3D Scene component
  * @returns JSX.Element
  */
 const Scene = () => {
-  const ready = useSceneReady();
+  // Loading state comes from LoadingProvider (wrapping the app in App.tsx),
+  // the same source Camera uses to gate its intro flythrough - so the
+  // splash, the DOM chrome fade-in below, and the camera animation all stay
+  // in sync off one signal instead of three independent ones.
+  const { ready } = useLoading();
 
   return (
     <EnvironmentProvider>
@@ -115,7 +94,7 @@ const Scene = () => {
                     {/* Performance Stats */}
                     <Stats />
                   </Canvas>
-                  <LoadingScreen hidden={ready} />
+                  <LoadingScreen />
                   {/* DOM chrome held back until the 3D scene is ready, then
                       faded in together instead of appearing before it. */}
                   <div

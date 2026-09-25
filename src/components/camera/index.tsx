@@ -13,6 +13,7 @@ import animate from "./animate";
 import { useEnvironment } from "../../context/envContext";
 import { useScene } from "../../context/sceneContext";
 import { useAutopilot } from "../../context/autopilotContext";
+import { useLoading } from "../../context/loadingContext";
 
 // Disable react/prop-types for this file
 /* eslint-disable react/prop-types */
@@ -33,6 +34,7 @@ const Camera: React.FC<CameraProps> = ({ fly = false }) => {
   const { shipRef } = useScene();
   const { showCameraHelper: helper } = useEnvironment();
   const { isFlying } = useAutopilot();
+  const { ready } = useLoading();
   const { camera } = useThree();
   const reorientTween = useRef<gsap.core.Tween | null>(null);
 
@@ -49,7 +51,7 @@ const Camera: React.FC<CameraProps> = ({ fly = false }) => {
     );
   }, [camera]);
 
-  if (!helper) animate(camera);
+  if (!helper) animate(camera, ready);
   shipRef.current?.add(camera);
 
   // The player may have freely orbited the camera around while looking for
