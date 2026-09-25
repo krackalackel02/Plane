@@ -43,8 +43,16 @@ const useSceneReady = () => {
 
   useEffect(() => {
     if (active) startedRef.current = true;
-    if (!active && (startedRef.current || progress === 100)) {
-      setReady(true);
+
+    if (!active && startedRef.current && progress === 100) {
+      // The loading manager can go briefly idle between separate useLoader
+      // batches - e.g. the ship model finishes loading before the boards'
+      // textures have even registered - so `active` flips false/true/false
+      // in quick succession rather than once. Debounce before committing to
+      // "ready" so a new batch starting right after this one doesn't get
+      // missed and reveal the scene before the boards have painted.
+      const timeout = setTimeout(() => setReady(true), 300);
+      return () => clearTimeout(timeout);
     }
   }, [active, progress]);
 
