@@ -7,11 +7,24 @@ import { matteColorMap } from "../colorMaps";
 import { ExhaustRendererProps } from "../types";
 import { voxelVertexShader, voxelFragmentShader } from "./voxelMaterial";
 
-// How many small cubes make up one puff - kept low since each puff's voxels
-// are simulated and drawn every frame.
-const VOXELS_PER_PUFF = 5;
-const VOXEL_SIZE = 0.28;
-const SPIN_SPEED = 6;
+// Cube offsets, on a unit grid, that approximate a rounded ball: the centre
+// cell plus every face- and edge-adjacent cell, skipping the 8 corners
+// (which have all three axes non-zero) so the silhouette reads as round
+// rather than boxy. 19 cubes per puff.
+const LATTICE_OFFSETS: [number, number, number][] = [];
+for (let x = -1; x <= 1; x++) {
+  for (let y = -1; y <= 1; y++) {
+    for (let z = -1; z <= 1; z++) {
+      const axesUsed = Number(x !== 0) + Number(y !== 0) + Number(z !== 0);
+      if (axesUsed <= 2) LATTICE_OFFSETS.push([x, y, z]);
+    }
+  }
+}
+const VOXELS_PER_PUFF = LATTICE_OFFSETS.length;
+
+const VOXEL_SIZE = 0.26;
+const CLUSTER_SPACING = 0.22; // > voxel size would leave gaps at spawn; this overlaps them into a solid-looking ball
+const MAX_SPREAD = 4; // how many times wider the lattice gets by end of life
 
 // Random direction uniformly distributed on the unit sphere.
 const randomOnSphere = (out: Vector3) => {
@@ -22,16 +35,33 @@ const randomOnSphere = (out: Vector3) => {
   return out;
 };
 
+// A uniform-random rotation (Shoemake's method).
+const randomQuaternion = (out: Quaternion) => {
+  const u1 = Math.random();
+  const u2 = Math.random();
+  const u3 = Math.random();
+  const s1 = Math.sqrt(1 - u1);
+  const s2 = Math.sqrt(u1);
+  out.set(
+    s1 * Math.sin(2 * Math.PI * u2),
+    s1 * Math.cos(2 * Math.PI * u2),
+    s2 * Math.sin(2 * Math.PI * u3),
+    s2 * Math.cos(2 * Math.PI * u3),
+  );
+  return out;
+};
+
 /**
- * "voxels" mode: each simulated puff is a small cluster of cubes that burst
- * outward from the emission point and tumble as they go, shrinking and
- * fading with age - a true 3D, particle-rig-style cloud rather than a
- * billboarded blob.
+ * "voxels" mode: each simulated puff is a rigid ball built out of small
+ * cubes (see LATTICE_OFFSETS) rather than a billboarded blob. The whole
+ * ball tumbles together and, as it ages, its cubes drift apart (spacing
+ * grows) and shrink/fade - "disperse" reads as the ball coming apart and
+ * dissolving, not individual embers flying off.
  */
 const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
   active,
   position,
-  count = 40,
+  count = 30,
   coneAngle = Math.PI / 6,
   decaySpeed = 0.01,
   speedDecay = 0.98,
@@ -40,20 +70,21 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
   const meshRef = useRef<InstancedMesh>(null);
   const totalVoxels = count * VOXELS_PER_PUFF;
 
-  // Per-voxel scatter state, (re)assigned whenever its parent puff spawns.
-  const directions = useRef(new Float32Array(totalVoxels * 3));
-  const spinAxes = useRef(new Float32Array(totalVoxels * 3));
-  const spinRates = useRef(new Float32Array(totalVoxels));
-  const sizeJitter = useRef(new Float32Array(totalVoxels).fill(1));
-  const radiusJitter = useRef(new Float32Array(totalVoxels).fill(1));
+  // Per-puff rigid-body state, (re)assigned whenever that puff spawns.
+  const orientations = useRef(new Float32Array(count * 4)); // quaternion xyzw
+  const spinAxes = useRef(new Float32Array(count * 3));
+  const spinRates = useRef(new Float32Array(count));
+  const sizeJitter = useRef(new Float32Array(count).fill(1));
+
   const voxelAlphas = useRef(new Float32Array(totalVoxels));
   const voxelColors = useRef(new Float32Array(totalVoxels * 3));
 
-  // Scratch objects reused every frame to avoid per-instance allocation.
-  const tmpDir = useRef(new Vector3());
+  // Scratch objects reused every frame/instance to avoid allocation.
   const tmpAxis = useRef(new Vector3());
+  const tmpOrientation = useRef(new Quaternion());
+  const tmpSpin = useRef(new Quaternion());
+  const tmpOffset = useRef(new Vector3());
   const tmpPosition = useRef(new Vector3());
-  const tmpQuaternion = useRef(new Quaternion());
   const tmpScale = useRef(new Vector3());
   const tmpMatrix = useRef(new Matrix4());
 
@@ -70,68 +101,92 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
       if (!mesh) return;
 
       if (spawnedIndex !== null) {
-        for (let v = 0; v < VOXELS_PER_PUFF; v++) {
-          const gi = spawnedIndex * VOXELS_PER_PUFF + v;
-          randomOnSphere(tmpDir.current);
-          directions.current.set(tmpDir.current.toArray(), gi * 3);
-          randomOnSphere(tmpAxis.current);
-          spinAxes.current.set(tmpAxis.current.toArray(), gi * 3);
-          spinRates.current[gi] = SPIN_SPEED * (0.5 + Math.random());
-          sizeJitter.current[gi] = 0.6 + Math.random() * 0.7;
-          radiusJitter.current[gi] = 0.7 + Math.random() * 0.6;
-        }
+        randomQuaternion(tmpOrientation.current);
+        orientations.current.set(
+          tmpOrientation.current.toArray(),
+          spawnedIndex * 4,
+        );
+        randomOnSphere(tmpAxis.current);
+        spinAxes.current.set(tmpAxis.current.toArray(), spawnedIndex * 3);
+        spinRates.current[spawnedIndex] = 1.5 + Math.random() * 2;
+        sizeJitter.current[spawnedIndex] = 0.85 + Math.random() * 0.3;
       }
 
       for (let i = 0; i < count; i++) {
         const lifetime = state.lifetimes[i];
         const puffIdx = i * 3;
 
+        if (lifetime <= 0) {
+          for (let v = 0; v < VOXELS_PER_PUFF; v++) {
+            voxelAlphas.current[i * VOXELS_PER_PUFF + v] = 0;
+          }
+          continue;
+        }
+
+        const age = 1 - lifetime; // 0 at spawn -> 1 at death
+
+        // Ball inflates ("blown out") then keeps spreading as it fades -
+        // the lattice spacing, not individual cube trajectories, is what
+        // disperses.
+        const blowout = smoothstep(0, 0.3, age);
+        const drift = age > 0.3 ? (age - 0.3) / 0.7 : 0;
+        const spacing =
+          CLUSTER_SPACING * (1 + blowout * 0.8 + drift * (MAX_SPREAD - 1.8));
+
+        const cubeScale =
+          VOXEL_SIZE *
+          sizeJitter.current[i] *
+          (1 - smoothstep(0.3, 1, age) * 0.7);
+        tmpScale.current.set(cubeScale, cubeScale, cubeScale);
+
+        // The whole puff tumbles as one rigid body: its fixed spawn
+        // orientation plus a continuous spin about its own axis.
+        const oi = i * 4;
+        tmpOrientation.current.set(
+          orientations.current[oi],
+          orientations.current[oi + 1],
+          orientations.current[oi + 2],
+          orientations.current[oi + 3],
+        );
+        const ai = i * 3;
+        tmpAxis.current.set(
+          spinAxes.current[ai],
+          spinAxes.current[ai + 1],
+          spinAxes.current[ai + 2],
+        );
+        tmpSpin.current.setFromAxisAngle(
+          tmpAxis.current,
+          age * spinRates.current[i],
+        );
+        tmpOrientation.current.premultiply(tmpSpin.current);
+
+        const fadeIn = smoothstep(0, 0.05, age);
+        const fadeOut = 1 - smoothstep(0.5, 1, age);
+        const alpha = fadeIn * fadeOut;
+
         for (let v = 0; v < VOXELS_PER_PUFF; v++) {
           const gi = i * VOXELS_PER_PUFF + v;
+          const [ox, oy, oz] = LATTICE_OFFSETS[v];
 
-          if (lifetime <= 0) {
-            voxelAlphas.current[gi] = 0;
-            continue;
-          }
+          tmpOffset.current
+            .set(ox, oy, oz)
+            .multiplyScalar(spacing)
+            .applyQuaternion(tmpOrientation.current);
 
-          const age = 1 - lifetime; // 0 at spawn -> 1 at death
-
-          // Burst outward (ease-out) then keep drifting - "disperse" reads
-          // as the cluster spreading wider, not just shrinking in place.
-          const spread = 1 - Math.pow(1 - age, 3);
-          const radius = (0.05 + spread * 1.6) * radiusJitter.current[gi];
-
-          const dgi = gi * 3;
           tmpPosition.current.set(
-            state.positions[puffIdx] + directions.current[dgi] * radius,
-            state.positions[puffIdx + 1] + directions.current[dgi + 1] * radius,
-            state.positions[puffIdx + 2] + directions.current[dgi + 2] * radius,
-          );
-
-          const shrink = 1 - smoothstep(0.25, 1, age) * 0.8;
-          const scale = VOXEL_SIZE * sizeJitter.current[gi] * shrink;
-          tmpScale.current.set(scale, scale, scale);
-
-          tmpAxis.current.set(
-            spinAxes.current[dgi],
-            spinAxes.current[dgi + 1],
-            spinAxes.current[dgi + 2],
-          );
-          tmpQuaternion.current.setFromAxisAngle(
-            tmpAxis.current,
-            age * spinRates.current[gi],
+            state.positions[puffIdx] + tmpOffset.current.x,
+            state.positions[puffIdx + 1] + tmpOffset.current.y,
+            state.positions[puffIdx + 2] + tmpOffset.current.z,
           );
 
           tmpMatrix.current.compose(
             tmpPosition.current,
-            tmpQuaternion.current,
+            tmpOrientation.current,
             tmpScale.current,
           );
           mesh.setMatrixAt(gi, tmpMatrix.current);
 
-          const fadeIn = smoothstep(0, 0.05, age);
-          const fadeOut = 1 - smoothstep(0.5, 1, age);
-          voxelAlphas.current[gi] = fadeIn * fadeOut;
+          voxelAlphas.current[gi] = alpha;
           voxelColors.current.set(
             [
               state.colors[puffIdx],
