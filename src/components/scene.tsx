@@ -9,6 +9,7 @@ import { KeyProvider } from "../context/keyContext";
 import { SceneProvider } from "../context/sceneContext";
 import { ProjectProvider } from "../context/projectContext";
 import { AutopilotProvider } from "../context/autopilotContext";
+import { TrickProvider } from "../context/trickContext";
 import { AudioProvider } from "../context/audioContext";
 import Stats from "./helper/stats";
 
@@ -74,72 +75,75 @@ const Scene = () => {
             {/* Provide loaded projects context */}
             <AutopilotProvider>
               {/* Provide autopilot flight-request context */}
-              <AudioProvider>
-                {/* Provide engine hum / activation bleep / ambient audio */}
-                <WelcomeProvider>
-                  {/* Provide intro-popup + reopenable-help-modal state */}
-                  <Canvas id="threejs-canvas">
-                    {/** 3D rendering canvas */}
-                    {/*
+              <TrickProvider>
+                {/* Provide tap-to-trick (barrel roll) request context */}
+                <AudioProvider>
+                  {/* Provide engine hum / activation bleep / ambient audio */}
+                  <WelcomeProvider>
+                    {/* Provide intro-popup + reopenable-help-modal state */}
+                    <Canvas id="threejs-canvas">
+                      {/** 3D rendering canvas */}
+                      {/*
                       Camera Setup
                       - Ship-following camera component
                     */}
-                    {/* Camera */}
-                    <Camera />
-                    {/*
+                      {/* Camera */}
+                      <Camera />
+                      {/*
                       Lighting Setup
                       - Scene lights configuration
                     */}
-                    <Lights />
-                    {/*
+                      <Lights />
+                      {/*
                       Objects Setup
                       - Scene objects configuration
                       Galaxy has nothing to load, so it's kept outside the
                       suspending subtrees below and paints on the very first
                       frame instead of waiting on the ship model/board textures.
                     */}
-                    <Galaxy />
-                    {/* Background galaxy component */}
-                    {/* Ship and Timeline each get their own Suspense boundary
+                      <Galaxy />
+                      {/* Background galaxy component */}
+                      {/* Ship and Timeline each get their own Suspense boundary
                         so a slow board texture doesn't hold back the ship (or
                         vice versa) - the scene fills in progressively. */}
-                    <Suspense fallback={null}>
-                      <Ship />
-                      {/* Main ship component */}
-                    </Suspense>
-                    <Sphere position={[0, 0, 0]} label="Origin" />
-                    {/* Origin sphere */}
-                    <Suspense fallback={null}>
-                      <Timeline /> {/* CV Timeline Objects Path Component */}
-                    </Suspense>
-                    {/* Performance Stats */}
-                    <Stats />
-                  </Canvas>
-                  <LoadingScreen hidden={ready} />
-                  {/* DOM chrome held back until the 3D scene is ready, then
+                      <Suspense fallback={null}>
+                        <Ship />
+                        {/* Main ship component */}
+                      </Suspense>
+                      <Sphere position={[0, 0, 0]} label="Origin" />
+                      {/* Origin sphere */}
+                      <Suspense fallback={null}>
+                        <Timeline /> {/* CV Timeline Objects Path Component */}
+                      </Suspense>
+                      {/* Performance Stats */}
+                      <Stats />
+                    </Canvas>
+                    <LoadingScreen hidden={ready} />
+                    {/* DOM chrome held back until the 3D scene is ready, then
                       faded in together instead of appearing before it. */}
-                  <div
-                    className={`scene-chrome${ready ? " scene-chrome--visible" : ""}`}
-                  >
-                    {/* Camera Helper */}
-                    <Overlay /> {/* Overlay for camera helper and HUD */}
-                    <AutopilotBanner />
-                    {/* Bottom-left GTA5-style minimap */}
-                    <Minimap />
-                    {/* Touch controls */}
-                    <MobileControls />
-                    {/* Project details modal, shown when the ship activates a board */}
-                    <Highlight />
-                    {/* Shared top-right HUD group: sound + help */}
-                    <HudCorner>
-                      <MuteButton />
-                      <HelpButton />
-                    </HudCorner>
-                    {/* Intro alert + reopenable controls reference */}
-                    <WelcomeOverlay />
-                  </div>
-                </WelcomeProvider>
-              </AudioProvider>
+                    <div
+                      className={`scene-chrome${ready ? " scene-chrome--visible" : ""}`}
+                    >
+                      {/* Camera Helper */}
+                      <Overlay /> {/* Overlay for camera helper and HUD */}
+                      <AutopilotBanner />
+                      {/* Bottom-left GTA5-style minimap */}
+                      <Minimap />
+                      {/* Touch controls */}
+                      <MobileControls />
+                      {/* Project details modal, shown when the ship activates a board */}
+                      <Highlight />
+                      {/* Shared top-right HUD group: sound + help */}
+                      <HudCorner>
+                        <MuteButton />
+                        <HelpButton />
+                      </HudCorner>
+                      {/* Intro alert + reopenable controls reference */}
+                      <WelcomeOverlay />
+                    </div>
+                  </WelcomeProvider>
+                </AudioProvider>
+              </TrickProvider>
             </AutopilotProvider>
           </ProjectProvider>
         </SceneProvider>

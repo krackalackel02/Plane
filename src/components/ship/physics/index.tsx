@@ -13,9 +13,11 @@ import {
   useAutopilot,
   AutopilotTarget,
 } from "../../../context/autopilotContext";
+import { useTrick } from "../../../context/trickContext";
 import motionConstants from "../../../utils/motionConstants.json";
 import { HarmonicMotion } from "./motions/harmonic/harmonic";
 import { AutopilotMotion } from "./motions/autopilot/autopilot";
+import { TrickMotion } from "./motions/trick/trick";
 import keys from "../../../utils/keys.json";
 
 /**
@@ -112,6 +114,13 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   // toward the stale destination.
   const activeTargetRef = useRef<AutopilotTarget | null>(null);
 
+  const { trickToken, clearTrick } = useTrick();
+  const trickMotion = useRef(new TrickMotion());
+  // Tracks which trickToken is currently playing, mirroring
+  // activeTargetRef's pattern, so a fresh token (a new tap) is told apart
+  // from the one already animating.
+  const activeTrickRef = useRef<number | null>(null);
+
   // Attach motions to the group on mount
   useEffect(() => {
     if (!groupRef.current) return;
@@ -120,10 +129,12 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
       if (groupRef.current) motion.attachTo(groupRef.current);
     });
     autopilotMotion.current.attachTo(groupRef.current);
+    trickMotion.current.attachTo(groupRef.current);
 
     return () => {
       Object.values(motions.current).forEach((motion) => motion.cleanup());
       autopilotMotion.current.cleanup();
+      trickMotion.current.cleanup();
     };
   }, [groupRef]);
 
@@ -162,7 +173,24 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
       return; // skip the four normal motions entirely this frame
     }
 
+    if (trickToken !== null && activeTrickRef.current !== trickToken) {
+      // New tap on the ship - hand the roll axis to the trick animation so
+      // it can't fight a held roll key while it plays.
+      (motions.current[Motion.ROLL] as HarmonicMotion).pause();
+      trickMotion.current.start();
+      activeTrickRef.current = trickToken;
+    }
+
+    if (activeTrickRef.current !== null) {
+      const status = trickMotion.current.update(delta);
+      if (status === "done") {
+        activeTrickRef.current = null;
+        clearTrick();
+      }
+    }
+
     Object.entries(motions.current).forEach(([type, motion]) => {
+      if (type === Motion.ROLL && activeTrickRef.current !== null) return;
       const config = params[type as keyof typeof params];
       motion.updateConfig(config);
       motion.update(delta, activeKeys);
