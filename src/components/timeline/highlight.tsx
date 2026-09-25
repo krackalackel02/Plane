@@ -2,27 +2,26 @@ import React, { useEffect } from "react";
 import "./highlight.css";
 import { useProjects } from "../../context/projectContext";
 import { useKeyContext } from "../../context/keyContext";
+import { FaPlay } from "react-icons/fa";
+import { SiGithub } from "react-icons/si";
+import TechStackRow from "./techGem";
 
 const CloseButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <button className="close-button" onClick={onClick}>
+  <button className="close-button" onClick={onClick} aria-label="Close">
     &times;
   </button>
 );
 
-const Header: React.FC<{
-  text: string | undefined;
-  children: React.ReactNode;
-}> = ({ text, children }) => (
-  <div className="highlight-header">
-    <h2>{text}</h2>
-    {children}
+const ProjectImage: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
+  <div className="highlight-image-wrap">
+    <img src={src} alt={alt} className="highlight-image" loading="lazy" />
   </div>
 );
 
-const TechStack: React.FC<{ techStack: string[] }> = ({ techStack }) => (
-  <p className="tech-stack">
-    <strong>Tech:</strong> {techStack.join(", ")}
-  </p>
+const Header: React.FC<{ text: string | undefined }> = ({ text }) => (
+  <div className="highlight-header">
+    <h2>{text}</h2>
+  </div>
 );
 
 const Description: React.FC<{ descriptionPoints: string[] }> = ({
@@ -38,22 +37,24 @@ const Description: React.FC<{ descriptionPoints: string[] }> = ({
 const DemoButton: React.FC<{ link: string }> = ({ link }) => (
   <a
     href={link}
-    className="btn btn-primary"
+    className="btn btn-demo"
     target="_blank"
     rel="noopener noreferrer"
   >
-    View Demo
+    <FaPlay aria-hidden="true" className="btn-icon" />
+    <span>View Demo</span>
   </a>
 );
 
-const GitHubButton: React.FC<{ link: string }> = ({ link }) => (
+const CodeButton: React.FC<{ link: string }> = ({ link }) => (
   <a
     href={link}
-    className="btn btn-secondary"
+    className="btn btn-code"
     target="_blank"
     rel="noopener noreferrer"
   >
-    View on GitHub
+    <SiGithub aria-hidden="true" className="btn-icon" />
+    <span>View Code</span>
   </a>
 );
 
@@ -101,23 +102,34 @@ const Highlight: React.FC = () => {
         className="highlight-content-3d"
         onClick={(event) => event.stopPropagation()}
       >
-        <Header text={projectData.title}>
-          <CloseButton onClick={close} />
-        </Header>
+        <CloseButton onClick={close} />
 
-        {projectData.techStack && (
-          <TechStack techStack={projectData.techStack} />
+        {/* Same thumbnail the 3D board displays - the popup covers the
+            board while it's open, so this keeps the artwork visible. */}
+        {projectData.imagePath && (
+          <ProjectImage
+            src={projectData.imagePath}
+            alt={`${projectData.title ?? "Project"} preview`}
+          />
         )}
 
-        {descriptionPoints && (
-          <Description descriptionPoints={descriptionPoints} />
-        )}
+        <div className="highlight-body">
+          <Header text={projectData.title} />
 
-        <div className="button-group">
-          {projectData.link && <DemoButton link={projectData.link} />}
-          {projectData.githubLink && (
-            <GitHubButton link={projectData.githubLink} />
+          {projectData.techStack && (
+            <TechStackRow techStack={projectData.techStack} />
           )}
+
+          {descriptionPoints && (
+            <Description descriptionPoints={descriptionPoints} />
+          )}
+
+          <div className="button-group">
+            {projectData.link && <DemoButton link={projectData.link} />}
+            {projectData.githubLink && (
+              <CodeButton link={projectData.githubLink} />
+            )}
+          </div>
         </div>
       </div>
     </div>
