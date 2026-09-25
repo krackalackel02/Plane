@@ -1,7 +1,5 @@
-import { useRef, useState } from "react";
 import { isMobile } from "react-device-detect";
 import { Keycap, JoystickIcon } from "./controlIcons";
-import { GLITCH_EXIT_MS } from "./glitchTiming";
 import "./helpModal.css";
 
 /* eslint-disable react/prop-types -- TS interfaces already cover this */
@@ -84,32 +82,21 @@ const MobileControls = () => (
 // Full controls reference, reopenable via the persistent "?" button. Content
 // branches on device so touch users never see a keyboard diagram, and desktop
 // users never see a joystick. Shares the welcome popup's glitchy HUD-panel
-// styling (welcome-alert) and exit transition so the two feel like one system.
+// styling (welcome-alert) on open, but - unlike the one-time welcome intro -
+// closes instantly: this modal gets toggled open/closed repeatedly, so it
+// skips the glitch-out exit delay rather than making every dismiss wait on it.
 const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
-  const [closing, setClosing] = useState(false);
-  const closingRef = useRef(false);
-
-  const requestClose = () => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-    setClosing(true);
-    setTimeout(() => {
-      closingRef.current = false;
-      onClose();
-    }, GLITCH_EXIT_MS);
-  };
-
   return (
-    <div className="welcome-backdrop" onClick={requestClose}>
+    <div className="welcome-backdrop" onClick={onClose}>
       <div
-        className={`welcome-alert help-modal${closing ? " welcome-alert--closing" : ""}`}
+        className="welcome-alert help-modal"
         role="dialog"
         aria-label="Controls"
         onClick={(event) => event.stopPropagation()}
       >
         <button
           className="welcome-alert-close"
-          onClick={requestClose}
+          onClick={onClose}
           aria-label="Close"
         >
           &times;
