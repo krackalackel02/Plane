@@ -1,0 +1,126 @@
+.keycap-row {
+  display: flex;
+  gap: 4px;
+}
+
+/* Cartoony beveled keycap: bright top face, dark drop shadow underneath to
+   read as a physical, pressable key rather than a flat label. */
+.keycap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2a3550, #182036);
+  border: 1px solid rgba(140, 220, 255, 0.4);
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.5),
+    0 0 8px rgba(80, 200, 255, 0.25) inset;
+  color: #eafcff;
+  font-family: "Orbitron", sans-serif;
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+.keycap--wide {
+  min-width: 52px;
+  padding: 0 10px;
+}
+
+.keycap--compact {
+  min-width: 20px;
+  height: 20px;
+  font-size: 0.6rem;
+  border-radius: 5px;
+}
+
+.keycap--compact.keycap--wide {
+  min-width: 40px;
+}
+
+.help-joystick {
+  position: relative;
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(140, 220, 255, 0.4);
+  box-shadow: 0 0 10px rgba(80, 200, 255, 0.25) inset;
+}
+
+.help-joystick--compact {
+  width: 48px;
+  height: 48px;
+}
+
+.help-joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 35% 30%, #fff200, #ff8800);
+  box-shadow: 0 0 10px rgba(255, 180, 0, 0.6);
+}
+
+.help-joystick--compact .help-joystick-knob {
+  width: 18px;
+  height: 18px;
+}
+
+.help-joystick-hint {
+  position: absolute;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  line-height: 1;
+  text-shadow: 0 0 2px #000;
+}
+
+.help-joystick-hint--top {
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.help-joystick-hint--bottom {
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.help-joystick-hint--left {
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.help-joystick-hint--right {
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.help-joystick--compact .help-joystick-hint {
+  font-size: 8px;
+}
+
+.help-joystick--compact .help-joystick-hint--top {
+  top: 2px;
+}
+
+.help-joystick--compact .help-joystick-hint--bottom {
+  bottom: 2px;
+}
+
+.help-joystick--compact .help-joystick-hint--left {
+  left: 2px;
+}
+
+.help-joystick--compact .help-joystick-hint--right {
+  right: 2px;
+}
