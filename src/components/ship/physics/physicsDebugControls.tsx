@@ -9,11 +9,13 @@ import { createSaveButton } from "../../../utils/debugSaveButton";
  * @returns control properties
  */
 const getControlProps = (key: string) => {
-  if (key === "decayFactor") return { min: 0, max: 1, step: 0.05 };
   if (key === "stiffness") return { min: 0, max: 100, step: 1 };
   if (key === "damping") return { min: 0, max: 10, step: 0.1 };
   if (key === "maxAngle") return { min: 0, max: 90, step: 1 };
-  if (key === "acceleration") return { min: 0, max: 1, step: 0.01 };
+  // acceleration is a responsiveness constant (1/s) for the yaw/throttle
+  // exponential approach-to-target, not a literal acceleration magnitude -
+  // higher is snappier. ~3-6 covers brisk-to-twitchy.
+  if (key === "acceleration") return { min: 0, max: 10, step: 0.1 };
   if (key === "maxSpeed") return { min: 0, max: 100, step: 1 };
   if (key === "speed") return { min: 1, max: 50, step: 1 };
   return { min: 0, max: 10, step: 1 };

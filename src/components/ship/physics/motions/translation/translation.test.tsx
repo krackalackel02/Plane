@@ -7,7 +7,6 @@ describe("TranslationMotion class tests", () => {
     const motion = new TranslationMotion({
       positiveKey: "ArrowUp",
       negativeKey: "ArrowDown",
-      decayFactor: 0.95,
       maxSpeed: 2,
       acceleration: 1,
     });

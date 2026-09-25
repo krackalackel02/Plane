@@ -6,43 +6,42 @@ export interface BaseMotionConfig {
   axis?: AxisType;
   positiveKey: string;
   negativeKey: string;
-  decayFactor?: number;
 }
 
 export class BaseMotion {
   protected axis: AxisType;
   protected positiveKey: string;
   protected negativeKey: string;
-  protected decayFactor: number;
   protected group: Group | undefined;
 
-  constructor({
-    axis,
-    positiveKey,
-    negativeKey,
-    decayFactor = 0.95,
-  }: BaseMotionConfig) {
+  constructor({ axis, positiveKey, negativeKey }: BaseMotionConfig) {
     this.axis = axis as AxisType;
     this.positiveKey = positiveKey;
     this.negativeKey = negativeKey;
-    this.decayFactor = decayFactor;
   }
 
   attachTo(group: Group) {
     this.group = group;
   }
 
-  // decayFactor is tuned as the per-frame multiplier at this reference
-  // rate. Raising it to (delta * DECAY_REFERENCE_FPS) reproduces that same
-  // tuned coast-down feel at any frame rate, instead of the old
-  // `value *= decayFactor` which drained velocity once per *rendered
-  // frame* - roughly 2.4x faster per second on a 144Hz display than on 60Hz.
-  private static readonly DECAY_REFERENCE_FPS = 60;
-
-  protected decay(value: number, delta: number): number {
-    return (
-      value * Math.pow(this.decayFactor, delta * BaseMotion.DECAY_REFERENCE_FPS)
-    );
+  /**
+   * Frame-rate-independent exponential approach of `current` toward
+   * `target`: current + (current - target) * exp(-rate * delta). The pull
+   * toward the target is proportional to how far off `current` is, so
+   * reversing direction from full speed converges just as fast as
+   * accelerating from rest - unlike constant acceleration plus passive
+   * decay, where undoing a large built-up value took as long as building
+   * it up. `rate` is a responsiveness constant (1/s): roughly how many
+   * "e-foldings" per second toward the target, so a bigger rate means a
+   * snappier response.
+   */
+  protected approach(
+    current: number,
+    target: number,
+    rate: number,
+    delta: number,
+  ): number {
+    return target + (current - target) * Math.exp(-rate * delta);
   }
 
   update(delta: number, activeKeys: Set<string>) {
@@ -52,7 +51,6 @@ export class BaseMotion {
     if (config.axis !== undefined) this.axis = config.axis;
     if (config.positiveKey !== undefined) this.positiveKey = config.positiveKey;
     if (config.negativeKey !== undefined) this.negativeKey = config.negativeKey;
-    if (config.decayFactor !== undefined) this.decayFactor = config.decayFactor;
   }
   cleanup() {
     this.group = undefined;

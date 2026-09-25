@@ -1,7 +1,7 @@
 import { BaseMotion, BaseMotionConfig } from "../baseMotion";
 export interface TranslationMotionConfig extends BaseMotionConfig {
   maxSpeed: number;
-  acceleration: number;
+  acceleration: number; // Responsiveness (1/s): how quickly velocity closes the gap to its target
 }
 
 export class TranslationMotion extends BaseMotion {
@@ -12,11 +12,10 @@ export class TranslationMotion extends BaseMotion {
   constructor({
     positiveKey,
     negativeKey,
-    decayFactor,
     maxSpeed,
     acceleration,
   }: TranslationMotionConfig) {
-    super({ positiveKey, negativeKey, decayFactor });
+    super({ positiveKey, negativeKey });
     this.maxSpeed = maxSpeed as number;
     this.acceleration = acceleration as number;
   }
@@ -28,11 +27,19 @@ export class TranslationMotion extends BaseMotion {
     if (config.maxSpeed !== undefined) this.maxSpeed = config.maxSpeed;
   }
 
+  /**
+   * velocity chases a target vector - heading * maxSpeed while throttle is
+   * held, zero otherwise - via BaseMotion.approach. Because the target
+   * rotates with the ship's current heading, holding throttle through a
+   * turn actively pulls velocity onto the new heading instead of just
+   * adding to whatever direction the ship happened to be drifting in, and
+   * releasing (or reversing) throttle corrects just as fast as building
+   * speed up did. The target is already bounded by maxSpeed and approach()
+   * never overshoots it, so no separate clamp is needed.
+   */
   update(delta: number, activeKeys: Set<string>) {
     if (!this.group) return;
     const yaw = this.group.rotation.y || 0;
-
-    const accel = this.acceleration || 0.01;
     const forwardZ = Math.cos(yaw);
     const forwardX = Math.sin(yaw);
 
@@ -43,38 +50,23 @@ export class TranslationMotion extends BaseMotion {
         ? 1
         : 0;
 
-    if (direction !== 0) {
-      // Ease acceleration off as speed *along the direction being held*
-      // approaches maxSpeed, so cruising settles in smoothly instead of
-      // slamming into the hard clamp below. Only the along-direction
-      // component counts, and it's clamped to >= 0 - a fresh key press, or
-      // reversing out of a drift, still gets full accel rather than being
-      // eased by speed built up in the other direction.
-      const alongSpeed =
-        (this.velocity.z * forwardZ + this.velocity.x * forwardX) * direction;
-      const approachRatio = Math.max(alongSpeed / this.maxSpeed, 0);
-      const easedAccel = accel * (1 - approachRatio * approachRatio) * delta;
+    this.velocity.z = this.approach(
+      this.velocity.z,
+      forwardZ * direction * this.maxSpeed,
+      this.acceleration,
+      delta,
+    );
+    this.velocity.x = this.approach(
+      this.velocity.x,
+      forwardX * direction * this.maxSpeed,
+      this.acceleration,
+      delta,
+    );
 
-      this.velocity.z += forwardZ * direction * easedAccel;
-      this.velocity.x += forwardX * direction * easedAccel;
-    } else {
-      this.velocity.z = this.decay(this.velocity.z, delta);
-      this.velocity.x = this.decay(this.velocity.x, delta);
-
+    if (direction === 0) {
       // Reset velocity if below threshold
       if (Math.abs(this.velocity.z) < 0.001) this.velocity.z = 0;
       if (Math.abs(this.velocity.x) < 0.001) this.velocity.x = 0;
-    }
-
-    const maxSpeed = this.maxSpeed; // Replace with your desired max speed
-    const velocityMagnitude = Math.sqrt(
-      this.velocity.z ** 2 + this.velocity.x ** 2,
-    );
-
-    if (velocityMagnitude > maxSpeed) {
-      const scale = maxSpeed / velocityMagnitude;
-      this.velocity.z *= scale;
-      this.velocity.x *= scale;
     }
 
     // Apply translation to the group
