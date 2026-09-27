@@ -1,21 +1,35 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Instances, Instance } from "@react-three/drei";
+import { useWorldBounds } from "../../utils/worldBounds";
 
-// Utility to generate random positions
-import { generateRandomPosition } from "../../utils/3d";
+// Vertical spread for stars - kept independent of the ship's play area
+// since the ship never leaves the y=0 plane, but stars are purely
+// decorative backdrop and should still fill out the sky above/below it.
+const STAR_Y_RANGE = 150;
 
 /**
- * Stars component to render a field of stars in the galaxy
+ * Stars component to render a field of stars in the galaxy, confined to
+ * the same world boundary the ship is confined to (see utils/worldBounds)
+ * so the starfield reads as "the sky over the playable zone" rather than
+ * scattering stars the ship can never actually reach.
  * @param count - Number of stars to render
  * @returns JSX.Element
  */
 const Stars: React.FC<{ count?: number }> = ({ count = 1000 }) => {
-  const starRange = 200; // Range for star positions in x, y, z
+  const bounds = useWorldBounds();
 
-  // Generate positions for stars
-  const stars = Array.from({ length: count }).map(() => ({
-    position: generateRandomPosition(starRange), // Ensure the tuple type
-  }));
+  // Generate positions for stars within the world boundary
+  const stars = useMemo(
+    () =>
+      Array.from({ length: count }).map(() => ({
+        position: [
+          bounds.minX + Math.random() * (bounds.maxX - bounds.minX),
+          (Math.random() - 0.5) * STAR_Y_RANGE,
+          bounds.minZ + Math.random() * (bounds.maxZ - bounds.minZ),
+        ] as [number, number, number],
+      })),
+    [count, bounds],
+  );
 
   const geometry: [number, number, number] = [0.1, 8, 8]; // Sphere geometry: radius, widthSegments, heightSegments
   const starColor = "white"; // Star color

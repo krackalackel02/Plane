@@ -1,3 +1,5 @@
+import { WorldBounds } from "../../utils/worldBounds";
+
 export interface WorldPoint {
   id: string;
   position: [number, number, number];
@@ -9,15 +11,28 @@ export interface MapPoint {
   y: number;
 }
 
+export interface MapRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface WorldToMapProjection {
   toMap: (x: number, z: number) => [number, number];
   boardPoints: MapPoint[];
+  // The world boundary (see utils/worldBounds) in the same map CSS-pixel
+  // space as toMap/boardPoints, so the minimap can draw the zone the ship
+  // is physically confined to.
+  boundaryRect: MapRect;
 }
 
 /**
  * Build a fixed-scale world (x, z) -> map (x, y) CSS-pixel projection that
- * fits every board plus the ship's (0, 0, 0) starting point inside a
- * `size` x `size` square, with `paddingRatio` reserved as empty margin.
+ * fits the whole world boundary (see utils/worldBounds) inside a `size` x
+ * `size` square, with `paddingRatio` reserved as empty margin. Since the
+ * boundary already contains every board plus the ship's (0, 0, 0) starting
+ * point with room to spare, this guarantees both fit too.
  *
  * Both world axes are negated:
  *
@@ -36,23 +51,15 @@ export interface WorldToMapProjection {
  * from these same two flips.
  */
 export const computeWorldToMapProjection = (
+  bounds: WorldBounds,
   boards: WorldPoint[],
   size: number,
   paddingRatio: number,
 ): WorldToMapProjection => {
-  const xs = [0, ...boards.map((b) => b.position[0])];
-  const zs = [0, ...boards.map((b) => b.position[2])];
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minZ = Math.min(...zs);
-  const maxZ = Math.max(...zs);
-
-  // Floor the span so a single board (or none) doesn't zoom the map in to
-  // an unusably tiny world.
-  const spanX = Math.max(maxX - minX, 10);
-  const spanZ = Math.max(maxZ - minZ, 10);
-  const centerX = (minX + maxX) / 2;
-  const centerZ = (minZ + maxZ) / 2;
+  const spanX = Math.max(bounds.maxX - bounds.minX, 10);
+  const spanZ = Math.max(bounds.maxZ - bounds.minZ, 10);
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
 
   const usable = size * (1 - paddingRatio);
   const scale = usable / Math.max(spanX, spanZ);
@@ -67,7 +74,19 @@ export const computeWorldToMapProjection = (
     return { id: b.id, x, y };
   });
 
-  return { toMap, boardPoints };
+  // Two opposite corners of the boundary, mapped, then normalized into a
+  // top-left-origin rect - the axis negation above means either corner can
+  // land on either side depending on world orientation.
+  const [cornerAX, cornerAY] = toMap(bounds.minX, bounds.minZ);
+  const [cornerBX, cornerBY] = toMap(bounds.maxX, bounds.maxZ);
+  const boundaryRect: MapRect = {
+    x: Math.min(cornerAX, cornerBX),
+    y: Math.min(cornerAY, cornerBY),
+    width: Math.abs(cornerBX - cornerAX),
+    height: Math.abs(cornerBY - cornerAY),
+  };
+
+  return { toMap, boardPoints, boundaryRect };
 };
 
 /**

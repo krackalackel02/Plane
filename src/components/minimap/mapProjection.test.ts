@@ -4,6 +4,7 @@ import {
   computeWorldToMapProjection,
   type WorldPoint,
 } from "./mapProjection";
+import { computeWorldBounds } from "../../utils/worldBounds";
 
 const SIZE = 200;
 const PADDING_RATIO = 0.22;
@@ -15,9 +16,15 @@ describe("computeWorldToMapProjection", () => {
     { id: "right", position: [20, 0, 0] },
     { id: "left", position: [-20, 0, 0] },
   ];
+  const bounds = computeWorldBounds(boards);
 
   test("a board ahead of the ship (+z) maps above center - reads as north", () => {
-    const { toMap } = computeWorldToMapProjection(boards, SIZE, PADDING_RATIO);
+    const { toMap } = computeWorldToMapProjection(
+      bounds,
+      boards,
+      SIZE,
+      PADDING_RATIO,
+    );
     const [, shipY] = toMap(0, 0);
     const [, aheadY] = toMap(0, 20);
     const [, behindY] = toMap(0, -20);
@@ -30,7 +37,12 @@ describe("computeWorldToMapProjection", () => {
   // comment) so the map's left/right matches the ship's own left/right,
   // not raw world +x/-x.
   test("positive world x maps to the left of center", () => {
-    const { toMap } = computeWorldToMapProjection(boards, SIZE, PADDING_RATIO);
+    const { toMap } = computeWorldToMapProjection(
+      bounds,
+      boards,
+      SIZE,
+      PADDING_RATIO,
+    );
     const [shipX] = toMap(0, 0);
     const [rightX] = toMap(20, 0);
     const [leftX] = toMap(-20, 0);
@@ -41,6 +53,7 @@ describe("computeWorldToMapProjection", () => {
 
   test("the ship's own boardPoints land at the same coordinates toMap would compute", () => {
     const { toMap, boardPoints } = computeWorldToMapProjection(
+      bounds,
       boards,
       SIZE,
       PADDING_RATIO,
@@ -53,8 +66,10 @@ describe("computeWorldToMapProjection", () => {
   });
 
   test("a single board (or none) still floors the span instead of zooming to a point", () => {
+    const onlyBoards: WorldPoint[] = [{ id: "only", position: [0, 0, 0] }];
     const { toMap } = computeWorldToMapProjection(
-      [{ id: "only", position: [0, 0, 0] }],
+      computeWorldBounds(onlyBoards),
+      onlyBoards,
       SIZE,
       PADDING_RATIO,
     );
@@ -62,6 +77,22 @@ describe("computeWorldToMapProjection", () => {
 
     expect(Number.isFinite(x)).toBe(true);
     expect(Number.isFinite(y)).toBe(true);
+  });
+
+  test("boundaryRect frames the whole world boundary, containing every board point", () => {
+    const { boardPoints, boundaryRect } = computeWorldToMapProjection(
+      bounds,
+      boards,
+      SIZE,
+      PADDING_RATIO,
+    );
+
+    boardPoints.forEach(({ x, y }) => {
+      expect(x).toBeGreaterThanOrEqual(boundaryRect.x);
+      expect(x).toBeLessThanOrEqual(boundaryRect.x + boundaryRect.width);
+      expect(y).toBeGreaterThanOrEqual(boundaryRect.y);
+      expect(y).toBeLessThanOrEqual(boundaryRect.y + boundaryRect.height);
+    });
   });
 });
 
@@ -76,8 +107,10 @@ describe("arrowRotationForYaw", () => {
   });
 
   test("at yaw 0 the arrow points straight up (north), matching a ship that starts facing the boards", () => {
+    const boards: WorldPoint[] = [{ id: "ahead", position: [0, 0, 20] }];
     const { toMap } = computeWorldToMapProjection(
-      [{ id: "ahead", position: [0, 0, 20] }],
+      computeWorldBounds(boards),
+      boards,
       SIZE,
       PADDING_RATIO,
     );

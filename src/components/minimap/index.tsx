@@ -11,6 +11,7 @@ import {
 import { useScene } from "../../context/sceneContext";
 import { useProjects } from "../../context/projectContext";
 import { useAutopilot } from "../../context/autopilotContext";
+import { useWorldBounds } from "../../utils/worldBounds";
 import {
   calculatedBoardPositionsAndRotations,
   computeArcRadius,
@@ -57,24 +58,38 @@ const useMapSize = (ref: RefObject<HTMLDivElement>) => {
 /**
  * Project world (x, z) coordinates onto the map's CSS-pixel space. The map
  * does not pan or rotate with the ship - it is scaled once to fit the
- * whole timeline arc plus the ship's origin, GTA5-style "whole area"
+ * whole world boundary (see utils/worldBounds), GTA5-style "whole area"
  * minimap rather than a close-up chase view. `size` is re-derived from
  * the live rendered box (see useMapSize) so the same projection serves
  * both the collapsed dock and the expanded, tappable overlay.
  */
 const useWorldToMap = (size: number) => {
   const { items } = useProjects();
+  const bounds = useWorldBounds();
 
   return useMemo(() => {
     const boardsData = calculatedBoardPositionsAndRotations(items, "arc");
     const arcRadius = computeArcRadius(items.length);
     const projection = computeWorldToMapProjection(
+      bounds,
       boardsData,
       size,
       PADDING_RATIO,
     );
     return { ...projection, boardsData, arcRadius };
-  }, [items, size]);
+  }, [items, bounds, size]);
+};
+
+const drawBoundary = (
+  ctx: CanvasRenderingContext2D,
+  rect: { x: number; y: number; width: number; height: number },
+) => {
+  ctx.save();
+  ctx.strokeStyle = "rgba(120, 190, 255, 0.55)";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+  ctx.restore();
 };
 
 const drawBook = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
@@ -146,7 +161,8 @@ const Minimap = () => {
   // consumed by the FLIP effect below.
   const preToggleRectRef = useRef<DOMRect | null>(null);
   const size = useMapSize(containerRef);
-  const { boardPoints, boardsData, toMap, arcRadius } = useWorldToMap(size);
+  const { boardPoints, boardsData, toMap, arcRadius, boundaryRect } =
+    useWorldToMap(size);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -173,6 +189,10 @@ const Minimap = () => {
         ctx.stroke();
       });
 
+      // The world boundary the ship is physically confined to (see
+      // utils/worldBounds and ship/physics/collision).
+      drawBoundary(ctx, boundaryRect);
+
       boardPoints.forEach(({ x, y }) => drawBook(ctx, x, y));
 
       const ship = shipRef.current;
@@ -186,7 +206,7 @@ const Minimap = () => {
 
     frameId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frameId);
-  }, [boardPoints, toMap, shipRef, size]);
+  }, [boardPoints, toMap, shipRef, size, boundaryRect]);
 
   // Both directions go through the same rect capture so the FLIP effect
   // below can animate the toggle as one continuous element resizing,
