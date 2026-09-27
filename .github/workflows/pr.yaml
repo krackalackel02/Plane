@@ -11,11 +11,20 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  # Scoped to this PR/ref, not shared with the "pages" deploy pipeline in
+  # main.yaml — PR checks never touch Pages, so they shouldn't queue
+  # behind (or block) deploys or other PRs' checks. A new push cancels
+  # the previous run for the same ref instead of wasting a queue slot.
+  group: verify-pr-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # Job 1: Install Dependencies
+  # Job: standalone install check. Nothing has `needs: install` — this
+  # exists purely so a broken `npm ci` (bad lockfile, registry outage,
+  # etc.) shows up as one clearly-red job at a glance, instead of you
+  # having to open test/e2e/build individually and notice they all died
+  # on the same step. test/e2e/build each still run their own npm ci in
+  # parallel, so this job doesn't gate or slow anything down.
   install:
     runs-on: ubuntu-latest
     steps:
@@ -26,21 +35,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
 
-  # Job 2: Testing Job
+  # Job: Unit tests (no dependency on e2e/build — starts immediately)
   test:
-    needs: install
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -50,22 +51,29 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
-      - name: Restore node_modules cache
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+      - name: Install dependencies
+        run: npm ci
 
       - name: Run tests
         run: npx vitest --run
 
-  # Job 3: End-to-end Job (real mobile-device emulation: touch controls)
+  # Job: End-to-end tests (real mobile-device emulation: touch controls).
+  # Runs in parallel with test/build — no dependency between them.
+  #
+  # Sharded across 4 runners instead of one. Each shard gets its own
+  # runner and its own `npm run dev` instance (webServer's
+  # reuseExistingServer is false in CI), so shards never share a dev
+  # server — the exact thing that made concurrent workers flaky inside
+  # a single process (see playwright.config.ts). workers stays 1 within
+  # each shard; the parallelism comes from running 4 shards at once.
   e2e:
-    needs: install
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -74,32 +82,42 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
-      - name: Restore node_modules cache
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
         uses: actions/cache@v4
         with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium webkit
 
-      - name: Run e2e tests
-        run: npx playwright test
+      - name: Install Playwright OS dependencies (browsers already cached)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium webkit
+
+      - name: Run e2e tests (shard ${{ matrix.shard }}/4)
+        run: npx playwright test --shard=${{ matrix.shard }}/4
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
 
-  # Job 4: Build Job (verifies the app actually builds; PRs don't deploy)
+  # Job: Build (verifies the app actually builds; PRs don't deploy).
+  # Doesn't consume test/e2e output, so it runs in parallel with them
+  # instead of waiting — a failing build shows up just as fast as a
+  # failing test.
   build:
-    needs: [test, e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -109,14 +127,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
-      - name: Restore node_modules cache
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build project with Npx Vite
         env:

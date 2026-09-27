@@ -22,7 +22,7 @@ import { TrickMotion } from "./motions/trick/trick";
 import { buildBoardObbs } from "./collision/boardCollision";
 import { calculatedBoardPositionsAndRotations } from "../../timeline/calculatedBoardPositionsAndRotations";
 import boardGeometry from "../../../utils/boardParams.json";
-import keys from "../../../utils/keys.json";
+import { hasAnyRealControlKey, isBoostEngaged } from "../../../utils/boost";
 
 /**
  * Default motion parameters for ship physics
@@ -63,16 +63,9 @@ const defaultMotionParams = {
   },
 };
 
-/**
- * True if any real movement key (roll/pitch/yaw/throttle) is held -
- * excludes the exhaust key, which is cosmetic-adjacent rather than a real
- * motion input. Manual input like this always takes over from autopilot.
- */
-const hasAnyRealControlKey = (activeKeys: Set<string>) =>
-  [keys.roll, keys.pitch, keys.yaw, keys.throttle].some(
-    ({ positive, negative }) =>
-      activeKeys.has(positive) || activeKeys.has(negative),
-  );
+// How much faster throttle accelerates and how much higher its top speed
+// goes while the boost key is held.
+const BOOST_MULTIPLIER = 1.6;
 
 /**
  * Props for Physics component
@@ -205,9 +198,18 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
       }
     }
 
+    const isBoosting = isBoostEngaged(activeKeys);
+
     Object.entries(motions.current).forEach(([type, motion]) => {
       if (type === Motion.ROLL && activeTrickRef.current !== null) return;
-      const config = params[type as keyof typeof params];
+      let config = params[type as keyof typeof params];
+      if (type === Motion.THROTTLE && isBoosting) {
+        config = {
+          ...config,
+          acceleration: config.acceleration * BOOST_MULTIPLIER,
+          maxSpeed: config.maxSpeed * BOOST_MULTIPLIER,
+        };
+      }
       motion.updateConfig(config);
       motion.update(delta, activeKeys);
     });

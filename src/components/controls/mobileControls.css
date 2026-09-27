@@ -29,6 +29,28 @@
   touch-action: none;
 }
 
+/* Dashed ring hinting at the "boost zone" beyond the track's own edge -
+   dragging the knob out this far snaps it to the ring and engages boost.
+   48px = 2 * BOOST_RING_WIDTH in movementStick.tsx, so the ring's radius
+   matches the knob's actual outer travel limit while boosting. */
+.circular-stick-track::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 48px);
+  height: calc(100% + 48px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px dashed rgba(57, 255, 106, 0.3);
+  pointer-events: none;
+  transition: border-color 0.15s ease;
+}
+
+.circular-stick-track.is-boosting::after {
+  border-color: rgba(57, 255, 106, 0.95);
+}
+
 .circular-stick-knob {
   position: absolute;
   top: 50%;
@@ -38,6 +60,14 @@
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.55);
   pointer-events: none;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.circular-stick-knob.is-boosting {
+  background: rgba(57, 255, 106, 0.85);
+  box-shadow: 0 0 14px rgba(57, 255, 106, 0.9);
 }
 
 /* Small direction hints rendered inside each stick. High-contrast white

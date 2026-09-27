@@ -12,6 +12,7 @@ import { BoundaryProvider } from "../context/boundaryContext";
 import { useLoading } from "../context/loadingContext";
 import { TrickProvider } from "../context/trickContext";
 import { AudioProvider } from "../context/audioContext";
+import { ExhaustModeProvider } from "../context/exhaustModeContext";
 import Stats from "./helper/stats";
 
 /// 3D Scene Components
@@ -21,6 +22,7 @@ import Camera from "./camera";
 import Overlay from "./helper/overlay";
 import AutopilotBanner from "./helper/autopilotBanner";
 import OutOfZoneBanner from "./helper/outOfZoneBanner";
+import BoostBanner from "./helper/boostBanner";
 import Lights from "./lights";
 import Timeline from "./timeline";
 import Sphere from "./helper/sphere";
@@ -32,6 +34,7 @@ import { WelcomeProvider } from "./helper/welcomeContext";
 import HelpButton from "./helper/helpButton";
 import HudCorner from "./helper/hudCorner";
 import MuteButton from "./helper/muteButton";
+import ExhaustModeButton from "./helper/exhaustModeButton";
 import LoadingScreen from "./helper/loadingScreen";
 
 /**
@@ -62,70 +65,77 @@ const Scene = () => {
                   {/* Provide tap-to-trick (barrel roll) request context */}
                   <AudioProvider>
                     {/* Provide engine hum / activation bleep / ambient audio */}
-                    <WelcomeProvider>
-                      {/* Provide intro-popup + reopenable-help-modal state */}
-                      <Canvas id="threejs-canvas">
-                        {/** 3D rendering canvas */}
-                        {/*
-                        Camera Setup
-                        - Ship-following camera component
-                      */}
-                        {/* Camera */}
-                        <Camera />
-                        {/*
-                        Lighting Setup
-                        - Scene lights configuration
-                      */}
-                        <Lights />
-                        {/*
-                        Objects Setup
-                        - Scene objects configuration
-                        Galaxy has nothing to load, so it's kept outside the
-                        suspending subtrees below and paints on the very first
-                        frame instead of waiting on the ship model/board textures.
-                      */}
-                        <Galaxy />
-                        {/* Background galaxy component */}
-                        {/* Ship and Timeline each get their own Suspense boundary
-                          so a slow board texture doesn't hold back the ship (or
-                          vice versa) - the scene fills in progressively. */}
-                        <Suspense fallback={null}>
-                          <Ship />
-                          {/* Main ship component */}
-                        </Suspense>
-                        <Sphere position={[0, 0, 0]} label="Origin" />
-                        {/* Origin sphere */}
-                        <Suspense fallback={null}>
-                          <Timeline /> {/* CV Timeline Objects Path Component */}
-                        </Suspense>
-                        {/* Performance Stats */}
-                        <Stats />
-                      </Canvas>
-                      <LoadingScreen />
-                      {/* DOM chrome held back until the 3D scene is ready, then
-                        faded in together instead of appearing before it. */}
-                      <div
-                        className={`scene-chrome${ready ? " scene-chrome--visible" : ""}`}
-                      >
-                        {/* Camera Helper */}
-                        <Overlay /> {/* Overlay for camera helper and HUD */}
-                        <AutopilotBanner />
-                        <OutOfZoneBanner />
-                        {/* Bottom-left GTA5-style minimap */}
-                        <Minimap />
-                        {/* Touch controls */}
-                        <MobileControls />
-                        {/* Project details modal, shown when the ship activates a board */}
-                        <Highlight />
-                        {/* Shared top-right HUD group: sound + help */}
-                        <HudCorner>
-                          <MuteButton />
-                          <HelpButton />
-                        </HudCorner>
-                        {/* Intro alert + reopenable controls reference */}
-                        <WelcomeOverlay />
-                      </div>
-                    </WelcomeProvider>
+                    <ExhaustModeProvider>
+                      {/* Provide the ship exhaust's current render mode, live-
+                          switchable via the HUD button below */}
+                      <WelcomeProvider>
+                        {/* Provide intro-popup + reopenable-help-modal state */}
+                        <Canvas id="threejs-canvas">
+                          {/** 3D rendering canvas */}
+                          {/*
+                          Camera Setup
+                          - Ship-following camera component
+                        */}
+                          {/* Camera */}
+                          <Camera />
+                          {/*
+                          Lighting Setup
+                          - Scene lights configuration
+                        */}
+                          <Lights />
+                          {/*
+                          Objects Setup
+                          - Scene objects configuration
+                          Galaxy has nothing to load, so it's kept outside the
+                          suspending subtrees below and paints on the very first
+                          frame instead of waiting on the ship model/board textures.
+                        */}
+                          <Galaxy />
+                          {/* Background galaxy component */}
+                          {/* Ship and Timeline each get their own Suspense boundary
+                            so a slow board texture doesn't hold back the ship (or
+                            vice versa) - the scene fills in progressively. */}
+                          <Suspense fallback={null}>
+                            <Ship />
+                            {/* Main ship component */}
+                          </Suspense>
+                          <Sphere position={[0, 0, 0]} label="Origin" />
+                          {/* Origin sphere */}
+                          <Suspense fallback={null}>
+                            <Timeline />{" "}
+                            {/* CV Timeline Objects Path Component */}
+                          </Suspense>
+                          {/* Performance Stats */}
+                          <Stats />
+                        </Canvas>
+                        <LoadingScreen />
+                        {/* DOM chrome held back until the 3D scene is ready, then
+                          faded in together instead of appearing before it. */}
+                        <div
+                          className={`scene-chrome${ready ? " scene-chrome--visible" : ""}`}
+                        >
+                          {/* Camera Helper */}
+                          <Overlay /> {/* Overlay for camera helper and HUD */}
+                          <AutopilotBanner />
+                          <OutOfZoneBanner />
+                          <BoostBanner />
+                          {/* Bottom-left GTA5-style minimap */}
+                          <Minimap />
+                          {/* Touch controls */}
+                          <MobileControls />
+                          {/* Project details modal, shown when the ship activates a board */}
+                          <Highlight />
+                          {/* Shared top-right HUD group: sound + help + exhaust style */}
+                          <HudCorner>
+                            <MuteButton />
+                            <ExhaustModeButton />
+                            <HelpButton />
+                          </HudCorner>
+                          {/* Intro alert + reopenable controls reference */}
+                          <WelcomeOverlay />
+                        </div>
+                      </WelcomeProvider>
+                    </ExhaustModeProvider>
                   </AudioProvider>
                 </TrickProvider>
               </BoundaryProvider>

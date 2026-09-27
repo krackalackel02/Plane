@@ -15,5 +15,6 @@
         "positive": "w",
         "negative": "s"
     },
-    "exhaust":" "
+    "exhaust":" ",
+    "boost":"Shift"
 }
