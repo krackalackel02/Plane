@@ -131,7 +131,7 @@ describe("WelcomeOverlay + HelpButton", () => {
     expect(screen.queryByText("W")).toBeNull();
   });
 
-  it("closes the help modal via its close button", () => {
+  it("closes the help modal instantly via its close button, with no exit delay", () => {
     renderWelcome();
     settle();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
@@ -139,7 +139,6 @@ describe("WelcomeOverlay + HelpButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show controls" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    finishExit();
     expect(screen.queryByRole("dialog", { name: "Controls" })).toBeNull();
   });
 });
