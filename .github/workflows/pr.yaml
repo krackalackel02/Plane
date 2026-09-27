@@ -19,6 +19,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Job: standalone install check. Nothing has `needs: install` — this
+  # exists purely so a broken `npm ci` (bad lockfile, registry outage,
+  # etc.) shows up as one clearly-red job at a glance, instead of you
+  # having to open test/e2e/build individually and notice they all died
+  # on the same step. test/e2e/build each still run their own npm ci in
+  # parallel, so this job doesn't gate or slow anything down.
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
   # Job: Unit tests (no dependency on e2e/build — starts immediately)
   test:
     runs-on: ubuntu-latest
