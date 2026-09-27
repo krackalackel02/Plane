@@ -1,6 +1,20 @@
 import { isMobile } from "react-device-detect";
 import { Keycap, JoystickIcon } from "./controlIcons";
+import { ModeIcon, MODE_LABEL } from "./exhaustModeButton";
+import { EXHAUST_MODE_ORDER } from "../../context/exhaustModeContext";
 import "./helpModal.css";
+
+// Mini preview of the three exhaust-look icons, matching the HUD button's
+// own glyphs so players recognise it as "that thing in the corner".
+const ExhaustModePreview = () => (
+  <div className="help-exhaust-preview" aria-hidden="true">
+    {EXHAUST_MODE_ORDER.map((mode) => (
+      <span key={mode} className="help-exhaust-icon" title={MODE_LABEL[mode]}>
+        <ModeIcon mode={mode} />
+      </span>
+    ))}
+  </div>
+);
 
 /* eslint-disable react/prop-types -- TS interfaces already cover this */
 
@@ -42,7 +56,17 @@ const PcControls = () => (
       <div className="help-cluster">
         <Keycap label="Space" wide />
       </div>
-      <p className="help-copy">Fire the exhaust boost</p>
+      <p className="help-copy">Fire the ship&apos;s exhaust</p>
+    </div>
+
+    <div className="help-row">
+      <div className="help-cluster">
+        <Keycap label="Shift" wide />
+      </div>
+      <p className="help-copy">
+        Boost - accelerates faster and makes the exhaust bigger, brighter, and
+        bluer
+      </p>
     </div>
 
     <div className="help-row">
@@ -63,6 +87,16 @@ const PcControls = () => (
       <p className="help-copy">
         Click the map in the corner to expand it, then click a book icon to
         autopilot straight there
+      </p>
+    </div>
+
+    <div className="help-row">
+      <div className="help-cluster">
+        <ExhaustModePreview />
+      </div>
+      <p className="help-copy">
+        Hover the engine icon (top right) to pick between particle, cloud, and
+        voxel exhaust styles
       </p>
     </div>
   </div>
@@ -90,6 +124,16 @@ const MobileControls = () => (
       <p className="help-copy">
         Tap the map in the corner to expand it, then tap a book icon to
         autopilot straight there
+      </p>
+    </div>
+
+    <div className="help-row">
+      <div className="help-cluster">
+        <ExhaustModePreview />
+      </div>
+      <p className="help-copy">
+        Tap the engine icon (top right) to pick between particle, cloud, and
+        voxel exhaust styles
       </p>
     </div>
   </div>
