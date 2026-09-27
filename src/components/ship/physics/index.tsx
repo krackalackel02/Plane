@@ -104,7 +104,7 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   const activeKeys = useKeyContext();
   const { target, cancelAutopilot, setIsFlying } = useAutopilot();
   const autopilotMotion = useRef(new AutopilotMotion());
-  const { items } = useProjects();
+  const { items, activeProjectId } = useProjects();
   // Board footprints the autopilot flight path must route around (see
   // AutopilotMotion.start) - same data ship/physics/collision derives
   // independently for its own, per-frame reactive collision.
@@ -168,10 +168,19 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
         setIsFlying(true);
       }
 
-      const status = autopilotMotion.current.update(
-        delta,
-        hasAnyRealControlKey(activeKeys),
-      );
+      // The project popup (Highlight) opens the instant the ship enters a
+      // board's activation zone - a separate, proximity-based check from
+      // this curve's own progress - so it can appear before progress
+      // reaches 1. Treat a popup opening mid-flight as arrival: otherwise
+      // the curve keeps "flying" underneath the popup (isFlying stays
+      // true), leaving the exhaust lit and autopilot nominally still
+      // engaged for however long the popup stays open.
+      const status = activeProjectId
+        ? "arrived"
+        : autopilotMotion.current.update(
+            delta,
+            hasAnyRealControlKey(activeKeys),
+          );
       if (status !== "flying") {
         cancelAutopilot();
         activeTargetRef.current = null;
