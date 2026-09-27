@@ -4,6 +4,7 @@ import { Group, Vector3 } from "three";
 import { useScene } from "../../../../context/sceneContext";
 import { useProjects } from "../../../../context/projectContext";
 import { useAutopilot } from "../../../../context/autopilotContext";
+import { useBoundary } from "../../../../context/boundaryContext";
 import { useWorldBounds } from "../../../../utils/worldBounds";
 import { calculatedBoardPositionsAndRotations } from "../../../timeline/calculatedBoardPositionsAndRotations";
 import boardGeometry from "../../../../utils/boardParams.json";
@@ -33,16 +34,17 @@ const SHIP_RADIUS = 2;
  * - bounces the ship off each project board's frame with real springiness,
  *   by applying a decaying knockback impulse directly to position.
  *
- * This only ever reads/writes shipRef.position. It never touches
- * keyContext or autopilotContext, so a bounce can never trigger the
- * exhaust jets (see ship/exhaust/index.tsx) - those react purely to held
- * keys and autopilot flight, not to how the ship's position actually
- * moves.
+ * This only ever reads/writes shipRef.position (plus boundaryContext's
+ * isOutOfZone flag, an on/off warning light). It never touches keyContext
+ * or autopilotContext, so a bounce can never trigger the exhaust jets
+ * (see ship/exhaust/index.tsx) - those react purely to held keys and
+ * autopilot flight, not to how the ship's position actually moves.
  */
 const ShipCollision = () => {
   const { shipRef } = useScene();
   const { items } = useProjects();
   const { isFlying } = useAutopilot();
+  const { setIsOutOfZone } = useBoundary();
   const bounds = useWorldBounds();
 
   const boardObbs = useMemo(() => {
@@ -90,6 +92,7 @@ const ShipCollision = () => {
       pushOutOfBoards(ship);
       prevPosition.current.copy(ship.position);
       impulse.current = { x: 0, z: 0 };
+      setIsOutOfZone(false);
       return;
     }
 
@@ -113,15 +116,18 @@ const ShipCollision = () => {
     );
     ship.position.x = wall.position.x;
     ship.position.z = wall.position.z;
+    let pushingOnWall = false;
     if (wall.hit) {
       const velocityAlongNormal =
         velocity.x * wall.outwardNormal.x + velocity.z * wall.outwardNormal.z;
       if (velocityAlongNormal > 0) {
+        pushingOnWall = true;
         const bounce = velocityAlongNormal * (1 + WALL_RESTITUTION);
         impulse.current.x -= bounce * wall.outwardNormal.x;
         impulse.current.z -= bounce * wall.outwardNormal.z;
       }
     }
+    setIsOutOfZone(pushingOnWall);
 
     // --- Boards: springy knockback. ---
     for (const obb of boardObbs) {
