@@ -88,8 +88,18 @@
   height: 15px;
 }
 
-.radial-node-menu__fan-node--active {
+/* Whichever node is the active mode gets a highlighted ring, not just a
+   tint - a general "this one is selected" treatment any consumer's
+   active node gets for free, not something exhaust-specific. Compounded
+   with .hud-icon-button.radial-node-menu__fan-node (three classes) so it
+   reliably outranks the two-class base rule above regardless of source
+   order, the same specificity-safety pattern used there. */
+.hud-icon-button.radial-node-menu__fan-node--active {
   color: #fff200;
+  border-color: #fff200;
+  box-shadow:
+    0 0 0 2px #fff200,
+    0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 @media (max-width: 768px) {

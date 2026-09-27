@@ -48,6 +48,20 @@ export const ModeIcon = ({ mode }: { mode: ExhaustMode }) => (
   </svg>
 );
 
+// Fixed trigger glyph - a flame, standing for "exhaust" generally - rather
+// than swapping to match whichever look is currently active. The active
+// look is already communicated by the highlighted ring on its fan node
+// (see .radial-node-menu__fan-node--active in radialNodeMenu.css), so the
+// trigger's job is just to say "this button is about exhaust".
+const FlameIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path
+      d="M12 2c-1.8 2.6-4.5 5-4.5 8.5a4.5 4.5 0 0 0 9 0c0-1.6-.6-2.9-1.3-3.9.2 1.5-.5 2.7-1.7 2.7a1.3 1.3 0 0 1-1.3-1.3c0-1.1.7-1.9.9-3.1C13.4 3.9 12.6 2.9 12 2z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 // Speed-dial-style icon button whose sub-options fan out in an arc below
 // it, built on the shared RadialNodeMenu template (see radialNodeMenu.tsx)
 // - the same template any other HUD button with sub-options (e.g. a future
@@ -66,7 +80,7 @@ const ExhaustModeButton = () => {
 
   return (
     <RadialNodeMenu
-      trigger={<ModeIcon mode={mode} />}
+      trigger={<FlameIcon />}
       triggerLabel={`Exhaust style: ${MODE_LABEL[mode]} (open to switch)`}
       nodes={nodes}
     />
