@@ -69,3 +69,27 @@ describe("KeyProvider stuck-key recovery", () => {
     expect(last()).toEqual(["a"]);
   });
 });
+
+describe("KeyProvider Caps Lock normalization", () => {
+  beforeEach(() => {
+    captured.length = 0;
+  });
+
+  // With Caps Lock on, the browser reports event.key as an uppercase letter
+  // for w/a/s/d, but keys.json binds controls to lowercase strings. Without
+  // normalizing, activeKeys would hold "W" while every consumer checks for
+  // "w", silently breaking throttle/yaw input whenever Caps Lock is active.
+  test("records single-character letter keys as lowercase regardless of Caps Lock", () => {
+    render(<Scene />);
+    press("W");
+    expect(last()).toEqual(["w"]);
+  });
+
+  // Multi-character key names (arrows, modifiers) aren't affected by Caps
+  // Lock and must be left exactly as the browser reports them.
+  test("leaves multi-character key names untouched", () => {
+    render(<Scene />);
+    press("ArrowLeft");
+    expect(last()).toEqual(["ArrowLeft"]);
+  });
+});
