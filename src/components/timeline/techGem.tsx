@@ -199,36 +199,32 @@ const PERSPECTIVE_PX = 640;
 // How long rotation holds still with a gem centered in the showcase spot
 // before advancing to the next one.
 const SHOWCASE_PAUSE_SEC = 1.1;
-// A gem's screen x-offset is radius*sin(angle), which is only monotonic
-// (i.e. further from center = further from its neighbors) for angles
-// within +-90deg of dead-center-front. Past that, sin folds back toward
-// 0, so a gem swinging around the back would visually cross paths with
-// whichever gem is trailing it in front - fade gems out approaching this
-// side-profile point and back in on the far side, same idea as the old
-// backface-visibility: hidden, so that never becomes visible.
-const FADE_START_DEG = 78;
-const FADE_END_DEG = 92;
+// Front-half (facing the viewer) gems are lit up toward this brightness;
+// back-half gems dim down toward the other end, continuously by depth -
+// see the z-based lerp in tick().
+const BRIGHTNESS_BACK = 0.65;
+const BRIGHTNESS_FRONT = 1.15;
 
 /**
- * Auto-rotating "3D" ring: gems sit evenly spaced around a circle whose
+ * Auto-rotating "3D" ring: gems sit evenly spaced around an ellipse whose
  * axis is vertical (Y), stepping one slot at a time - rotate to bring the
  * next gem to dead center, pause there for a beat so it can be read as
  * the "showcase" gem, then rotate to the next one.
  *
- * This used to continuously rotate while also warping the (otherwise
- * evenly spaced) angles to bunch several gems together near the front
- * and scaling/brightening whichever was closest to center. That caused
- * two problems: bunched-together gems could visually overlap (only
- * partly fixable - see the z-index note below), and because a gem was
- * still ramping into its "showcase" bump before the previous one had
- * finished ramping out, they'd overlap mid-transition too. Pausing on
- * each evenly-spaced showcase spot removes the timing overlap
- * (transitions are simple, constant-spacing, constant-scale moves
- * between holds), and dropping the artificial bunching/scale-bump
- * removes the spatial one - gems are never closer together than their
- * even base spacing, and the only size variation left is the natural
- * perspective falloff below (nearer = bigger), not an extra effect
- * layered on top.
+ * It's an ellipse rather than a circle so the horizontal spread and the
+ * depth (how much gems shrink/grow and how bunched-up the perspective
+ * makes them look) can be tuned independently: the x radius is the
+ * carousel's own on-page width (so gems use the full card), while the z
+ * radius is the stage's height - a much smaller, independently-tunable
+ * value that keeps the perspective effect gentle instead of a circle's
+ * single radius forcing depth to scale up right along with width.
+ *
+ * Gems never disappear or fade out, even swinging around the back -
+ * that's still "the carousel", just its far side, and correct z-index
+ * (see below) already means a nearer gem properly occludes a farther one
+ * where they visually overlap, same as it would in a real 3D scene. A
+ * continuous brightness lerp (front lit up, back dimmed) is the only
+ * front/back cue, on top of the natural perspective size falloff.
  *
  * This used to be a real CSS 3D carousel (rotateY + translateZ on a
  * transform-style: preserve-3d ancestor, letting the browser's own 3D
@@ -246,7 +242,11 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
   const stageRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const radiusRef = useRef(140);
+  // Ellipse radii: x (horizontal spread) tracks the stage's own width, z
+  // (depth) its height - see the class doc comment above for why these
+  // are deliberately independent instead of a single shared radius.
+  const radiusXRef = useRef(140);
+  const radiusZRef = useRef(48);
   const rotationRef = useRef(0);
   const pausedRef = useRef(false);
   // Seconds remaining in the current showcase-spot dwell (0 = actively
@@ -261,9 +261,12 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
     if (!stage) return;
 
     const measure = () => {
-      // 2 * radius == the carousel's own width, so the ring's diameter
-      // matches the card it's shown inside.
-      radiusRef.current = stage.getBoundingClientRect().width / 2;
+      // 2 * radiusX == the carousel's own width, so the ring's horizontal
+      // diameter matches the card it's shown inside; radiusZ is the
+      // stage's height, an independent (and much smaller) depth budget.
+      const rect = stage.getBoundingClientRect();
+      radiusXRef.current = rect.width / 2;
+      radiusZRef.current = rect.height;
     };
 
     measure();
@@ -313,28 +316,19 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
         let displayAngle = (baseAngle + rotationRef.current) % 360;
         if (displayAngle > 180) displayAngle -= 360;
         const rad = (displayAngle * Math.PI) / 180;
+        const cos = Math.cos(rad);
 
-        // z: signed depth along the camera axis (+radius = closest to the
-        // viewer, at displayAngle 0; -radius = farthest, at +-180).
-        const z = radiusRef.current * Math.cos(rad);
-        const x = radiusRef.current * Math.sin(rad);
+        // z: signed depth along the camera axis (+radiusZ = closest to
+        // the viewer, at displayAngle 0; -radiusZ = farthest, at +-180).
+        const z = radiusZRef.current * cos;
+        const x = radiusXRef.current * Math.sin(rad);
         const projScale = PERSPECTIVE_PX / (PERSPECTIVE_PX - z);
 
         item.style.transform = `translateX(${x * projScale}px) scale(${projScale})`;
         item.style.zIndex = String(Math.round(z * 1000));
-
-        const opacity =
-          1 -
-          Math.min(
-            1,
-            Math.max(
-              0,
-              (Math.abs(displayAngle) - FADE_START_DEG) /
-                (FADE_END_DEG - FADE_START_DEG),
-            ),
-          );
-        item.style.opacity = String(opacity);
-        item.style.pointerEvents = opacity < 0.05 ? "none" : "auto";
+        item.style.filter = `brightness(${
+          BRIGHTNESS_BACK + ((cos + 1) / 2) * (BRIGHTNESS_FRONT - BRIGHTNESS_BACK)
+        })`;
       });
 
       rafRef.current = requestAnimationFrame(tick);
