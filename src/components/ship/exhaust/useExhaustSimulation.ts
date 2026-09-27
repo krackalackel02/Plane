@@ -66,12 +66,15 @@ export const useExhaustSimulation = ({
       velocities[idx + 1] *= speedDecay;
       velocities[idx + 2] *= speedDecay;
 
-      // Update position based on velocity
+      // Update position based on velocity. The Z sign for reverse is baked
+      // into velocities[idx + 2] at spawn time below, not decided here from
+      // the live `reverse` prop - otherwise every already-alive particle
+      // would flip its direction of travel the instant `reverse` toggles
+      // (e.g. releasing reverse throttle), producing a visible burst of
+      // particles suddenly reversing course mid-flight.
       positions[idx] += velocities[idx];
       positions[idx + 1] += velocities[idx + 1];
-      positions[idx + 2] += reverse
-        ? -velocities[idx + 2]
-        : velocities[idx + 2];
+      positions[idx + 2] += velocities[idx + 2];
 
       // Decrease lifetime
       lifetimes[i] = Math.max(0, lifetimes[i] - decaySpeed);
@@ -101,12 +104,15 @@ export const useExhaustSimulation = ({
       const idx = i * 3;
       const theta = Math.random() * 2 * Math.PI;
       const phi = Math.random() * coneAngle;
+      // Direction is fixed at spawn time from the current `reverse` prop -
+      // see the update loop above for why it must not be re-read live.
+      const zSign = reverse ? 1 : -1;
 
       velocities.set(
         [
           Math.sin(phi) * Math.cos(theta) * 0.2,
           Math.sin(phi) * Math.sin(theta) * 0.2,
-          -Math.cos(phi) * 0.2,
+          zSign * Math.cos(phi) * 0.2,
         ],
         idx,
       );

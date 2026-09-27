@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useMemo, useRef } from "react";
 import { Points } from "three";
 
 import { smoothstep } from "../../../../utils/3d";
@@ -36,6 +36,15 @@ const CloudRenderer: React.FC<ExhaustRendererProps> = ({
   const sizes = useRef(new Float32Array(count));
   const rotations = useRef(new Float32Array(count));
   const colors = useRef(new Float32Array(count * 3));
+  // Stable across re-renders (only recreated if `count` changes) - see
+  // particleRenderer.tsx for why inline `new Float32Array(...)` buffers
+  // passed directly in JSX cause a visible flash at every boost/reverse
+  // toggle (this component re-renders on those too).
+  const positionsArray = useMemo(() => new Float32Array(count * 3), [count]);
+  const colorsArray = useMemo(() => new Float32Array(count * 3), [count]);
+  const alphasArray = useMemo(() => new Float32Array(count), [count]);
+  const sizesArray = useMemo(() => new Float32Array(count), [count]);
+  const rotationsArray = useMemo(() => new Float32Array(count), [count]);
 
   useExhaustSimulation({
     active,
@@ -110,31 +119,31 @@ const CloudRenderer: React.FC<ExhaustRendererProps> = ({
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            array={new Float32Array(count * 3)}
+            array={positionsArray}
             count={count}
             itemSize={3}
           />
           <bufferAttribute
             attach="attributes-color"
-            array={new Float32Array(count * 3)}
+            array={colorsArray}
             count={count}
             itemSize={3}
           />
           <bufferAttribute
             attach="attributes-alpha"
-            array={new Float32Array(count)}
+            array={alphasArray}
             count={count}
             itemSize={1}
           />
           <bufferAttribute
             attach="attributes-size"
-            array={new Float32Array(count)}
+            array={sizesArray}
             count={count}
             itemSize={1}
           />
           <bufferAttribute
             attach="attributes-rotation"
-            array={new Float32Array(count)}
+            array={rotationsArray}
             count={count}
             itemSize={1}
           />

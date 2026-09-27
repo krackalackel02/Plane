@@ -10,7 +10,7 @@ describe("camera intro animation", () => {
     const camera = new THREE.PerspectiveCamera();
     const timelineSpy = vi.spyOn(gsap, "timeline");
 
-    renderHook(() => animate(camera));
+    renderHook(() => animate(camera, true));
 
     const timeline = timelineSpy.mock.results[0].value;
     // Jump the timeline straight to completion instead of waiting on real time/RAF.
@@ -20,6 +20,47 @@ describe("camera intro animation", () => {
     expect(camera.position.x).toBeCloseTo(lastFrame.position.x, 5);
     expect(camera.position.y).toBeCloseTo(lastFrame.position.y, 5);
     expect(camera.position.z).toBeCloseTo(lastFrame.position.z, 5);
+
+    timelineSpy.mockRestore();
+  });
+
+  // Regression test: the intro flythrough must not start until assets have
+  // finished loading, otherwise it plays over an empty/half-built scene.
+  test("does not start until assets are ready", () => {
+    const camera = new THREE.PerspectiveCamera();
+    const timelineSpy = vi.spyOn(gsap, "timeline");
+
+    const { rerender } = renderHook(({ ready }) => animate(camera, ready), {
+      initialProps: { ready: false },
+    });
+
+    expect(timelineSpy).not.toHaveBeenCalled();
+
+    rerender({ ready: true });
+
+    expect(timelineSpy).toHaveBeenCalledTimes(1);
+
+    timelineSpy.mockRestore();
+  });
+
+  // Regression test: anything waiting for the intro to "finish" (e.g. the
+  // welcome popup) must be told via this real GSAP completion, not a
+  // guessed duration - a fixed timer can't know the camera's actual start
+  // time, which itself already shifts with `ready`.
+  test("calls onComplete only once the full keyframe sequence has actually played through", () => {
+    const camera = new THREE.PerspectiveCamera();
+    const timelineSpy = vi.spyOn(gsap, "timeline");
+    const onComplete = vi.fn();
+
+    renderHook(() => animate(camera, true, onComplete));
+
+    const timeline = timelineSpy.mock.results[0].value;
+
+    timeline.progress(0.5);
+    expect(onComplete).not.toHaveBeenCalled();
+
+    timeline.progress(1);
+    expect(onComplete).toHaveBeenCalledTimes(1);
 
     timelineSpy.mockRestore();
   });

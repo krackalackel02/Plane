@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useMemo, useRef } from "react";
 import { InstancedMesh, Matrix4, Quaternion, Vector3 } from "three";
 
 import { smoothstep } from "../../../../utils/3d";
@@ -90,6 +90,18 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
 
   const voxelAlphas = useRef(new Float32Array(totalVoxels));
   const voxelColors = useRef(new Float32Array(totalVoxels * 3));
+  // Stable across re-renders (only recreated if `totalVoxels` changes) -
+  // see particleRenderer.tsx for why an inline `new Float32Array(...)`
+  // passed directly in JSX would replace these instanced buffers with a
+  // zeroed array (and flash every voxel) on every boost/reverse toggle.
+  const voxelAlphaArray = useMemo(
+    () => new Float32Array(totalVoxels),
+    [totalVoxels],
+  );
+  const voxelColorArray = useMemo(
+    () => new Float32Array(totalVoxels * 3),
+    [totalVoxels],
+  );
   // Per-puff selected voxel indices to act as sparks (small number)
   const sparkIndices = useRef(new Int8Array(count * 2));
 
@@ -324,13 +336,13 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
         <boxGeometry args={[1, 1, 1]}>
           <instancedBufferAttribute
             attach="attributes-voxelAlpha"
-            array={new Float32Array(totalVoxels)}
+            array={voxelAlphaArray}
             count={totalVoxels}
             itemSize={1}
           />
           <instancedBufferAttribute
             attach="attributes-voxelColor"
-            array={new Float32Array(totalVoxels * 3)}
+            array={voxelColorArray}
             count={totalVoxels}
             itemSize={3}
           />

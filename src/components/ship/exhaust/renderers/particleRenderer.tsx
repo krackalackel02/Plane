@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useMemo, useRef } from "react";
 import { Points } from "three";
 
 import { useExhaustSimulation } from "../useExhaustSimulation";
@@ -28,6 +28,14 @@ const ParticleRenderer: React.FC<ExhaustRendererProps> = ({
 }) => {
   const particlesRef = useRef<Points>(null);
   const colors = useRef(new Float32Array(count * 3));
+  // Stable across re-renders (only recreated if `count` changes) - a fresh
+  // `new Float32Array(...)` passed inline in JSX gets recreated on every
+  // re-render of this component (which happens on every boost/reverse
+  // toggle, since those come from activeKeys), replacing the geometry's
+  // actual buffers with a zeroed array and snapping every particle back to
+  // the jet origin as a visible flash right at that instant.
+  const positionsArray = useMemo(() => new Float32Array(count * 3), [count]);
+  const colorsArray = useMemo(() => new Float32Array(count * 3), [count]);
 
   useExhaustSimulation({
     active,
@@ -72,13 +80,13 @@ const ParticleRenderer: React.FC<ExhaustRendererProps> = ({
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            array={new Float32Array(count * 3)}
+            array={positionsArray}
             count={count}
             itemSize={3}
           />
           <bufferAttribute
             attach="attributes-color"
-            array={new Float32Array(count * 3)}
+            array={colorsArray}
             count={count}
             itemSize={3}
           />

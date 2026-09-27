@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useControlState, useKeyContext } from "../../../context/keyContext"; // Import control state hook
 import { useAutopilot } from "../../../context/autopilotContext";
+import { useTrick } from "../../../context/trickContext";
 import { audioEngine } from "../../../audio/audioEngine";
 import keys from "../../../utils/keys.json";
 
@@ -12,6 +13,7 @@ const Exhaust: React.FC = () => {
   const { direction, turn } = useControlState(); // Only consume exhaust state
   const { isFlying } = useAutopilot();
   const activeKeys = useKeyContext();
+  const { activeTrickDirection } = useTrick();
 
   // Determine if jets are active based on direction and turn
   let isLeftJetActive =
@@ -29,6 +31,15 @@ const Exhaust: React.FC = () => {
   // Boosting only reads as "boosting" while the jet firing it is actually
   // pushing the ship forward - not on reverse thrust or an idle jet.
   const isBoosting = activeKeys.has(keys.boost) && !isReverse;
+
+  // A barrel roll is driven by firing the jet opposite the roll direction
+  // (more thrust on that side pushes the ship over) - flare it for the
+  // trick's duration so the roll reads as jet-powered rather than sourceless.
+  if (activeTrickDirection === 1) {
+    isLeftJetActive = true;
+  } else if (activeTrickDirection === -1) {
+    isRightJetActive = true;
+  }
 
   // Space-engine "wirr" hum tracks whether either jet is firing.
   const isEngineActive = isLeftJetActive || isRightJetActive;
