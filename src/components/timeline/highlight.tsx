@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import "./highlight.css";
 import { useProjects } from "../../context/projectContext";
-import { useKeyContext } from "../../context/keyContext";
+import { useKeyContext, useKeyControls } from "../../context/keyContext";
 import { FaPlay } from "react-icons/fa";
 import { SiGithub } from "react-icons/si";
 import TechStackRow from "./techGem";
@@ -73,18 +73,25 @@ const CodeButton: React.FC<{ link: string }> = ({ link }) => (
 const Highlight: React.FC = () => {
   const { items, activeProjectId, setActiveProjectId } = useProjects();
   const activeKeys = useKeyContext();
+  const { releaseKey } = useKeyControls();
   const projectData = items.find((item) => item.id === activeProjectId);
   const isVisible = projectData !== undefined;
 
   useEffect(() => {
     if (isVisible && activeKeys.has("Enter")) {
-      activeKeys.delete("Enter");
+      releaseKey("Enter");
       if (projectData?.link) {
         window.open(projectData.link, "_blank");
       }
       setActiveProjectId(null);
     }
-  }, [isVisible, activeKeys, setActiveProjectId, projectData?.link]);
+  }, [
+    isVisible,
+    activeKeys,
+    releaseKey,
+    setActiveProjectId,
+    projectData?.link,
+  ]);
 
   if (!projectData) {
     return null;

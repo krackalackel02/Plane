@@ -4,6 +4,10 @@ import { Group } from "three";
 // Define the shape of the context data
 interface SceneContextType {
   shipRef: RefObject<Group>;
+  // Wraps just the ship model, excluding Exhaust/Physics/ShipCollision, so
+  // the debug bounding-box overlay (scene.tsx) can trace the ship's actual
+  // hull rather than including the exhaust flame's extent.
+  bodyRef: RefObject<Group>;
 }
 
 // Create the context with a default value
@@ -13,11 +17,12 @@ const SceneContext = createContext<SceneContextType | null>(null);
 export const SceneProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  // Create the ref here, inside the component body
+  // Create the refs here, inside the component body
   const shipRef = useRef<Group>(null);
+  const bodyRef = useRef<Group>(null);
   return (
-    // Provide the created ref to all children
-    <SceneContext.Provider value={{ shipRef }}>
+    // Provide the created refs to all children
+    <SceneContext.Provider value={{ shipRef, bodyRef }}>
       {children}
     </SceneContext.Provider>
   );

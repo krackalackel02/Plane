@@ -7,6 +7,7 @@ import React, {
   useMemo,
 } from "react";
 import { print } from "../utils/common"; // Debug print utility
+import { E2E_TEST_HOOKS_ENABLED } from "../utils/e2eTestHooks";
 import keys from "../utils/keys.json"; // Key mappings
 import { ControlKeys, ControlState } from "../components/types/controlTypes"; // Control types/states
 
@@ -106,28 +107,55 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     [releaseKey],
   );
 
+  // A key held down when focus leaves the window (e.g. the project popup's
+  // "View Demo"/"View Code" links, or the Enter-to-open-link shortcut in
+  // Highlight, open a new tab) never gets its keyup delivered here - the OS
+  // sends that keyup to whatever now has focus instead. Without this, the
+  // key reads as permanently "held", leaving the ship stuck turning/
+  // throttling on its own and autopilot unable to re-engage (it treats the
+  // phantom input as the player taking manual control).
+  const handleBlur = useCallback(() => {
+    setActiveKeys((prev) => (prev.size === 0 ? prev : new Set()));
+  }, []);
+
   // Attach and detach event listeners
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
     };
-  }, [handleKeyDown, handleKeyUp]);
+  }, [handleKeyDown, handleKeyUp, handleBlur]);
 
   const keyControls = useMemo(
     () => ({ pressKey, releaseKey }),
     [pressKey, releaseKey],
   );
 
-  // Dev-only hook so Playwright (a real browser, unlike the component
-  // tests' jsdom) can assert which keys a touch control actually produced.
-  // import.meta.env.DEV is false in a production build, so this never
-  // ships to the deployed GitHub Pages bundle.
+  // Backstop against any stuck-key path we haven't found yet - independent
+  // of whether keyup/blur actually fired. The page cannot genuinely have a
+  // key held down while it lacks focus, so periodically verify that ground
+  // truth and self-heal instead of trusting event delivery alone.
   useEffect(() => {
-    if (import.meta.env.DEV) {
+    const STUCK_KEY_POLL_MS = 7000;
+    const interval = setInterval(() => {
+      if (!document.hasFocus()) {
+        setActiveKeys((prev) => (prev.size === 0 ? prev : new Set()));
+      }
+    }, STUCK_KEY_POLL_MS);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Test-only hook so Playwright (a real browser, unlike the component
+  // tests' jsdom) can assert which keys a touch control actually produced.
+  // See src/utils/e2eTestHooks.ts — never ships to the deployed GitHub
+  // Pages bundle.
+  useEffect(() => {
+    if (E2E_TEST_HOOKS_ENABLED) {
       (window as unknown as { __activeKeys?: Set<string> }).__activeKeys =
         activeKeys;
     }

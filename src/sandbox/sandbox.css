@@ -1,0 +1,100 @@
+#root {
+  all: unset;
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#sandbox-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.sandbox-picker {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 4rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+}
+
+.sandbox-picker h1 {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.sandbox-picker > p {
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 2rem;
+}
+
+.sandbox-error {
+  color: #ff6b6b;
+}
+
+.sandbox-picker ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  max-width: 32rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sandbox-picker li {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+.sandbox-picker li a {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.sandbox-picker-description {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.sandbox-hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  pointer-events: none;
+}
+
+.sandbox-hud > * {
+  pointer-events: auto;
+}
+
+.sandbox-back {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
+}
+
+.sandbox-back:hover {
+  color: #fff;
+}
+
+.sandbox-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}

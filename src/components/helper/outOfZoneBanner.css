@@ -1,0 +1,50 @@
+#out-of-zone-banner {
+  position: fixed;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  pointer-events: none;
+  max-width: 92vw;
+  box-sizing: border-box;
+  text-align: center;
+
+  font-family: "Orbitron", sans-serif;
+  font-weight: 900;
+  font-size: 2rem;
+  letter-spacing: 0.4rem;
+  color: #ff3b3b;
+  text-shadow:
+    0 0 6px #ff3b3b,
+    0 0 16px #ff0000,
+    0 0 32px #990000;
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  animation: out-of-zone-flash 0.5s steps(2, jump-none) infinite;
+}
+
+@media (max-width: 768px) {
+  #out-of-zone-banner {
+    top: 32px;
+    font-size: clamp(0.85rem, 5.5vw, 1.4rem);
+    letter-spacing: clamp(0.1rem, 1.5vw, 0.25rem);
+  }
+}
+
+@media (max-width: 360px) {
+  #out-of-zone-banner {
+    white-space: normal;
+  }
+}
+
+@keyframes out-of-zone-flash {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.35;
+  }
+}
