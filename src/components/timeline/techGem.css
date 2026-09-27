@@ -29,13 +29,10 @@
 .tech-carousel-item {
   /* Sized to the gem itself (not inset: 0 / full stage) and statically
      centered on the stage's pivot via top/left/margin, so the JS-driven
-     translateX/scale below (see techGem.tsx - the carousel's angle math
-     is faked with a manual perspective projection rather than real CSS
-     3D transforms, because the browser's native preserve-3d depth sort
-     turned out to paint gems in the wrong order once several of them
-     land at near-identical depths near the showcase spot) is the item's
-     whole transform, and z-index alone (a plain 2D stacking context, so
-     it's reliably honored) controls paint order. */
+     translateX/scale/rotateY in techGem.tsx is the item's whole
+     transform, and z-index alone (a plain 2D stacking context, so it's
+     reliably honored regardless of any per-item rotateY tilt) controls
+     paint order. */
   position: absolute;
   top: 50%;
   left: 50%;
@@ -74,6 +71,16 @@
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
+}
+
+/* Ambient glow behind the gem currently in focus, in its own brand
+   color (var(--gem-from) is set inline per-gem in techGem.tsx and
+   inherited down from the .tech-gem button this shape sits inside). */
+.tech-carousel-item.is-focused .tech-gem-shape {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    0 0 22px 6px var(--gem-from);
 }
 
 .tech-gem-label {
