@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Vector3 } from "three";
+import { Group, Vector3 } from "three";
 import { useScene } from "../../../../context/sceneContext";
 import { useProjects } from "../../../../context/projectContext";
 import { useAutopilot } from "../../../../context/autopilotContext";
@@ -54,6 +54,19 @@ const ShipCollision = () => {
   const impulse = useRef({ x: 0, z: 0 });
   const initialized = useRef(false);
 
+  const pushOutOfBoards = (ship: Group) => {
+    for (const obb of boardObbs) {
+      const hit = resolveCircleObb(
+        { x: ship.position.x, z: ship.position.z },
+        obb,
+        SHIP_RADIUS,
+      );
+      if (!hit) continue;
+      ship.position.x += hit.pushOut.x;
+      ship.position.z += hit.pushOut.z;
+    }
+  };
+
   useFrame(() => {
     const ship = shipRef.current;
     if (!ship) return;
@@ -64,11 +77,17 @@ const ShipCollision = () => {
       return;
     }
 
-    // Autopilot flies a scripted path straight to a board's landing mat -
-    // let it, without this system second-guessing it. Keep velocity
-    // tracking in sync so a spurious "impact" isn't inferred the instant
-    // manual control resumes.
+    // Autopilot flies a scripted, obstacle-avoiding path straight to a
+    // board's landing mat (see AutopilotMotion) - trust its velocity
+    // entirely rather than fighting it with knockback impulses or wall
+    // clamping, which could yank the ship off its curve. It's still a
+    // straight-line/two-leg path though, not a real collision check, so a
+    // tight route can graze a board's frame - keep applying the
+    // position-only push-out (no impulse, so it can't perturb the curve)
+    // every frame so that never reads as the ship clipping through solid
+    // geometry.
     if (isFlying) {
+      pushOutOfBoards(ship);
       prevPosition.current.copy(ship.position);
       impulse.current = { x: 0, z: 0 };
       return;
@@ -87,18 +106,21 @@ const ShipCollision = () => {
       z: ship.position.z - prevPosition.current.z,
     };
 
-    // --- Boundary walls: hard stop, little to no bounce. ---
-    const { position: clamped, hitX, hitZ } = clampToBounds(
+    // --- Boundary wall: hard stop, little to no bounce. ---
+    const wall = clampToBounds(
       { x: ship.position.x, z: ship.position.z },
       bounds,
     );
-    ship.position.x = clamped.x;
-    ship.position.z = clamped.z;
-    if (hitX !== 0 && Math.sign(velocity.x) === hitX) {
-      impulse.current.x += -velocity.x * WALL_RESTITUTION;
-    }
-    if (hitZ !== 0 && Math.sign(velocity.z) === hitZ) {
-      impulse.current.z += -velocity.z * WALL_RESTITUTION;
+    ship.position.x = wall.position.x;
+    ship.position.z = wall.position.z;
+    if (wall.hit) {
+      const velocityAlongNormal =
+        velocity.x * wall.outwardNormal.x + velocity.z * wall.outwardNormal.z;
+      if (velocityAlongNormal > 0) {
+        const bounce = velocityAlongNormal * (1 + WALL_RESTITUTION);
+        impulse.current.x -= bounce * wall.outwardNormal.x;
+        impulse.current.z -= bounce * wall.outwardNormal.z;
+      }
     }
 
     // --- Boards: springy knockback. ---

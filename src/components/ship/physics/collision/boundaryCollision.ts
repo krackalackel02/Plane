@@ -5,46 +5,39 @@ export interface Vec2 {
   z: number;
 }
 
-/**
- * Which side of an axis's range was crossed: -1 = the min side, 1 = the
- * max side, 0 = still inside.
- */
-export type AxisHit = -1 | 0 | 1;
-
 export interface BoundaryClamp {
   position: Vec2;
-  hitX: AxisHit;
-  hitZ: AxisHit;
+  hit: boolean;
+  // Unit vector pointing radially outward from the boundary's center at
+  // the clamp point. Only meaningful when `hit` is true.
+  outwardNormal: Vec2;
 }
 
 /**
- * Clamps a position inside the world boundary rectangle, independently per
- * axis, reporting which wall (if any) was hit on each axis so the caller
- * can decide how much of the incoming speed to bounce back.
+ * Clamps a position inside the world boundary circle (see
+ * utils/worldBounds), reporting the outward radial normal at the contact
+ * point when a clamp happened, so the caller can decide how much of the
+ * incoming speed to bounce back.
  */
 export const clampToBounds = (
   position: Vec2,
   bounds: WorldBounds,
 ): BoundaryClamp => {
-  let x = position.x;
-  let hitX: AxisHit = 0;
-  if (x < bounds.minX) {
-    x = bounds.minX;
-    hitX = -1;
-  } else if (x > bounds.maxX) {
-    x = bounds.maxX;
-    hitX = 1;
+  const dx = position.x - bounds.centerX;
+  const dz = position.z - bounds.centerZ;
+  const dist = Math.hypot(dx, dz);
+
+  if (dist <= bounds.radius) {
+    return { position, hit: false, outwardNormal: { x: 0, z: 0 } };
   }
 
-  let z = position.z;
-  let hitZ: AxisHit = 0;
-  if (z < bounds.minZ) {
-    z = bounds.minZ;
-    hitZ = -1;
-  } else if (z > bounds.maxZ) {
-    z = bounds.maxZ;
-    hitZ = 1;
-  }
-
-  return { position: { x, z }, hitX, hitZ };
+  const outwardNormal = { x: dx / dist, z: dz / dist };
+  return {
+    position: {
+      x: bounds.centerX + outwardNormal.x * bounds.radius,
+      z: bounds.centerZ + outwardNormal.z * bounds.radius,
+    },
+    hit: true,
+    outwardNormal,
+  };
 };

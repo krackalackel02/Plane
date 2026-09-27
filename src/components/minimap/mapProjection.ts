@@ -11,28 +11,25 @@ export interface MapPoint {
   y: number;
 }
 
-export interface MapRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 export interface WorldToMapProjection {
   toMap: (x: number, z: number) => [number, number];
   boardPoints: MapPoint[];
-  // The world boundary (see utils/worldBounds) in the same map CSS-pixel
-  // space as toMap/boardPoints, so the minimap can draw the zone the ship
-  // is physically confined to.
-  boundaryRect: MapRect;
+  // The world boundary's radius (see utils/worldBounds), scaled into the
+  // same map CSS-pixel space as toMap/boardPoints. Always centered at
+  // (size/2, size/2) by construction, since the world boundary is itself
+  // centered on (bounds.centerX, bounds.centerZ).
+  boundaryRadius: number;
 }
 
 /**
  * Build a fixed-scale world (x, z) -> map (x, y) CSS-pixel projection that
- * fits the whole world boundary (see utils/worldBounds) inside a `size` x
- * `size` square, with `paddingRatio` reserved as empty margin. Since the
- * boundary already contains every board plus the ship's (0, 0, 0) starting
- * point with room to spare, this guarantees both fit too.
+ * fits the whole world boundary circle (see utils/worldBounds) inside a
+ * `size` x `size` square, with `paddingRatio` reserved as empty margin -
+ * i.e. the boundary maps exactly onto the minimap's own circular dock, so
+ * "how close to the rim you are on the map" directly reads as "how close
+ * to the wall you are in the world". Since the boundary already contains
+ * every board plus the ship's (0, 0, 0) starting point with room to
+ * spare, this guarantees both fit too.
  *
  * Both world axes are negated:
  *
@@ -56,17 +53,12 @@ export const computeWorldToMapProjection = (
   size: number,
   paddingRatio: number,
 ): WorldToMapProjection => {
-  const spanX = Math.max(bounds.maxX - bounds.minX, 10);
-  const spanZ = Math.max(bounds.maxZ - bounds.minZ, 10);
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-
-  const usable = size * (1 - paddingRatio);
-  const scale = usable / Math.max(spanX, spanZ);
+  const boundaryRadius = (size / 2) * (1 - paddingRatio);
+  const scale = boundaryRadius / bounds.radius;
 
   const toMap = (x: number, z: number): [number, number] => [
-    size / 2 - (x - centerX) * scale,
-    size / 2 - (z - centerZ) * scale,
+    size / 2 - (x - bounds.centerX) * scale,
+    size / 2 - (z - bounds.centerZ) * scale,
   ];
 
   const boardPoints: MapPoint[] = boards.map((b) => {
@@ -74,19 +66,7 @@ export const computeWorldToMapProjection = (
     return { id: b.id, x, y };
   });
 
-  // Two opposite corners of the boundary, mapped, then normalized into a
-  // top-left-origin rect - the axis negation above means either corner can
-  // land on either side depending on world orientation.
-  const [cornerAX, cornerAY] = toMap(bounds.minX, bounds.minZ);
-  const [cornerBX, cornerBY] = toMap(bounds.maxX, bounds.maxZ);
-  const boundaryRect: MapRect = {
-    x: Math.min(cornerAX, cornerBX),
-    y: Math.min(cornerAY, cornerBY),
-    width: Math.abs(cornerBX - cornerAX),
-    height: Math.abs(cornerBY - cornerAY),
-  };
-
-  return { toMap, boardPoints, boundaryRect };
+  return { toMap, boardPoints, boundaryRadius };
 };
 
 /**

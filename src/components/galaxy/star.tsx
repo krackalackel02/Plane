@@ -9,25 +9,31 @@ const STAR_Y_RANGE = 150;
 
 /**
  * Stars component to render a field of stars in the galaxy, confined to
- * the same world boundary the ship is confined to (see utils/worldBounds)
- * so the starfield reads as "the sky over the playable zone" rather than
- * scattering stars the ship can never actually reach.
+ * the same cylindrical world boundary the ship is confined to (see
+ * utils/worldBounds) so the starfield reads as "the sky over the playable
+ * zone" rather than scattering stars the ship can never actually reach.
  * @param count - Number of stars to render
  * @returns JSX.Element
  */
 const Stars: React.FC<{ count?: number }> = ({ count = 1000 }) => {
   const bounds = useWorldBounds();
 
-  // Generate positions for stars within the world boundary
+  // Generate positions uniformly within the world boundary's disk (sqrt of
+  // a uniform random radius fraction gives uniform area density - a plain
+  // linear radius would bunch stars up near the center instead).
   const stars = useMemo(
     () =>
-      Array.from({ length: count }).map(() => ({
-        position: [
-          bounds.minX + Math.random() * (bounds.maxX - bounds.minX),
-          (Math.random() - 0.5) * STAR_Y_RANGE,
-          bounds.minZ + Math.random() * (bounds.maxZ - bounds.minZ),
-        ] as [number, number, number],
-      })),
+      Array.from({ length: count }).map(() => {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = bounds.radius * Math.sqrt(Math.random());
+        return {
+          position: [
+            bounds.centerX + radius * Math.cos(angle),
+            (Math.random() - 0.5) * STAR_Y_RANGE,
+            bounds.centerZ + radius * Math.sin(angle),
+          ] as [number, number, number],
+        };
+      }),
     [count, bounds],
   );
 

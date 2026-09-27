@@ -82,13 +82,16 @@ const useWorldToMap = (size: number) => {
 
 const drawBoundary = (
   ctx: CanvasRenderingContext2D,
-  rect: { x: number; y: number; width: number; height: number },
+  size: number,
+  radius: number,
 ) => {
   ctx.save();
   ctx.strokeStyle = "rgba(120, 190, 255, 0.55)";
   ctx.lineWidth = 1.5;
   ctx.setLineDash([4, 4]);
-  ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, radius, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 };
 
@@ -161,7 +164,7 @@ const Minimap = () => {
   // consumed by the FLIP effect below.
   const preToggleRectRef = useRef<DOMRect | null>(null);
   const size = useMapSize(containerRef);
-  const { boardPoints, boardsData, toMap, arcRadius, boundaryRect } =
+  const { boardPoints, boardsData, toMap, arcRadius, boundaryRadius } =
     useWorldToMap(size);
 
   useEffect(() => {
@@ -190,8 +193,10 @@ const Minimap = () => {
       });
 
       // The world boundary the ship is physically confined to (see
-      // utils/worldBounds and ship/physics/collision).
-      drawBoundary(ctx, boundaryRect);
+      // utils/worldBounds and ship/physics/collision) - always concentric
+      // with the range rings above, since it maps directly onto the
+      // minimap's own circular dock.
+      drawBoundary(ctx, size, boundaryRadius);
 
       boardPoints.forEach(({ x, y }) => drawBook(ctx, x, y));
 
@@ -206,7 +211,7 @@ const Minimap = () => {
 
     frameId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frameId);
-  }, [boardPoints, toMap, shipRef, size, boundaryRect]);
+  }, [boardPoints, toMap, shipRef, size, boundaryRadius]);
 
   // Both directions go through the same rect capture so the FLIP effect
   // below can animate the toggle as one continuous element resizing,

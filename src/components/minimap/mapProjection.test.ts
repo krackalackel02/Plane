@@ -65,7 +65,7 @@ describe("computeWorldToMapProjection", () => {
     expect(ahead.y).toBeCloseTo(y);
   });
 
-  test("a single board (or none) still floors the span instead of zooming to a point", () => {
+  test("a single board (or none) still floors the radius instead of zooming to a point", () => {
     const onlyBoards: WorldPoint[] = [{ id: "only", position: [0, 0, 0] }];
     const { toMap } = computeWorldToMapProjection(
       computeWorldBounds(onlyBoards),
@@ -79,19 +79,18 @@ describe("computeWorldToMapProjection", () => {
     expect(Number.isFinite(y)).toBe(true);
   });
 
-  test("boundaryRect frames the whole world boundary, containing every board point", () => {
-    const { boardPoints, boundaryRect } = computeWorldToMapProjection(
+  test("boundaryRadius is centered on the map and contains every board point", () => {
+    const { boardPoints, boundaryRadius } = computeWorldToMapProjection(
       bounds,
       boards,
       SIZE,
       PADDING_RATIO,
     );
+    const center = SIZE / 2;
 
     boardPoints.forEach(({ x, y }) => {
-      expect(x).toBeGreaterThanOrEqual(boundaryRect.x);
-      expect(x).toBeLessThanOrEqual(boundaryRect.x + boundaryRect.width);
-      expect(y).toBeGreaterThanOrEqual(boundaryRect.y);
-      expect(y).toBeLessThanOrEqual(boundaryRect.y + boundaryRect.height);
+      const dist = Math.hypot(x - center, y - center);
+      expect(dist).toBeLessThanOrEqual(boundaryRadius + 1e-6);
     });
   });
 });
