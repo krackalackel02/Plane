@@ -3,6 +3,7 @@ import "./App.css";
 
 // Scene Component
 import Scene from "./components/scene";
+import { LoadingProvider } from "./context/loadingContext";
 
 /**
  * Main application component
@@ -10,9 +11,9 @@ import Scene from "./components/scene";
  */
 function App() {
   return (
-    <>
+    <LoadingProvider>
       <Scene />
-    </>
+    </LoadingProvider>
   );
 }
 
