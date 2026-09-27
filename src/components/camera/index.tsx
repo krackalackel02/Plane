@@ -34,7 +34,7 @@ const Camera: React.FC<CameraProps> = ({ fly = false }) => {
   const { shipRef } = useScene();
   const { showCameraHelper: helper } = useEnvironment();
   const { isFlying } = useAutopilot();
-  const { ready } = useLoading();
+  const { ready, notifyIntroComplete } = useLoading();
   const { camera } = useThree();
   const reorientTween = useRef<gsap.core.Tween | null>(null);
 
@@ -51,7 +51,7 @@ const Camera: React.FC<CameraProps> = ({ fly = false }) => {
     );
   }, [camera]);
 
-  if (!helper) animate(camera, ready);
+  if (!helper) animate(camera, ready, notifyIntroComplete);
   shipRef.current?.add(camera);
 
   // The player may have freely orbited the camera around while looking for

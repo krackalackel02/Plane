@@ -42,4 +42,26 @@ describe("camera intro animation", () => {
 
     timelineSpy.mockRestore();
   });
+
+  // Regression test: anything waiting for the intro to "finish" (e.g. the
+  // welcome popup) must be told via this real GSAP completion, not a
+  // guessed duration - a fixed timer can't know the camera's actual start
+  // time, which itself already shifts with `ready`.
+  test("calls onComplete only once the full keyframe sequence has actually played through", () => {
+    const camera = new THREE.PerspectiveCamera();
+    const timelineSpy = vi.spyOn(gsap, "timeline");
+    const onComplete = vi.fn();
+
+    renderHook(() => animate(camera, true, onComplete));
+
+    const timeline = timelineSpy.mock.results[0].value;
+
+    timeline.progress(0.5);
+    expect(onComplete).not.toHaveBeenCalled();
+
+    timeline.progress(1);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+
+    timelineSpy.mockRestore();
+  });
 });

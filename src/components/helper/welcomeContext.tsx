@@ -7,12 +7,14 @@ import React, {
   useState,
 } from "react";
 import { isMobile } from "react-device-detect";
-import { INTRO_ANIMATION_DURATION_MS } from "../camera/animate";
+import { useLoading } from "../../context/loadingContext";
 import { GLITCH_EXIT_MS } from "./glitchTiming";
 
-// Give the camera a beat after the flythrough lands before popping the
-// alert, so it doesn't appear mid-motion.
-const SETTLE_DELAY_MS = 500;
+// Give the camera a beat after the flythrough actually lands (per
+// LoadingContext's introComplete, fired from the GSAP timeline's real
+// onComplete - not a guessed duration) before popping the alert, so it
+// doesn't appear mid-motion.
+export const SETTLE_DELAY_MS = 500;
 // Average adult silent reading speed, used to size the auto-dismiss timer to
 // the actual copy below instead of a guessed constant.
 const WORDS_PER_MINUTE = 220;
@@ -59,13 +61,19 @@ export const WelcomeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const body = isMobile ? WELCOME_BODY.mobile : WELCOME_BODY.pc;
 
+  const { introComplete } = useLoading();
+
+  // Fires off the real GSAP onComplete of the intro flythrough's last
+  // keyframe transition (the swing from just in front of the ship to behind
+  // it) rather than a fixed duration guessed from mount time - the camera
+  // animation itself doesn't even start until assets finish loading, so a
+  // mount-relative timer could fire while the world is still loading, or
+  // well before the camera has actually settled.
   useEffect(() => {
-    const timer = setTimeout(
-      () => setShowIntro(true),
-      INTRO_ANIMATION_DURATION_MS + SETTLE_DELAY_MS,
-    );
+    if (!introComplete) return;
+    const timer = setTimeout(() => setShowIntro(true), SETTLE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, []);
+  }, [introComplete]);
 
   // Plays the CSS "glitch-out" collapse before actually unmounting, rather
   // than snapping the alert away the instant it's dismissed.

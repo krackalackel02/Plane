@@ -5,20 +5,20 @@ import gsap from "gsap";
 const kframe = anim.frames;
 const duration = 1.5;
 
-// Total wall-clock length of the intro flythrough - kept here (rather than
-// re-derived where it's needed) so anything that has to wait for the camera
-// to settle, e.g. the welcome popup, can't drift out of sync if the
-// keyframe count or per-frame duration ever changes.
-export const INTRO_ANIMATION_DURATION_MS = kframe.length * duration * 1000;
-
 const animate = (
   camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
   ready: boolean,
+  // Fires when the flythrough's last keyframe transition actually finishes
+  // (the timeline's real GSAP onComplete) - not a fixed-duration estimate.
+  // Anything that needs to wait for the camera to settle (e.g. the welcome
+  // popup) should listen for this rather than guessing at a delay, since the
+  // animation's own start time already shifts with `ready`.
+  onComplete?: () => void,
 ) => {
   useEffect(() => {
     if (!ready) return;
 
-    const timeline = gsap.timeline({ repeat: 0 });
+    const timeline = gsap.timeline({ repeat: 0, onComplete });
 
     kframe.forEach((frame, index) => {
       // Calculate the start time for each frame transition
@@ -61,7 +61,7 @@ const animate = (
     return () => {
       timeline.kill();
     };
-  }, [camera, ready]);
+  }, [camera, ready, onComplete]);
 };
 
 export default animate;

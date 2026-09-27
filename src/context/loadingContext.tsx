@@ -1,5 +1,6 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -13,11 +14,15 @@ import { useProgress } from "@react-three/drei";
 interface LoadingContextValue {
   ready: boolean; // Whether every tracked asset (GLTF models, textures) has finished loading
   progress: number; // 0-100, see the display rules described below
+  introComplete: boolean; // Whether the camera's intro flythrough has actually finished playing
+  notifyIntroComplete: () => void; // Called by Camera when that flythrough's GSAP timeline really completes
 }
 
 const LoadingContext = createContext<LoadingContextValue>({
   ready: false,
   progress: 0,
+  introComplete: false,
+  notifyIntroComplete: () => {},
 });
 
 // If nothing ever starts loading (e.g. everything was already resident),
@@ -69,7 +74,13 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
   const { active, loaded, total } = useProgress();
   const [ready, setReady] = useState(false);
   const [maxProgress, setMaxProgress] = useState(0);
+  const [introComplete, setIntroComplete] = useState(false);
   const startedRef = useRef(false);
+
+  // Stable reference - Camera passes this to animate()'s effect deps, so a
+  // fresh function identity on every render would tear down and rebuild the
+  // GSAP timeline on every render instead of just once.
+  const notifyIntroComplete = useCallback(() => setIntroComplete(true), []);
 
   useEffect(() => {
     const raw = total > 0 ? (loaded / total) * 100 : 0;
@@ -112,7 +123,9 @@ export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({
     : Math.min(maxProgress, DISPLAY_CAP_BEFORE_READY);
 
   return (
-    <LoadingContext.Provider value={{ ready, progress }}>
+    <LoadingContext.Provider
+      value={{ ready, progress, introComplete, notifyIntroComplete }}
+    >
       {children}
     </LoadingContext.Provider>
   );

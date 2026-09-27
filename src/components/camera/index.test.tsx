@@ -3,10 +3,13 @@ import { render } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import * as THREE from "three";
 
-const { animateMock, useEnvironmentMock } = vi.hoisted(() => ({
-  animateMock: vi.fn(),
-  useEnvironmentMock: vi.fn(),
-}));
+const { animateMock, useEnvironmentMock, notifyIntroCompleteMock } = vi.hoisted(
+  () => ({
+    animateMock: vi.fn(),
+    useEnvironmentMock: vi.fn(),
+    notifyIntroCompleteMock: vi.fn(),
+  }),
+);
 
 vi.mock("./animate", () => ({ default: animateMock }));
 
@@ -34,7 +37,12 @@ vi.mock("../../context/autopilotContext", () => ({
 }));
 
 vi.mock("../../context/loadingContext", () => ({
-  useLoading: () => ({ ready: true, progress: 100 }),
+  useLoading: () => ({
+    ready: true,
+    progress: 100,
+    introComplete: false,
+    notifyIntroComplete: notifyIntroCompleteMock,
+  }),
 }));
 
 import Camera from "./index";
@@ -54,6 +62,15 @@ describe("Camera intro animation wiring", () => {
     render(<Camera />);
 
     expect(animateMock).toHaveBeenCalledTimes(1);
+    // The real completion signal (see loadingContext.tsx) must actually
+    // reach animate() - a stale/omitted arg here would silently break
+    // anything downstream that waits for the intro to truly finish (e.g.
+    // the welcome popup), regressing it back to a mount-relative guess.
+    expect(animateMock).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      notifyIntroCompleteMock,
+    );
   });
 
   test("skips the intro animation while the camera-helper debug view is active", () => {

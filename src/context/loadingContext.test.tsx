@@ -16,11 +16,13 @@ vi.mock("@react-three/drei", () => ({
 
 import { LoadingProvider, useLoading } from "./loadingContext";
 
-type Sample = { ready: boolean; progress: number };
+type Sample = { ready: boolean; progress: number; introComplete: boolean };
 const captured: Sample[] = [];
+let latestNotifyIntroComplete: (() => void) | null = null;
 const Probe = () => {
-  const { ready, progress } = useLoading();
-  captured.push({ ready, progress });
+  const { ready, progress, introComplete, notifyIntroComplete } = useLoading();
+  latestNotifyIntroComplete = notifyIntroComplete;
+  captured.push({ ready, progress, introComplete });
   return null;
 };
 
@@ -36,6 +38,7 @@ const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 describe("LoadingProvider", () => {
   beforeEach(() => {
     captured.length = 0;
+    latestNotifyIntroComplete = null;
     setProgress({ active: false, loaded: 0, total: 0 });
     vi.useFakeTimers();
   });
@@ -177,5 +180,23 @@ describe("LoadingProvider", () => {
     advance(50);
     expect(last().ready).toBe(true);
     expect(last().progress).toBe(100);
+  });
+
+  // introComplete is what the welcome popup actually waits on (see
+  // welcomeContext.tsx) - it must start false regardless of asset-loading
+  // state, and only flip once Camera calls notifyIntroComplete from the
+  // GSAP timeline's real onComplete, never from time passing on its own.
+  test("introComplete stays false until notifyIntroComplete is called, independent of asset loading", () => {
+    render(<Scene />);
+
+    expect(last().introComplete).toBe(false);
+
+    advance(60000);
+    expect(last().introComplete).toBe(false);
+
+    act(() => {
+      latestNotifyIntroComplete?.();
+    });
+    expect(last().introComplete).toBe(true);
   });
 });
