@@ -18,28 +18,35 @@
   height: 6rem;
   /* Room for the hover/click tooltip above a gem without it being clipped. */
   overflow: visible;
-  perspective: 640px;
 }
 
 .tech-carousel-ring {
   position: absolute;
   inset: 0;
-  transform-style: preserve-3d;
   will-change: transform;
 }
 
 .tech-carousel-item {
+  /* Sized to the gem itself (not inset: 0 / full stage) and statically
+     centered on the stage's pivot via top/left/margin, so the JS-driven
+     translateX/scale below (see techGem.tsx - the carousel's angle math
+     is faked with a manual perspective projection rather than real CSS
+     3D transforms, because the browser's native preserve-3d depth sort
+     turned out to paint gems in the wrong order once several of them
+     land at near-identical depths near the showcase spot) is the item's
+     whole transform, and z-index alone (a plain 2D stacking context, so
+     it's reliably honored) controls paint order. */
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 50%;
+  width: 2.35rem;
+  height: 2.35rem;
+  margin-top: -1.175rem;
+  margin-left: -1.175rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  transform-style: preserve-3d;
   will-change: transform;
-  /* Hide the item once it swings past the side profile instead of showing
-     a mirrored/backwards icon for the far half of the ring. */
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
 }
 
 .tech-carousel-item-inner {

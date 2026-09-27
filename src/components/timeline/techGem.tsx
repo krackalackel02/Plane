@@ -190,6 +190,10 @@ const TechGem: React.FC<{ tech: string; index: number; idle?: boolean }> = ({
 
 // Full loop time in degrees/sec - a complete revolution takes 360/this seconds.
 const ROTATION_DEG_PER_SEC = 32;
+// Mirrors the carousel's old `perspective: 640px` CSS value, now applied
+// manually (see TechCarousel doc comment below) instead of via real CSS
+// perspective/3D transforms.
+const PERSPECTIVE_PX = 640;
 // Arc (in degrees either side of dead-center-front) over which the
 // "showcase" scale/brightness bump ramps in.
 const FOCUS_WINDOW_DEG = 60;
@@ -204,17 +208,26 @@ const BRIGHTNESS_SHOWCASE = 1.35;
 const CLUSTER_POWER = 2.3;
 
 /**
- * Auto-rotating 3D ring: gems sit around a circle whose axis is vertical
- * (Y), each held out from the center by rotateY(displayAngle)
- * translateZ(radius) - the classic "3D carousel" technique, where
- * transform-style: preserve-3d on the shared ancestor makes the browser
- * depth-sort the items correctly as they swing through front and back.
- * Their evenly-spaced base angle is warped (see CLUSTER_POWER) so they
- * bunch together near the front showcase spot instead of spreading
- * uniformly around the whole circle. A per-frame loop advances the
- * rotation phase (pausing on hover/focus so a curious visitor can read a
- * label) and lights up whichever gem currently sits in the showcase spot,
- * dimming the rest into shadow.
+ * Auto-rotating "3D" ring: gems sit around a circle whose axis is
+ * vertical (Y). Their evenly-spaced base angle is warped (see
+ * CLUSTER_POWER) so they bunch together near the front showcase spot
+ * instead of spreading uniformly around the whole circle.
+ *
+ * This used to be a real CSS 3D carousel (rotateY + translateZ on a
+ * transform-style: preserve-3d ancestor, letting the browser's own 3D
+ * depth-sort pick paint order). That native sort turned out to be
+ * unreliable in practice: once CLUSTER_POWER packs several gems into
+ * near-identical depths near the showcase spot, the browser can paint a
+ * farther-back gem over a nearer one regardless of z-index or DOM order
+ * (verified in the running app - both were tried and both failed to fix
+ * it). So the "3D" here is now faked manually: each gem's angle is
+ * projected to a 2D x-offset and scale using the standard perspective
+ * formula (scale = P / (P - z)), and paint order is controlled with a
+ * plain z-index - which, outside of a shared 3D rendering context, is
+ * simply always honored. A per-frame loop advances the rotation phase
+ * (pausing on hover/focus so a curious visitor can read a label) and
+ * lights up whichever gem currently sits in the showcase spot, dimming
+ * the rest into shadow.
  */
 const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -272,8 +285,16 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
         const fraction = Math.abs(raw) / 180;
         const warpedFraction = Math.pow(fraction, CLUSTER_POWER);
         const displayAngle = Math.sign(raw) * warpedFraction * 180;
+        const rad = (displayAngle * Math.PI) / 180;
 
-        item.style.transform = `rotateY(${displayAngle}deg) translateZ(${radiusRef.current}px)`;
+        // z: signed depth along the camera axis (+radius = closest to the
+        // viewer, at displayAngle 0; -radius = farthest, at +-180).
+        const z = radiusRef.current * Math.cos(rad);
+        const x = radiusRef.current * Math.sin(rad);
+        const projScale = PERSPECTIVE_PX / (PERSPECTIVE_PX - z);
+
+        item.style.transform = `translateX(${x * projScale}px) scale(${projScale})`;
+        item.style.zIndex = String(Math.round(z * 1000));
 
         const focus = Math.max(
           0,
