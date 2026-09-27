@@ -76,6 +76,7 @@
   min-height: 0;
   flex: 1 1 auto;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 @keyframes fadeIn {
@@ -230,15 +231,18 @@
 
 @media (max-width: 600px) {
   .highlight-overlay {
-    padding: 0.75rem;
+    /* Generous margin on every side so the scene is still visible around
+       the card instead of it reading as a full-screen sheet. */
+    padding: 1.5rem 1.25rem;
     align-items: flex-end;
   }
 
   .highlight-content-3d {
-    border-radius: 12px 12px 0 0;
-    /* Leave a visible gap above the card instead of filling the screen. */
-    max-height: min(72vh, calc(100% - 3rem));
-    max-height: min(72dvh, calc(100% - 3rem));
+    /* Rounded on every corner (not just the top) - a floating card, not a
+       bottom sheet flush against the screen edge. */
+    border-radius: 16px;
+    max-height: min(65vh, calc(100% - 2rem));
+    max-height: min(65dvh, calc(100% - 2rem));
   }
 
   .highlight-image-wrap {

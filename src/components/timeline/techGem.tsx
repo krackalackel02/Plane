@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { IconType } from "react-icons";
-import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
 import {
   SiTypescript,
   SiJavascript,
@@ -189,118 +188,127 @@ const TechGem: React.FC<{ tech: string; index: number; idle?: boolean }> = ({
   );
 };
 
-const CENTER_THRESHOLD = 0.12;
-// Distance (px) from the carousel's center at which a gem reaches its
-// fully-receded state; beyond this, items just clamp at that same look.
-const FALLOFF_PX = 130;
-const MAX_ROTATE_DEG = 55;
+// Full loop time in degrees/sec - a complete revolution takes 360/this seconds.
+const ROTATION_DEG_PER_SEC = 15;
+// Arc (in degrees either side of dead-center-front) over which the
+// "showcase" scale/brightness bump ramps in.
+const FOCUS_WINDOW_DEG = 60;
+const SCALE_SHADOW = 0.82;
+const SCALE_SHOWCASE = 1.3;
+const BRIGHTNESS_SHADOW = 0.55;
+const BRIGHTNESS_SHOWCASE = 1.35;
+// >1 warps each item's raw, evenly-spaced angle toward the front (0deg),
+// so several gems bunch up near the showcase spot while the rest of the
+// ring (mostly hidden around back) stays comparatively sparse - rather
+// than every item being equidistant all the way around.
+const CLUSTER_POWER = 2.3;
 
 /**
- * Horizontal "coverflow" carousel: the centered gem sits flat and at full
- * size, while neighbors recede in Z, rotate to face the center, shrink, and
- * fade - then swap places as the user scrolls/swipes/drags through the
- * strip. Built on native horizontal scroll + scroll-snap (for touch/trackpad
- * momentum and keyboard/focus support) with a scroll listener driving the
- * per-item 3D transform, since CSS alone can't express "transform based on
- * distance from viewport center" across browsers yet.
+ * Auto-rotating 3D ring: gems sit around a circle whose axis is vertical
+ * (Y), each held out from the center by rotateY(displayAngle)
+ * translateZ(radius) - the classic "3D carousel" technique, where
+ * transform-style: preserve-3d on the shared ancestor makes the browser
+ * depth-sort the items correctly as they swing through front and back.
+ * Their evenly-spaced base angle is warped (see CLUSTER_POWER) so they
+ * bunch together near the front showcase spot instead of spreading
+ * uniformly around the whole circle. A per-frame loop advances the
+ * rotation phase (pausing on hover/focus so a curious visitor can read a
+ * label) and lights up whichever gem currently sits in the showcase spot,
+ * dimming the rest into shadow.
  */
 const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
-  const trackRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const ringRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const centerIndexRef = useRef(0);
+  const radiusRef = useRef(140);
+  const rotationRef = useRef(0);
+  const pausedRef = useRef(false);
   const rafRef = useRef(0);
+  const lastTimeRef = useRef<number | null>(null);
+  const count = techStack.length;
 
-  const updateTransforms = useCallback(() => {
-    const track = trackRef.current;
-    if (!track) return;
-    const trackRect = track.getBoundingClientRect();
-    const centerX = trackRect.left + trackRect.width / 2;
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
 
-    let bestIndex = 0;
-    let bestDistance = Infinity;
+    const measure = () => {
+      // 2 * radius == the carousel's own width, so the ring's diameter
+      // matches the card it's shown inside.
+      radiusRef.current = stage.getBoundingClientRect().width / 2;
+    };
 
-    itemRefs.current.forEach((item, index) => {
-      if (!item) return;
-      const itemRect = item.getBoundingClientRect();
-      const itemCenter = itemRect.left + itemRect.width / 2;
-      const distance = itemCenter - centerX;
-      const absDistance = Math.abs(distance);
-      const normalized = Math.max(-1, Math.min(1, distance / FALLOFF_PX));
-      const absNormalized = Math.abs(normalized);
-
-      const rotateY = normalized * -MAX_ROTATE_DEG;
-      const scale = 1 - absNormalized * 0.4;
-      const translateZ = -absNormalized * 40;
-      const opacity = 1 - absNormalized * 0.7;
-      const zIndex = Math.round((1 - absNormalized) * 50);
-
-      item.style.transform = `translateZ(${translateZ}px) rotateY(${rotateY}deg) scale(${scale})`;
-      item.style.opacity = String(opacity);
-      item.style.zIndex = String(zIndex);
-      item.classList.toggle("is-centered", absNormalized < CENTER_THRESHOLD);
-
-      if (absDistance < bestDistance) {
-        bestDistance = absDistance;
-        bestIndex = index;
-      }
-    });
-
-    centerIndexRef.current = bestIndex;
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, []);
 
   useEffect(() => {
-    updateTransforms();
-    const track = trackRef.current;
-    if (!track) return;
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
 
-    const onScroll = () => {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(updateTransforms);
-    };
-    const onWheel = (event: WheelEvent) => {
-      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-      track.scrollLeft += event.deltaY;
-      event.preventDefault();
+    const tick = (time: number) => {
+      if (lastTimeRef.current === null) lastTimeRef.current = time;
+      // Clamp so a backgrounded/throttled tab resuming after a long gap
+      // continues smoothly instead of the ring jumping through several
+      // rotations worth of "missed" time in one frame.
+      const deltaSec = Math.min((time - lastTimeRef.current) / 1000, 0.1);
+      lastTimeRef.current = time;
+
+      if (!pausedRef.current && !prefersReducedMotion) {
+        rotationRef.current =
+          (rotationRef.current + ROTATION_DEG_PER_SEC * deltaSec) % 360;
+      }
+
+      itemRefs.current.forEach((item, index) => {
+        if (!item) return;
+        const inner = item.firstElementChild as HTMLElement | null;
+        if (!inner) return;
+
+        const baseAngle = (360 / count) * index;
+        let raw = (baseAngle + rotationRef.current) % 360;
+        if (raw > 180) raw -= 360;
+
+        const fraction = Math.abs(raw) / 180;
+        const warpedFraction = Math.pow(fraction, CLUSTER_POWER);
+        const displayAngle = Math.sign(raw) * warpedFraction * 180;
+
+        item.style.transform = `rotateY(${displayAngle}deg) translateZ(${radiusRef.current}px)`;
+
+        const focus = Math.max(
+          0,
+          1 - Math.abs(displayAngle) / FOCUS_WINDOW_DEG,
+        );
+        inner.style.transform = `scale(${SCALE_SHADOW + focus * (SCALE_SHOWCASE - SCALE_SHADOW)})`;
+        inner.style.filter = `brightness(${BRIGHTNESS_SHADOW + focus * (BRIGHTNESS_SHOWCASE - BRIGHTNESS_SHADOW)})`;
+      });
+
+      rafRef.current = requestAnimationFrame(tick);
     };
 
-    track.addEventListener("scroll", onScroll, { passive: true });
-    track.addEventListener("wheel", onWheel, { passive: false });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      track.removeEventListener("scroll", onScroll);
-      track.removeEventListener("wheel", onWheel);
-      window.removeEventListener("resize", onScroll);
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, [updateTransforms, techStack.length]);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [count]);
 
-  const scrollToIndex = (index: number) => {
-    itemRefs.current[index]?.scrollIntoView({
-      behavior: "smooth",
-      inline: "center",
-      block: "nearest",
-    });
+  const pause = () => {
+    pausedRef.current = true;
+  };
+  const resume = () => {
+    pausedRef.current = false;
   };
 
   return (
     <div className="tech-stack-row">
       <span className="tech-stack-label">Tech Stack</span>
-      <div className="tech-carousel">
-        {techStack.length > 1 && (
-          <button
-            type="button"
-            className="tech-carousel-arrow tech-carousel-arrow-prev"
-            aria-label="Previous tech"
-            onClick={() =>
-              scrollToIndex(Math.max(0, centerIndexRef.current - 1))
-            }
-          >
-            <FaChevronLeft aria-hidden="true" size={11} />
-          </button>
-        )}
-
-        <div className="tech-carousel-track" ref={trackRef}>
-          <div className="tech-carousel-spacer" aria-hidden="true" />
+      <div
+        className="tech-carousel-stage"
+        ref={stageRef}
+        onMouseEnter={pause}
+        onMouseLeave={resume}
+        onFocus={pause}
+        onBlur={resume}
+      >
+        <div className="tech-carousel-ring" ref={ringRef}>
           {techStack.map((tech, index) => (
             <div
               className="tech-carousel-item"
@@ -308,29 +316,13 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
               ref={(el) => {
                 itemRefs.current[index] = el;
               }}
-              onClick={() => scrollToIndex(index)}
-              onFocus={() => scrollToIndex(index)}
             >
-              <TechGem tech={tech} index={index} idle={false} />
+              <div className="tech-carousel-item-inner">
+                <TechGem tech={tech} index={index} idle={false} />
+              </div>
             </div>
           ))}
-          <div className="tech-carousel-spacer" aria-hidden="true" />
         </div>
-
-        {techStack.length > 1 && (
-          <button
-            type="button"
-            className="tech-carousel-arrow tech-carousel-arrow-next"
-            aria-label="Next tech"
-            onClick={() =>
-              scrollToIndex(
-                Math.min(techStack.length - 1, centerIndexRef.current + 1),
-              )
-            }
-          >
-            <FaChevronRight aria-hidden="true" size={11} />
-          </button>
-        )}
       </div>
     </div>
   );
