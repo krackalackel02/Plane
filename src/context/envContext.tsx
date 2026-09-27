@@ -26,6 +26,7 @@ export const config = {
   showShip: readBoolEnv(import.meta.env.VITE_SHOW_SHIP, true),
   showDebug: readBoolEnv(import.meta.env.VITE_SHOW_DEBUG, false),
   showSpheres: readBoolEnv(import.meta.env.VITE_SHOW_SPHERES, false),
+  showBounds: readBoolEnv(import.meta.env.VITE_SHOW_BOUNDS, false),
   musicEnabled: readBoolEnv(import.meta.env.VITE_MUSIC_ENABLED, true),
 };
 
