@@ -3,7 +3,11 @@ import { Points } from "three";
 
 import { smoothstep } from "../../../../utils/3d";
 import { useExhaustSimulation } from "../useExhaustSimulation";
-import { matteColorMap } from "../colorMaps";
+import {
+  matteColorMap,
+  applyBoostTint,
+  BOOST_SIZE_MULTIPLIER,
+} from "../colorMaps";
 import { ExhaustRendererProps } from "../types";
 import { cloudVertexShader, cloudFragmentShader } from "./cloudMaterial";
 
@@ -31,6 +35,7 @@ const CloudRenderer: React.FC<ExhaustRendererProps> = ({
   const alphas = useRef(new Float32Array(count));
   const sizes = useRef(new Float32Array(count));
   const rotations = useRef(new Float32Array(count));
+  const colors = useRef(new Float32Array(count * 3));
 
   useExhaustSimulation({
     active,
@@ -45,9 +50,11 @@ const CloudRenderer: React.FC<ExhaustRendererProps> = ({
       if (!mesh) return;
 
       for (let i = 0; i < count; i++) {
+        const idx = i * 3;
         if (state.lifetimes[i] <= 0) {
           alphas.current[i] = 0;
           sizes.current[i] = 0;
+          colors.current.set([0, 0, 0], idx);
           continue;
         }
 
@@ -56,13 +63,27 @@ const CloudRenderer: React.FC<ExhaustRendererProps> = ({
         const age = 1 - state.lifetimes[i]; // 0 at spawn -> 1 at death
         const blowout = smoothstep(0, 0.3, age);
         const drift = age > 0.3 ? (age - 0.3) / 0.7 : 0;
-        const boostScale = boost ? 1.35 : 1;
+        const boostScale = boost ? BOOST_SIZE_MULTIPLIER : 1;
         sizes.current[i] =
           BASE_SIZE * boostScale * (0.5 + blowout * 0.9 + drift * 1.1);
 
         const fadeIn = smoothstep(0, 0.06, age);
         const fadeOut = 1 - smoothstep(0.4, 1, age);
         alphas.current[i] = fadeIn * fadeOut;
+
+        if (boost) {
+          const [r, g, b] = applyBoostTint(
+            state.colors[idx],
+            state.colors[idx + 1],
+            state.colors[idx + 2],
+          );
+          colors.current.set([r, g, b], idx);
+        } else {
+          colors.current.set(
+            [state.colors[idx], state.colors[idx + 1], state.colors[idx + 2]],
+            idx,
+          );
+        }
       }
 
       if (spawnedIndex !== null) {
@@ -71,7 +92,7 @@ const CloudRenderer: React.FC<ExhaustRendererProps> = ({
 
       const { attributes } = mesh.geometry;
       (attributes.position.array as Float32Array).set(state.positions);
-      (attributes.color.array as Float32Array).set(state.colors);
+      (attributes.color.array as Float32Array).set(colors.current);
       (attributes.alpha.array as Float32Array).set(alphas.current);
       (attributes.size.array as Float32Array).set(sizes.current);
       (attributes.rotation.array as Float32Array).set(rotations.current);

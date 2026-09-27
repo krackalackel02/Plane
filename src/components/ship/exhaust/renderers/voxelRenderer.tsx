@@ -3,7 +3,12 @@ import { InstancedMesh, Matrix4, Quaternion, Vector3 } from "three";
 
 import { smoothstep } from "../../../../utils/3d";
 import { useExhaustSimulation } from "../useExhaustSimulation";
-import { matteColorMap } from "../colorMaps";
+import {
+  matteColorMap,
+  applyBoostTint,
+  BOOST_SIZE_MULTIPLIER,
+  BOOST_TINT,
+} from "../colorMaps";
 import { ExhaustRendererProps } from "../types";
 import { voxelVertexShader, voxelFragmentShader } from "./voxelMaterial";
 
@@ -25,10 +30,6 @@ const VOXELS_PER_PUFF = LATTICE_OFFSETS.length;
 const VOXEL_SIZE = 0.2;
 const CLUSTER_SPACING = 0.15; // > voxel size would leave gaps at spawn; this overlaps them into a solid-looking ball
 const MAX_SPREAD = 2.6; // how many times wider the lattice gets by end of life - kept modest so the two jets' plumes stay visually separate
-const BOOST_SCALE = 1.35; // extra size while boosting, so the jet visibly grows
-
-const BOOST_EXTRA_FACTOR = 1.6; // additional multiplier to make boost more obvious
-const BOOST_COLOR: [number, number, number] = [0.35, 0.65, 1.0]; // hotter/bluer tint for boost
 
 const SPARK_COLOR: [number, number, number] = [1, 0.92, 0.7];
 
@@ -134,8 +135,8 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
         );
       }
 
-      const boostScale = boost ? BOOST_SCALE * BOOST_EXTRA_FACTOR : 1;
-      const sparkBoost = boost ? 1.6 * BOOST_EXTRA_FACTOR : 1;
+      const boostScale = boost ? BOOST_SIZE_MULTIPLIER : 1;
+      const sparkBoost = boost ? BOOST_SIZE_MULTIPLIER : 1;
 
       for (let i = 0; i < count; i++) {
         const lifetime = state.lifetimes[i];
@@ -175,18 +176,11 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
           boostScale *
           (1 + blowout * 0.5 + drift * (MAX_SPREAD - 1.5));
 
-        let cubeScale =
+        const cubeScale =
           VOXEL_SIZE *
           boostScale *
           sizeJitter.current[i] *
           (1 - smoothstep(0.3, 1, age) * 0.7);
-        // When boosting, make new puffs start noticeably larger and shrink
-        // toward the regular size as they age so the boost reads as a
-        // visibly bigger plume.
-        if (boost) {
-          const initialBoostFactor = 1 + 0.6 * (1 - age); // stronger at spawn
-          cubeScale *= initialBoostFactor;
-        }
         tmpScale.current.set(cubeScale, cubeScale, cubeScale);
 
         // The whole puff tumbles as one rigid body: its fixed spawn
@@ -265,18 +259,22 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
 
           // Default visual for voxel comes from the shared sim color and alpha
           voxelAlphas.current[gi] = alpha;
-          const baseR = state.colors[puffIdx];
-          const baseG = state.colors[puffIdx + 1];
-          const baseB = state.colors[puffIdx + 2];
           if (boost) {
-            const t = Math.max(0, 1 - age); // stronger at spawn
-            const blend = 0.5 * t; // how strongly to mix toward boost color
-            const r = baseR * (1 - blend) + BOOST_COLOR[0] * blend;
-            const g = baseG * (1 - blend) + BOOST_COLOR[1] * blend;
-            const b = baseB * (1 - blend) + BOOST_COLOR[2] * blend;
+            const [r, g, b] = applyBoostTint(
+              state.colors[puffIdx],
+              state.colors[puffIdx + 1],
+              state.colors[puffIdx + 2],
+            );
             voxelColors.current.set([r, g, b], gi * 3);
           } else {
-            voxelColors.current.set([baseR, baseG, baseB], gi * 3);
+            voxelColors.current.set(
+              [
+                state.colors[puffIdx],
+                state.colors[puffIdx + 1],
+                state.colors[puffIdx + 2],
+              ],
+              gi * 3,
+            );
           }
 
           if (isSpark) {
@@ -284,9 +282,9 @@ const VoxelRenderer: React.FC<ExhaustRendererProps> = ({
             // hot-blue when boosting so they read like hotter embers.
             const sparkTint = boost
               ? [
-                  (SPARK_COLOR[0] + BOOST_COLOR[0]) / 2,
-                  (SPARK_COLOR[1] + BOOST_COLOR[1]) / 2,
-                  (SPARK_COLOR[2] + BOOST_COLOR[2]) / 2,
+                  (SPARK_COLOR[0] + BOOST_TINT[0]) / 2,
+                  (SPARK_COLOR[1] + BOOST_TINT[1]) / 2,
+                  (SPARK_COLOR[2] + BOOST_TINT[2]) / 2,
                 ]
               : SPARK_COLOR;
             voxelColors.current.set(
