@@ -30,8 +30,11 @@ export interface RadialNodeMenuProps {
 
 /* eslint-disable react/prop-types -- TS interfaces already cover this */
 
-const FAN_RADIUS = 54;
-const DEGREES_PER_GAP = 34;
+const FAN_RADIUS = 58;
+// Chord length between adjacent nodes is 2 * FAN_RADIUS * sin(gap/2) - at
+// the previous 34deg/54px this worked out to ~1.6px of actual edge-to-edge
+// gap between 30px buttons, i.e. nearly touching. 42deg/58px gives ~12px.
+const DEGREES_PER_GAP = 42;
 const MAX_SWEEP_DEGREES = 150;
 const EDGE_MARGIN = 8;
 
