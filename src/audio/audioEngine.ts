@@ -219,10 +219,17 @@ class AudioEngine {
   /** Turning a sound channel on always implies audio overall should be
    *  audible - otherwise flipping it "on" would silently do nothing while
    *  still muted, which reads as broken rather than as two independent
-   *  controls. Turning a channel off does NOT touch mute - it only
-   *  silences that one channel, same as it always could via mute alone. */
+   *  controls. Turning a channel off does NOT touch mute on its own -
+   *  unless it's the last channel still on, in which case switching it off
+   *  leaves nothing audible, so it engages mute the same way toggleMute
+   *  would (snapshotting this channel as the one to restore on unmute). */
   setMusicEnabled(enabled: boolean) {
     if (enabled && this.muted) this.setMuted(false);
+    if (!enabled && !this.muted && !this.sfxEnabled) {
+      this.preMuteMusicEnabled = true;
+      this.preMuteSfxEnabled = false;
+      this.setMuted(true);
+    }
     this.applyMusicEnabled(enabled);
   }
 
@@ -253,8 +260,14 @@ class AudioEngine {
     this.sfxListeners.forEach((listener) => listener(this.sfxEnabled));
   }
 
+  /** See setMusicEnabled - same reasoning, sfx's counterpart. */
   setSfxEnabled(enabled: boolean) {
     if (enabled && this.muted) this.setMuted(false);
+    if (!enabled && !this.muted && !this.musicEnabled) {
+      this.preMuteMusicEnabled = false;
+      this.preMuteSfxEnabled = true;
+      this.setMuted(true);
+    }
     this.applySfxEnabled(enabled);
   }
 
