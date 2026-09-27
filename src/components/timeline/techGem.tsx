@@ -206,10 +206,6 @@ const BRIGHTNESS_SHOWCASE = 1.35;
 // ring (mostly hidden around back) stays comparatively sparse - rather
 // than every item being equidistant all the way around.
 const CLUSTER_POWER = 2.3;
-// Minimum breathing room enforced between neighboring gems' visual edges
-// (see the no-overlap pass in tick()), on top of clearing each other's
-// half-widths outright.
-const MIN_GEM_GAP_PX = 6;
 
 /**
  * Auto-rotating "3D" ring: gems sit around a circle whose axis is
@@ -235,22 +231,20 @@ const MIN_GEM_GAP_PX = 6;
  *
  * CLUSTER_POWER's bunching also means several gems' natural projected
  * positions land close enough to visually overlap near the showcase
- * spot. Correct z-index ordering alone just makes that overlap "look
- * right" (nearer gem on top); it doesn't prevent it. So after computing
- * every gem's natural position, a second pass keeps the current showcase
- * gem (the one nearest the camera) fixed in place and pushes every other
- * gem outward - left-of-center gems further left, right-of-center gems
- * further right - just far enough to clear its neighbor's half-width, so
- * neighbors budge up next to the showcase gem instead of into it.
+ * spot. An earlier version of this component forcibly pushed overlapping
+ * neighbors sideways to keep them apart, but that fights the circular
+ * path every gem is actually moving along - the forced position and the
+ * natural rotated position disagree, so gems visibly jump/jutter instead
+ * of moving smoothly. Left alone (just the z-index fix above), an
+ * overlap during the crowded moment just looks like one gem correctly
+ * sliding in front of another as they rotate through the showcase spot,
+ * which reads as normal carousel motion rather than a glitch.
  */
 const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
   const stageRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const radiusRef = useRef(140);
-  // Base (untransformed) on-screen width of a gem, used by the no-overlap
-  // pass below to know how much clearance to leave between neighbors.
-  const gemSizeRef = useRef(38);
   const rotationRef = useRef(0);
   const pausedRef = useRef(false);
   const rafRef = useRef(0);
@@ -265,11 +259,6 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
       // 2 * radius == the carousel's own width, so the ring's diameter
       // matches the card it's shown inside.
       radiusRef.current = stage.getBoundingClientRect().width / 2;
-      const gemShape = stage.querySelector<HTMLElement>(".tech-gem-shape");
-      if (gemShape) {
-        const width = parseFloat(getComputedStyle(gemShape).width);
-        if (!Number.isNaN(width)) gemSizeRef.current = width;
-      }
     };
 
     measure();
@@ -295,16 +284,6 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
           (rotationRef.current + ROTATION_DEG_PER_SEC * deltaSec) % 360;
       }
 
-      const entries: {
-        item: HTMLDivElement;
-        inner: HTMLElement;
-        x: number;
-        z: number;
-        projScale: number;
-        innerScale: number;
-        brightness: number;
-      }[] = [];
-
       itemRefs.current.forEach((item, index) => {
         if (!item) return;
         const inner = item.firstElementChild as HTMLElement | null;
@@ -322,67 +301,19 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
         // z: signed depth along the camera axis (+radius = closest to the
         // viewer, at displayAngle 0; -radius = farthest, at +-180).
         const z = radiusRef.current * Math.cos(rad);
+        const x = radiusRef.current * Math.sin(rad);
         const projScale = PERSPECTIVE_PX / (PERSPECTIVE_PX - z);
-        // Final on-screen x (world x already projected) - the no-overlap
-        // pass below operates directly in this same screen-pixel space.
-        const x = radiusRef.current * Math.sin(rad) * projScale;
+
+        item.style.transform = `translateX(${x * projScale}px) scale(${projScale})`;
+        item.style.zIndex = String(Math.round(z * 1000));
 
         const focus = Math.max(
           0,
           1 - Math.abs(displayAngle) / FOCUS_WINDOW_DEG,
         );
-        const innerScale =
-          SCALE_SHADOW + focus * (SCALE_SHOWCASE - SCALE_SHADOW);
-        const brightness =
-          BRIGHTNESS_SHADOW + focus * (BRIGHTNESS_SHOWCASE - BRIGHTNESS_SHADOW);
-
-        entries.push({ item, inner, x, z, projScale, innerScale, brightness });
+        inner.style.transform = `scale(${SCALE_SHADOW + focus * (SCALE_SHOWCASE - SCALE_SHADOW)})`;
+        inner.style.filter = `brightness(${BRIGHTNESS_SHADOW + focus * (BRIGHTNESS_SHOWCASE - BRIGHTNESS_SHADOW)})`;
       });
-
-      // No-overlap pass: keep the current showcase gem (max z, i.e.
-      // nearest the camera) fixed, then walk outward from it in each
-      // direction pushing every other gem just far enough past its more-
-      // central neighbor to clear both gems' visual half-widths plus a
-      // gap - see the class doc comment above for why this is needed on
-      // top of z-index.
-      if (entries.length > 1) {
-        const halfWidth = (e: (typeof entries)[number]) =>
-          (gemSizeRef.current * e.projScale * e.innerScale) / 2;
-
-        let pivot = 0;
-        for (let i = 1; i < entries.length; i++) {
-          if (entries[i].z > entries[pivot].z) pivot = i;
-        }
-
-        const order = entries
-          .map((_, i) => i)
-          .sort((a, b) => entries[a].x - entries[b].x);
-        const pivotOrderIndex = order.indexOf(pivot);
-
-        for (let i = pivotOrderIndex + 1; i < order.length; i++) {
-          const prev = entries[order[i - 1]];
-          const cur = entries[order[i]];
-          const minX =
-            prev.x + halfWidth(prev) + halfWidth(cur) + MIN_GEM_GAP_PX;
-          if (cur.x < minX) cur.x = minX;
-        }
-        for (let i = pivotOrderIndex - 1; i >= 0; i--) {
-          const next = entries[order[i + 1]];
-          const cur = entries[order[i]];
-          const maxX =
-            next.x - halfWidth(next) - halfWidth(cur) - MIN_GEM_GAP_PX;
-          if (cur.x > maxX) cur.x = maxX;
-        }
-      }
-
-      entries.forEach(
-        ({ item, inner, x, z, projScale, innerScale, brightness }) => {
-          item.style.transform = `translateX(${x}px) scale(${projScale})`;
-          item.style.zIndex = String(Math.round(z * 1000));
-          inner.style.transform = `scale(${innerScale})`;
-          inner.style.filter = `brightness(${brightness})`;
-        },
-      );
 
       rafRef.current = requestAnimationFrame(tick);
     };
