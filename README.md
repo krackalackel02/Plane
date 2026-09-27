@@ -14,8 +14,9 @@ Display/debug flags are read in `src/context/envContext.tsx` via Vite's `import.
 | `VITE_SHOW_DEBUG` | Enables `print()` debug console logging (`src/utils/common.ts`) | `false` |
 | `VITE_SHOW_SPHERES` | Renders debug axis-helper spheres | `false` |
 | `VITE_MUSIC_ENABLED` | Plays the ambient background music | `true` |
+| `VITE_INCLUDE_SANDBOX` | Includes `sandbox.html` (see [Component sandbox](#component-sandbox)) in `vite build`'s output | `false` |
 
-To opt into any of these locally (e.g. for perf debugging), set `VITE_SHOW_STATS=true` etc. in your own `.env.development` or `.env.local` — Vite loads `.env.local`/`.env.development.local` automatically and they're gitignored too, so they won't affect anyone else.
+To opt into any of these locally (e.g. for perf debugging), set `VITE_SHOW_STATS=true` etc. in your own `.env.development` or `.env.local` — Vite loads `.env.local`/`.env.development.local` automatically and they're gitignored too, so they won't affect anyone else. (`VITE_INCLUDE_SANDBOX` is the one exception: it's read directly in `vite.config.ts`, not via `envContext.tsx`, since it needs to change `vite build`'s entry points rather than something at runtime — same `.env.local` opt-in works for it too.)
 
 ## Component sandbox
 
