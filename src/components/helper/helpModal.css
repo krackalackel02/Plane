@@ -29,6 +29,14 @@
   font-size: 1.6rem;
 }
 
+/* The exhaust preview row is wider than a plain keycap cluster (trigger
+   icon + arrow + three mode icons), so it gets room to grow instead of
+   wrapping inside the shared 96px column every other row uses. */
+.help-cluster--wide {
+  width: auto;
+  min-width: 96px;
+}
+
 /* Mini preview of the exhaust-mode HUD button's own icons, so this row
    reads as "here's what that button looks like" rather than needing its
    own separate visual language. */
@@ -52,6 +60,19 @@
 .help-exhaust-icon svg {
   width: 14px;
   height: 14px;
+}
+
+/* Matches the accent tint the real HUD button's active ring uses
+   (radial-node-menu__fan-node--active), so the trigger reads as visually
+   distinct from the plain mode-option icons next to it. */
+.help-exhaust-icon--trigger {
+  background: rgba(255, 242, 0, 0.12);
+  color: #fff200;
+}
+
+.help-exhaust-arrow {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.8rem;
 }
 
 .help-copy {

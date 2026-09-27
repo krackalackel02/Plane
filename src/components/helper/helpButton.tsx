@@ -1,6 +1,6 @@
 import { useWelcome } from "./welcomeContext";
 
-// Lives inside HudCorner (as a sibling of MuteButton) rather than nested
+// Lives inside HudCorner (as a sibling of AudioButton) rather than nested
 // under WelcomeOverlay, so both icon buttons can share one HUD group
 // container - state is coordinated via WelcomeContext instead.
 const HelpButton = () => {

@@ -34,7 +34,7 @@ import WelcomeOverlay from "./helper/welcomeOverlay";
 import { WelcomeProvider } from "./helper/welcomeContext";
 import HelpButton from "./helper/helpButton";
 import HudCorner from "./helper/hudCorner";
-import MuteButton from "./helper/muteButton";
+import AudioButton from "./helper/audioButton";
 import ExhaustModeButton from "./helper/exhaustModeButton";
 import LoadingScreen from "./helper/loadingScreen";
 import DebugBoundingBox from "./helper/debugBoundingBox";
@@ -142,7 +142,7 @@ const Scene = () => {
                             <Highlight />
                             {/* Shared top-right HUD group: sound + help + exhaust style */}
                             <HudCorner>
-                              <MuteButton />
+                              <AudioButton />
                               <ExhaustModeButton />
                               <HelpButton />
                             </HudCorner>
