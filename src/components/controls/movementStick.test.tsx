@@ -121,4 +121,67 @@ describe("MovementStick", () => {
     }); // down
     expect(screen.getByTestId("keys")).toHaveTextContent("s");
   });
+
+  // Boost ring: travel (base radius) is 40px, BOOST_RING_WIDTH is 24px, so
+  // the ring spans 40-64px from center. Engage fires at 60% across it
+  // (~54.4px), disengage falls back at 30% (~47.2px).
+  it("does not engage boost while still within the base radius", () => {
+    const track = setup();
+    drag(track, 0, -40); // exactly at the base radius, not into the ring yet
+    const keys = screen.getByTestId("keys").textContent;
+    expect(keys).toContain("w");
+    expect(keys).not.toContain("Shift");
+  });
+
+  it("snaps into boost once pulled past the engage point in the ring", () => {
+    const track = setup();
+    drag(track, 0, -55); // past the 60% engage point of the boost ring
+    const keys = screen.getByTestId("keys").textContent;
+    expect(keys).toContain("w");
+    expect(keys).toContain("Shift");
+  });
+
+  it("stays boosting inside the disengage band (hysteresis)", () => {
+    const track = setup();
+    drag(track, 0, -55); // engage
+    expect(screen.getByTestId("keys")).toHaveTextContent("Shift");
+
+    fireEvent.pointerMove(track, {
+      pointerId: 1,
+      clientX: CENTER_X,
+      clientY: CENTER_Y - 50, // still above the 30% disengage point (~47.2px)
+    });
+    expect(screen.getByTestId("keys")).toHaveTextContent("Shift");
+  });
+
+  it("disengages boost once pulled back under the disengage point", () => {
+    const track = setup();
+    drag(track, 0, -55); // engage
+    expect(screen.getByTestId("keys")).toHaveTextContent("Shift");
+
+    fireEvent.pointerMove(track, {
+      pointerId: 1,
+      clientX: CENTER_X,
+      clientY: CENTER_Y - 40, // back at the base radius, under the disengage point
+    });
+    expect(screen.getByTestId("keys")).not.toHaveTextContent("Shift");
+  });
+
+  it("releases boost on pointer up", () => {
+    const track = setup();
+    drag(track, 0, -70); // well past the ring, definitely boosting
+    expect(screen.getByTestId("keys")).toHaveTextContent("Shift");
+
+    fireEvent.pointerUp(track, { pointerId: 1 });
+    expect(screen.getByTestId("keys")).toHaveTextContent("");
+  });
+
+  it("caps the knob's boosting travel at the ring's outer edge", () => {
+    const track = setup();
+    drag(track, 0, -500); // far beyond the ring
+    const knob = document.querySelector(".circular-stick-knob") as HTMLElement;
+    expect(knob.className).toContain("is-boosting");
+    // travel (40) + BOOST_RING_WIDTH (24) = 64px max, snapped straight up.
+    expect(knob.style.transform).toContain("translate(0px, -64px)");
+  });
 });
