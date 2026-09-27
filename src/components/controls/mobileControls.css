@@ -8,14 +8,14 @@
      minimap. */
   justify-content: flex-end;
   align-items: flex-end;
-  /* Right padding must clear the boost ring's reach beyond the stick
-     track (BOOST_RING_WIDTH = 24px in movementStick.tsx) since this
-     container is docked to the right edge - otherwise the ring gets
-     clipped by the viewport edge (body has overflow: hidden) instead of
-     sitting fully on-screen. Bottom padding already matches for the
-     same reason. */
-  padding: 16px calc(24px + env(safe-area-inset-right))
-    calc(24px + env(safe-area-inset-bottom))
+  /* Right/bottom padding must clear the boost ring's reach beyond the
+     stick track (BOOST_RING_WIDTH = 24px in movementStick.tsx) since
+     this container is docked to those edges, plus the same 12px gap
+     the minimap keeps from the screen edge on mobile (see the
+     max-width: 768px rule in minimap.css) so the ring doesn't just
+     touch the edge but sits back from it the same amount. */
+  padding: 16px calc(36px + env(safe-area-inset-right))
+    calc(36px + env(safe-area-inset-bottom))
     calc(16px + env(safe-area-inset-left));
   pointer-events: none;
   z-index: 10;
