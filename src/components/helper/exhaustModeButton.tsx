@@ -11,9 +11,10 @@ export const MODE_LABEL: Record<ExhaustMode, string> = {
   voxels: "Voxels",
 };
 
-// One inline icon per exhaust look, drawn in the same plain-stroke style as
-// MuteButton's speaker glyph rather than emoji, so the HUD stays visually
-// consistent.
+// One inline icon per exhaust look - and the flame trigger below - all
+// drawn as solid currentColor fills (no outline-only glyphs) so the whole
+// set reads as one consistent icon language wherever it appears together:
+// the HUD fan, and the help modal's preview of that same button.
 const MODE_ICON: Record<ExhaustMode, React.ReactNode> = {
   particles: (
     <>
@@ -28,15 +29,23 @@ const MODE_ICON: Record<ExhaustMode, React.ReactNode> = {
       fill="currentColor"
     />
   ),
+  // An isometric cube, its three faces filled at different opacities
+  // (light from the top-right) to read as a solid 3D shape rather than a
+  // thin wireframe outline - matching the filled weight of its siblings.
   voxels: (
-    <path
-      d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z M12 3v18 M4 7.5l8 4.5 8-4.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinejoin="round"
-      strokeLinecap="round"
-    />
+    <>
+      <path d="M12 3l8 4.5-8 4.5-8-4.5L12 3z" fill="currentColor" />
+      <path
+        d="M4 7.5l8 4.5v9l-8-4.5v-9z"
+        fill="currentColor"
+        fillOpacity="0.55"
+      />
+      <path
+        d="M20 7.5l-8 4.5v9l8-4.5v-9z"
+        fill="currentColor"
+        fillOpacity="0.8"
+      />
+    </>
   ),
 };
 
@@ -53,10 +62,10 @@ export const ModeIcon = ({ mode }: { mode: ExhaustMode }) => (
 // look is already communicated by the highlighted ring on its fan node
 // (see .radial-node-menu__fan-node--active in radialNodeMenu.css), so the
 // trigger's job is just to say "this button is about exhaust".
-const FlameIcon = () => (
+export const FlameIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
     <path
-      d="M12 2c-1.8 2.6-4.5 5-4.5 8.5a4.5 4.5 0 0 0 9 0c0-1.6-.6-2.9-1.3-3.9.2 1.5-.5 2.7-1.7 2.7a1.3 1.3 0 0 1-1.3-1.3c0-1.1.7-1.9.9-3.1C13.4 3.9 12.6 2.9 12 2z"
+      d="M12.5 2c.5 3-1 4.7-2.8 6.7C7.8 10.8 6 12.9 6 15.5a6 6 0 0 0 12 0c0-2.5-1-4.4-2.2-6 .5 2.3-.6 4-2.2 4a2 2 0 0 1-2-2c0-1.2.7-2 1.4-3C14.3 6.7 13.3 4.4 12.5 2z"
       fill="currentColor"
     />
   </svg>

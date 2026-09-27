@@ -1,13 +1,22 @@
 import { isMobile } from "react-device-detect";
 import { Keycap, JoystickIcon } from "./controlIcons";
-import { ModeIcon, MODE_LABEL } from "./exhaustModeButton";
+import { ModeIcon, MODE_LABEL, FlameIcon } from "./exhaustModeButton";
 import { EXHAUST_MODE_ORDER } from "../../context/exhaustModeContext";
 import "./helpModal.css";
 
-// Mini preview of the three exhaust-look icons, matching the HUD button's
-// own glyphs so players recognise it as "that thing in the corner".
+// Mini preview of the exhaust HUD button, using the exact same glyphs it
+// does - the flame trigger, then an arrow into the three exhaust-look
+// icons it fans out to - so this row reads as "here's that button, and
+// here's what it opens" rather than needing its own separate icon set.
 const ExhaustModePreview = () => (
   <div className="help-exhaust-preview" aria-hidden="true">
+    <span
+      className="help-exhaust-icon help-exhaust-icon--trigger"
+      title="Exhaust style"
+    >
+      <FlameIcon />
+    </span>
+    <span className="help-exhaust-arrow">→</span>
     {EXHAUST_MODE_ORDER.map((mode) => (
       <span key={mode} className="help-exhaust-icon" title={MODE_LABEL[mode]}>
         <ModeIcon mode={mode} />
@@ -93,11 +102,11 @@ const PcControls = () => (
     </div>
 
     <div className="help-row">
-      <div className="help-cluster">
+      <div className="help-cluster help-cluster--wide">
         <ExhaustModePreview />
       </div>
       <p className="help-copy">
-        Hover the engine icon (top right) to pick between particle, cloud, and
+        Hover the flame icon (top right) to pick between particle, cloud, and
         voxel exhaust styles
       </p>
     </div>
@@ -130,11 +139,11 @@ const MobileControls = () => (
     </div>
 
     <div className="help-row">
-      <div className="help-cluster">
+      <div className="help-cluster help-cluster--wide">
         <ExhaustModePreview />
       </div>
       <p className="help-copy">
-        Tap the engine icon (top right) to pick between particle, cloud, and
+        Tap the flame icon (top right) to pick between particle, cloud, and
         voxel exhaust styles
       </p>
     </div>
