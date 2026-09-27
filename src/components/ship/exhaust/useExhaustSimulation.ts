@@ -85,7 +85,12 @@ export const useExhaustSimulation = ({
       colors.set([r, g, b], idx);
 
       if (lifetimes[i] === 0) {
-        positions.set([0, 0, 0], idx);
+        // Avoid leaving dead particles at the origin. Keeping particles at
+        // [0,0,0] can make point-sprite size calculations divide by a very
+        // small view-space z and generate large/NaN point sizes which show
+        // as black squares stuck on-screen. Move dead particles far off-
+        // screen instead and clear their color.
+        positions.set([1e6, 1e6, 1e6], idx);
         colors.set([0, 0, 0], idx);
       }
     }
