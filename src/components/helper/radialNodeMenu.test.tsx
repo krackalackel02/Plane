@@ -1,6 +1,6 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import RadialNodeMenu, { RadialMenuNode } from "./radialNodeMenu";
 
 const makeNodes = (onSelect: (key: string) => void): RadialMenuNode[] => [
@@ -17,6 +17,13 @@ const makeNodes = (onSelect: (key: string) => void): RadialMenuNode[] => [
     label: "Option B",
     active: false,
     onSelect: () => onSelect("b"),
+  },
+  {
+    key: "c",
+    icon: <span>C</span>,
+    label: "Option C",
+    active: false,
+    onSelect: () => onSelect("c"),
   },
 ];
 
@@ -38,7 +45,7 @@ describe("RadialNodeMenu", () => {
     vi.restoreAllMocks();
   });
 
-  it("starts collapsed with the vertical list hidden", () => {
+  it("starts collapsed with the fan hidden", () => {
     renderMenu();
     expect(screen.getByLabelText("Open menu")).toHaveAttribute(
       "aria-expanded",
@@ -62,6 +69,26 @@ describe("RadialNodeMenu", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("moving from the trigger toward the hover bridge does not collapse the branch", () => {
+    renderMenu();
+    const trigger = screen.getByLabelText("Open menu");
+    const root = trigger.parentElement as HTMLElement;
+    fireEvent.mouseEnter(root);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    const bridge = root.querySelector(".radial-node-menu__hover-bridge");
+    expect(bridge).not.toBeNull();
+    expect(root.contains(bridge)).toBe(true);
+    // React's onMouseLeave fires from a "mouseout" whose relatedTarget has
+    // left the element's subtree. The bridge exists precisely so that the
+    // physical gap the mouse crosses between the trigger and a fanned-out
+    // node still has a relatedTarget *inside* root - without it this
+    // transition would report leaving root entirely and collapse the
+    // branch mid-sweep.
+    fireEvent.mouseOut(trigger, { relatedTarget: bridge });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("toggles open/closed on click (touch fallback)", () => {
     renderMenu();
     const trigger = screen.getByLabelText("Open menu");
@@ -83,7 +110,7 @@ describe("RadialNodeMenu", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("selecting a list node fires onSelect and closes the branch", () => {
+  it("selecting a fanned node fires onSelect and closes the branch", () => {
     const { onSelect } = renderMenu();
     const trigger = screen.getByLabelText("Open menu");
     fireEvent.click(trigger);
@@ -122,67 +149,24 @@ describe("RadialNodeMenu", () => {
     expect(item).not.toHaveAttribute("aria-checked");
   });
 
-  it("renders up to two arc nodes flanking the trigger", () => {
-    const onSelect = vi.fn();
-    render(
-      <RadialNodeMenu
-        trigger={<span>Trigger</span>}
-        triggerLabel="Open menu"
-        nodes={[]}
-        arcNodes={[
-          { key: "left", icon: <span>L</span>, label: "Left action", onSelect },
-          {
-            key: "right",
-            icon: <span>R</span>,
-            label: "Right action",
-            onSelect,
-          },
-        ]}
-      />,
-    );
+  it("spreads every node out (not just the first two) across the fan", () => {
+    renderMenu();
     fireEvent.click(screen.getByLabelText("Open menu"));
 
-    fireEvent.click(screen.getByLabelText("Left action"));
-    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Option A")).toBeInTheDocument();
+    expect(screen.getByLabelText("Option B")).toBeInTheDocument();
+    expect(screen.getByLabelText("Option C")).toBeInTheDocument();
   });
 
-  it("selecting an arc node also closes the branch, same as a list node", () => {
-    const onSelect = vi.fn();
-    render(
-      <RadialNodeMenu
-        trigger={<span>Trigger</span>}
-        triggerLabel="Open menu"
-        nodes={[]}
-        arcNodes={[
-          { key: "left", icon: <span>L</span>, label: "Left action", onSelect },
-        ]}
-      />,
-    );
-    const trigger = screen.getByLabelText("Open menu");
-    fireEvent.click(trigger);
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-
-    fireEvent.click(screen.getByLabelText("Left action"));
-
-    expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-  });
-
-  describe("edge-avoidance alignment", () => {
-    let originalInnerWidth: number;
-
-    beforeEach(() => {
-      originalInnerWidth = window.innerWidth;
-    });
-
+  describe("edge-avoidance shift", () => {
     afterEach(() => {
       Object.defineProperty(window, "innerWidth", {
         configurable: true,
-        value: originalInnerWidth,
+        value: 1024,
       });
     });
 
-    it("anchors the panel to the right edge of the trigger when it would clip the right of the viewport", () => {
+    it("shifts the fan left when a node would clip the right edge of the viewport", () => {
       Object.defineProperty(window, "innerWidth", {
         configurable: true,
         value: 400,
@@ -202,12 +186,17 @@ describe("RadialNodeMenu", () => {
       renderMenu();
       fireEvent.click(screen.getByLabelText("Open menu"));
 
-      const trigger = screen.getByLabelText("Open menu");
-      const root = trigger.parentElement as HTMLElement;
-      expect(root.className).toContain("radial-node-menu--align-right");
+      const item = screen
+        .getByLabelText("Option A")
+        .closest(".radial-node-menu__fan-item") as HTMLElement;
+      const fanX = item.style.getPropertyValue("--fan-x");
+      // Base offset for a 3-node fan's first item is negative (left side);
+      // a rightward clip should push shiftX negative too, so the combined
+      // value stays well below the unshifted base.
+      expect(parseFloat(fanX)).toBeLessThan(-20);
     });
 
-    it("anchors the panel to the left edge of the trigger when it would clip the left of the viewport", () => {
+    it("shifts the fan right when a node would clip the left edge of the viewport", () => {
       vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
         top: 0,
         bottom: 0,
@@ -223,9 +212,15 @@ describe("RadialNodeMenu", () => {
       renderMenu();
       fireEvent.click(screen.getByLabelText("Open menu"));
 
-      const trigger = screen.getByLabelText("Open menu");
-      const root = trigger.parentElement as HTMLElement;
-      expect(root.className).toContain("radial-node-menu--align-left");
+      // Option C sits rightmost in the base (unshifted) fan, so a
+      // rightward shift is unambiguous here (unlike Option A, whose
+      // negative base offset a rightward shift would only partially
+      // cancel out).
+      const item = screen
+        .getByLabelText("Option C")
+        .closest(".radial-node-menu__fan-item") as HTMLElement;
+      const fanX = item.style.getPropertyValue("--fan-x");
+      expect(parseFloat(fanX)).toBeGreaterThan(20);
     });
   });
 });

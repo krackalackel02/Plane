@@ -48,25 +48,11 @@ export const ModeIcon = ({ mode }: { mode: ExhaustMode }) => (
   </svg>
 );
 
-const ChevronIcon = ({ direction }: { direction: "left" | "right" }) => (
-  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-    <path
-      d={direction === "left" ? "M14 6l-6 6 6 6" : "M10 6l6 6-6 6"}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-// Speed-dial-style icon button that branches out into one node per exhaust
-// look, built on the shared RadialNodeMenu template (see radialNodeMenu.tsx)
+// Speed-dial-style icon button whose sub-options fan out in an arc below
+// it, built on the shared RadialNodeMenu template (see radialNodeMenu.tsx)
 // - the same template any other HUD button with sub-options (e.g. a future
-// audio submenu) can adopt. The vertical list beneath the trigger holds the
-// full picker (all three looks); the arc nodes flanking it left/right are a
-// quick-cycle shortcut to the previous/next look without opening the list.
+// audio submenu) can adopt. The three exhaust looks are the arc itself,
+// not a separate list stacked underneath a quick-cycle shortcut.
 const ExhaustModeButton = () => {
   const { mode, setMode } = useExhaustModeContext();
 
@@ -78,33 +64,11 @@ const ExhaustModeButton = () => {
     onSelect: () => setMode(option),
   }));
 
-  const currentIndex = EXHAUST_MODE_ORDER.indexOf(mode);
-  const modeCount = EXHAUST_MODE_ORDER.length;
-  const previousMode =
-    EXHAUST_MODE_ORDER[(currentIndex - 1 + modeCount) % modeCount];
-  const nextMode = EXHAUST_MODE_ORDER[(currentIndex + 1) % modeCount];
-
-  const arcNodes: RadialMenuNode[] = [
-    {
-      key: "previous",
-      icon: <ChevronIcon direction="left" />,
-      label: `Previous exhaust style: ${MODE_LABEL[previousMode]}`,
-      onSelect: () => setMode(previousMode),
-    },
-    {
-      key: "next",
-      icon: <ChevronIcon direction="right" />,
-      label: `Next exhaust style: ${MODE_LABEL[nextMode]}`,
-      onSelect: () => setMode(nextMode),
-    },
-  ];
-
   return (
     <RadialNodeMenu
       trigger={<ModeIcon mode={mode} />}
       triggerLabel={`Exhaust style: ${MODE_LABEL[mode]} (open to switch)`}
       nodes={nodes}
-      arcNodes={arcNodes}
     />
   );
 };

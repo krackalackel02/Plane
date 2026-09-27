@@ -23,20 +23,33 @@ export interface RadialNodeMenuProps {
   trigger: React.ReactNode;
   /** Accessible name for the trigger button. */
   triggerLabel: string;
-  /** Full stacked list dropped in the connected vertical panel beneath the trigger. */
+  /** The sub-options themselves, fanned out in an arc below the trigger. */
   nodes: RadialMenuNode[];
-  /** Optional quick-access nodes that pop out left/right of the trigger,
-   *  inline on the same bar axis. Capped at 2 (one per side) - more would
-   *  need a real arc layout, which no current caller needs. */
-  arcNodes?: RadialMenuNode[];
   className?: string;
 }
 
 /* eslint-disable react/prop-types -- TS interfaces already cover this */
 
-type Align = "center" | "left" | "right";
-
+const FAN_RADIUS = 54;
+const DEGREES_PER_GAP = 34;
+const MAX_SWEEP_DEGREES = 150;
 const EDGE_MARGIN = 8;
+
+/** Angle (degrees, 0 = straight down, negative = left) each node sits at,
+ *  evenly spread so the whole set reads as one arc rather than a stack. */
+const fanAngle = (index: number, count: number) => {
+  if (count <= 1) return 0;
+  const sweep = Math.min(MAX_SWEEP_DEGREES, DEGREES_PER_GAP * (count - 1));
+  return -sweep / 2 + index * (sweep / (count - 1));
+};
+
+const fanOffset = (index: number, count: number) => {
+  const radians = (fanAngle(index, count) * Math.PI) / 180;
+  return {
+    dx: FAN_RADIUS * Math.sin(radians),
+    dy: FAN_RADIUS * Math.cos(radians),
+  };
+};
 
 const renderNode = (node: RadialMenuNode, extraClassName: string) => {
   const isPicker = node.active !== undefined;
@@ -59,29 +72,32 @@ const renderNode = (node: RadialMenuNode, extraClassName: string) => {
 };
 
 /**
- * Reusable "speed dial" trigger: a primary icon button that, on
- * hover (desktop) or tap (any device), branches into a connected vertical
- * list of sub-actions plus (optionally) one or two nodes that pop out
- * inline to the left/right of the trigger. Meant for any HUD button that
- * needs to offer a small set of sub-options without a full dropdown -
+ * Reusable "speed dial" trigger: a primary icon button that, on hover
+ * (desktop) or tap (any device), fans its sub-options out in an arc below
+ * it - the options themselves are the arc, not a separate dropdown. Meant
+ * for any HUD button that needs to offer a small set of sub-options -
  * exhaust style is the first caller; mute/volume can adopt it the same way
  * once it grows sub-options.
  *
- * State is driven in JS rather than CSS :hover so the open/closed/aligned
- * state is a plain render output, which is what makes this testable
- * without a real browser.
+ * State is driven in JS rather than CSS :hover so the open/closed state is
+ * a plain render output, which is what makes this testable without a real
+ * browser. An invisible "hover bridge" (see .radial-node-menu__hover-bridge
+ * in the CSS) covers the physical gap the mouse sweeps through between the
+ * trigger and a fanned-out node - without it, that gap is bare page/canvas,
+ * not part of this component's DOM subtree, so crossing it would fire
+ * onMouseLeave and collapse the branch before the cursor ever reaches the
+ * node it's headed for.
  */
 const RadialNodeMenu: React.FC<RadialNodeMenuProps> = ({
   trigger,
   triggerLabel,
   nodes,
-  arcNodes = [],
   className = "",
 }) => {
   const [expanded, setExpanded] = useState(false);
-  const [align, setAlign] = useState<Align>("center");
+  const [shiftX, setShiftX] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  const fanRef = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => setExpanded(false), []);
   const open = useCallback(() => setExpanded(true), []);
@@ -99,25 +115,45 @@ const RadialNodeMenu: React.FC<RadialNodeMenuProps> = ({
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [expanded, close]);
 
-  // Re-measure every time the branch opens: decide whether the centered
-  // vertical panel would clip past the viewport edge, and if so anchor it
-  // to whichever side of the trigger keeps it fully on-screen instead.
+  // Re-measure every time the branch opens: if the fanned-out nodes would
+  // clip past the viewport edge, shift the whole fan horizontally (rather
+  // than recomputing each node's angle) to bring it back on-screen.
+  //
+  // This deliberately does NOT call getBoundingClientRect on the fan nodes
+  // themselves: they're mid CSS-transition at this exact point (the class
+  // that starts the pop-out animation was just applied this same commit),
+  // so measuring them here reads their still-collapsed starting geometry,
+  // not where they're headed - which under-detects clipping and never
+  // corrects for it once the animation actually gets there. Instead this
+  // computes each node's target position arithmetically from the trigger's
+  // own (non-animating) rect plus the same fanOffset() math used to derive
+  // --fan-x/--fan-y, which is accurate regardless of transition timing.
   useLayoutEffect(() => {
     if (!expanded) {
-      setAlign("center");
+      setShiftX(0);
       return;
     }
-    const panel = listRef.current;
-    if (!panel) return;
-    const rect = panel.getBoundingClientRect();
-    if (rect.right > window.innerWidth - EDGE_MARGIN) {
-      setAlign("right");
-    } else if (rect.left < EDGE_MARGIN) {
-      setAlign("left");
-    } else {
-      setAlign("center");
+    const root = rootRef.current;
+    const count = nodes.length;
+    if (!root || count === 0) return;
+    const rootRect = root.getBoundingClientRect();
+    const centerX = rootRect.left + rootRect.width / 2;
+    const halfNodeSize = rootRect.width / 2;
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    for (let index = 0; index < count; index += 1) {
+      const { dx } = fanOffset(index, count);
+      minLeft = Math.min(minLeft, centerX + dx - halfNodeSize);
+      maxRight = Math.max(maxRight, centerX + dx + halfNodeSize);
     }
-  }, [expanded]);
+    if (maxRight > window.innerWidth - EDGE_MARGIN) {
+      setShiftX(window.innerWidth - EDGE_MARGIN - maxRight);
+    } else if (minLeft < EDGE_MARGIN) {
+      setShiftX(EDGE_MARGIN - minLeft);
+    } else {
+      setShiftX(0);
+    }
+  }, [expanded, nodes.length]);
 
   const selectNode = (node: RadialMenuNode) => {
     node.onSelect();
@@ -131,27 +167,13 @@ const RadialNodeMenu: React.FC<RadialNodeMenuProps> = ({
   return (
     <div
       ref={rootRef}
-      className={`radial-node-menu radial-node-menu--align-${align}${
-        arcNodes.length > 0 ? " radial-node-menu--has-arc" : ""
-      }${expanded ? " radial-node-menu--expanded" : ""}${
+      className={`radial-node-menu${expanded ? " radial-node-menu--expanded" : ""}${
         className ? ` ${className}` : ""
       }`}
       onMouseEnter={open}
       onMouseLeave={close}
     >
-      {arcNodes.slice(0, 2).map((node, index) => (
-        <div
-          key={node.key}
-          className={`radial-node-menu__arc radial-node-menu__arc--${
-            index === 0 ? "left" : "right"
-          }`}
-        >
-          {renderNode(
-            { ...node, onSelect: () => selectNode(node) },
-            "radial-node-menu__arc-node",
-          )}
-        </div>
-      ))}
+      <div className="radial-node-menu__hover-bridge" aria-hidden="true" />
 
       <button
         className="hud-icon-button"
@@ -166,23 +188,32 @@ const RadialNodeMenu: React.FC<RadialNodeMenuProps> = ({
       </button>
 
       <div
-        ref={listRef}
-        className="radial-node-menu__list"
+        ref={fanRef}
+        className="radial-node-menu__fan"
         role="menu"
         aria-hidden={!expanded}
       >
-        {nodes.map((node, index) => (
-          <div
-            key={node.key}
-            className="radial-node-menu__list-item"
-            style={{ transitionDelay: `${Math.min(index, 4) * 0.04}s` }}
-          >
-            {renderNode(
-              { ...node, onSelect: () => selectNode(node) },
-              "radial-node-menu__list-node",
-            )}
-          </div>
-        ))}
+        {nodes.map((node, index) => {
+          const { dx, dy } = fanOffset(index, nodes.length);
+          return (
+            <div
+              key={node.key}
+              className="radial-node-menu__fan-item"
+              style={
+                {
+                  "--fan-x": `${dx + shiftX}px`,
+                  "--fan-y": `${dy}px`,
+                  transitionDelay: `${Math.min(index, 4) * 0.03}s`,
+                } as React.CSSProperties
+              }
+            >
+              {renderNode(
+                { ...node, onSelect: () => selectNode(node) },
+                "radial-node-menu__fan-node",
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

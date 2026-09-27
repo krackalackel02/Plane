@@ -1,57 +1,70 @@
-/* Generic speed-dial trigger: a primary hud-icon-button that branches into
-   inline "arc" nodes (left/right of it, same bar axis) and a connected
-   vertical list dropped beneath it. Open/closed and alignment are plain
-   render output from radialNodeMenu.tsx (JS-driven, not :hover-driven), so
-   this file only styles what a given state already is - no ":hover"
-   selectors here. */
+/* Generic speed-dial trigger: a primary hud-icon-button whose sub-options
+   fan out in an arc below it. Open/closed state is plain render output
+   from radialNodeMenu.tsx (JS-driven, not :hover-driven), so this file
+   only styles what a given state already is - no ":hover" selectors here. */
 .radial-node-menu {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-/* --- Arc nodes: fan out diagonally below-left/below-right of the trigger.
-   Same-row (flanking the trigger inline in the bar) was the first attempt,
-   but this trigger normally sits packed between sibling HUD buttons with
-   only a couple px of gap - popping sideways landed squarely on top of the
-   neighbouring icon. Fanning downward instead uses the open space below
-   the bar (already proven clipping-safe by the vertical list) so a node
-   never has to fight a sibling for room. */
-.radial-node-menu__arc {
+/* Invisible hit-test area covering the physical gap the mouse sweeps
+   through between the trigger and a fanned-out node. Without this, that
+   gap is bare page (outside this component's DOM subtree entirely), so
+   crossing it on the way to a node would fire onMouseLeave and collapse
+   the branch before the cursor arrives. Sized generously around
+   FAN_RADIUS (see radialNodeMenu.tsx) rather than tightly, since erring
+   toward "stays open a bit too long" is the safe direction here. Placed
+   first in DOM order so the trigger/fan nodes (painted after it) stay on
+   top and remain clickable; only the empty gaps between them fall through
+   to the bridge. */
+.radial-node-menu__hover-bridge {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+}
+
+.radial-node-menu--expanded .radial-node-menu__hover-bridge {
+  top: 0;
+  left: -90px;
+  right: -90px;
+  bottom: -110px;
+}
+
+/* --- Fan: sub-options arc out below the trigger, one arc = the picker,
+   not a separate dropdown stacked underneath it. --- */
+.radial-node-menu__fan {
   position: absolute;
   top: 100%;
   left: 50%;
-  display: flex;
-  align-items: center;
+}
+
+.radial-node-menu__fan-item {
+  position: absolute;
+  top: 0;
+  left: 0;
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, 0) scale(0.4);
+  transform: translate(-50%, -50%) translate(0, 0) scale(0.4);
   transition:
     opacity 0.16s ease,
     transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.radial-node-menu--expanded .radial-node-menu__arc {
+.radial-node-menu--expanded .radial-node-menu__fan-item {
   opacity: 1;
   pointer-events: auto;
+  transform: translate(-50%, -50%) translate(var(--fan-x), var(--fan-y))
+    scale(1);
 }
 
-.radial-node-menu--expanded .radial-node-menu__arc--left {
-  transform: translate(calc(-50% - 30px), 26px) scale(1);
-}
-
-.radial-node-menu--expanded .radial-node-menu__arc--right {
-  transform: translate(calc(-50% + 30px), 26px) scale(1);
-}
-
-/* Unlike list nodes (which share one background panel), each arc node
-   floats on its own directly over the scene - it needs its own background
-   or a thin icon-only glyph disappears against the 3D canvas behind it.
-   Compounded with .hud-icon-button (not just .radial-node-menu__arc-node
-   alone) so this reliably outranks hud-icon-button's own same-specificity
-   width/background rule regardless of which stylesheet's <style> tag the
-   bundler happens to inject first. */
-.hud-icon-button.radial-node-menu__arc-node {
+/* Each node floats on its own directly over the scene - it needs its own
+   background or a thin icon-only glyph disappears against the 3D canvas
+   behind it. Compounded with .hud-icon-button (not just
+   .radial-node-menu__fan-node alone) so this reliably outranks
+   hud-icon-button's own same-specificity width/background rule regardless
+   of which stylesheet's <style> tag the bundler happens to inject first. */
+.hud-icon-button.radial-node-menu__fan-node {
   width: 30px;
   height: 30px;
   background: rgba(10, 14, 26, 0.75);
@@ -59,111 +72,22 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
-.radial-node-menu__arc-node svg {
+.radial-node-menu__fan-node svg {
   width: 15px;
   height: 15px;
 }
 
-/* --- Vertical list: connected panel dropped beneath the trigger --- */
-.radial-node-menu__list {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(10, 14, 26, 0.65);
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-50%) translateY(-6px);
-  transition:
-    opacity 0.18s ease,
-    transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* When arc nodes are in play they occupy the space just below the trigger
-   (see .radial-node-menu__arc above) - push the list further down so it
-   drops below the fanned-out petals instead of colliding with them. */
-.radial-node-menu--has-arc .radial-node-menu__list {
-  top: calc(100% + 48px);
-}
-
-/* Edge-avoidance: swap the anchor point instead of the centered transform
-   when the centered panel would clip the viewport (see the
-   getBoundingClientRect check in radialNodeMenu.tsx). */
-.radial-node-menu--align-left .radial-node-menu__list {
-  left: 0;
-  transform: translateX(0) translateY(-6px);
-}
-
-.radial-node-menu--align-right .radial-node-menu__list {
-  left: auto;
-  right: 0;
-  transform: translateX(0) translateY(-6px);
-}
-
-.radial-node-menu--expanded .radial-node-menu__list {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(-50%) translateY(0);
-}
-
-.radial-node-menu--align-left.radial-node-menu--expanded
-  .radial-node-menu__list,
-.radial-node-menu--align-right.radial-node-menu--expanded
-  .radial-node-menu__list {
-  transform: translateX(0) translateY(0);
-}
-
-.radial-node-menu__list-item {
-  transition:
-    opacity 0.16s ease,
-    transform 0.16s ease;
-}
-
-.hud-icon-button.radial-node-menu__list-node {
-  width: 30px;
-  height: 30px;
-}
-
-.radial-node-menu__list-node {
-  opacity: 0;
-  transform: scale(0.6) translateY(-6px);
-  transition:
-    opacity 0.16s ease,
-    transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.radial-node-menu__list-node svg {
-  width: 15px;
-  height: 15px;
-}
-
-.radial-node-menu--expanded .radial-node-menu__list-node {
-  opacity: 1;
-  transform: scale(1) translateY(0);
-}
-
-.radial-node-menu__list-node--active,
-.radial-node-menu__arc-node--active {
+.radial-node-menu__fan-node--active {
   color: #fff200;
 }
 
 @media (max-width: 768px) {
-  .hud-icon-button.radial-node-menu__list-node,
-  .hud-icon-button.radial-node-menu__arc-node {
+  .hud-icon-button.radial-node-menu__fan-node {
     width: 26px;
     height: 26px;
   }
 
-  .radial-node-menu__list-node svg,
-  .radial-node-menu__arc-node svg {
+  .radial-node-menu__fan-node svg {
     width: 13px;
     height: 13px;
   }
