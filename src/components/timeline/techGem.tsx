@@ -188,57 +188,59 @@ const TechGem: React.FC<{ tech: string; index: number; idle?: boolean }> = ({
   );
 };
 
-// Full loop time in degrees/sec - a complete revolution takes 360/this seconds.
+// Full loop time in degrees/sec while actively rotating between showcase
+// spots - a complete revolution (if it never paused) would take
+// 360/this seconds.
 const ROTATION_DEG_PER_SEC = 32;
 // Mirrors the carousel's old `perspective: 640px` CSS value, now applied
 // manually (see TechCarousel doc comment below) instead of via real CSS
 // perspective/3D transforms.
 const PERSPECTIVE_PX = 640;
-// Arc (in degrees either side of dead-center-front) over which the
-// "showcase" scale/brightness bump ramps in.
-const FOCUS_WINDOW_DEG = 60;
-const SCALE_SHADOW = 0.82;
-const SCALE_SHOWCASE = 1.3;
-const BRIGHTNESS_SHADOW = 0.55;
-const BRIGHTNESS_SHOWCASE = 1.35;
-// >1 warps each item's raw, evenly-spaced angle toward the front (0deg),
-// so several gems bunch up near the showcase spot while the rest of the
-// ring (mostly hidden around back) stays comparatively sparse - rather
-// than every item being equidistant all the way around.
-const CLUSTER_POWER = 2.3;
+// How long rotation holds still with a gem centered in the showcase spot
+// before advancing to the next one.
+const SHOWCASE_PAUSE_SEC = 1.1;
+// A gem's screen x-offset is radius*sin(angle), which is only monotonic
+// (i.e. further from center = further from its neighbors) for angles
+// within +-90deg of dead-center-front. Past that, sin folds back toward
+// 0, so a gem swinging around the back would visually cross paths with
+// whichever gem is trailing it in front - fade gems out approaching this
+// side-profile point and back in on the far side, same idea as the old
+// backface-visibility: hidden, so that never becomes visible.
+const FADE_START_DEG = 78;
+const FADE_END_DEG = 92;
 
 /**
- * Auto-rotating "3D" ring: gems sit around a circle whose axis is
- * vertical (Y). Their evenly-spaced base angle is warped (see
- * CLUSTER_POWER) so they bunch together near the front showcase spot
- * instead of spreading uniformly around the whole circle.
+ * Auto-rotating "3D" ring: gems sit evenly spaced around a circle whose
+ * axis is vertical (Y), stepping one slot at a time - rotate to bring the
+ * next gem to dead center, pause there for a beat so it can be read as
+ * the "showcase" gem, then rotate to the next one.
+ *
+ * This used to continuously rotate while also warping the (otherwise
+ * evenly spaced) angles to bunch several gems together near the front
+ * and scaling/brightening whichever was closest to center. That caused
+ * two problems: bunched-together gems could visually overlap (only
+ * partly fixable - see the z-index note below), and because a gem was
+ * still ramping into its "showcase" bump before the previous one had
+ * finished ramping out, they'd overlap mid-transition too. Pausing on
+ * each evenly-spaced showcase spot removes the timing overlap
+ * (transitions are simple, constant-spacing, constant-scale moves
+ * between holds), and dropping the artificial bunching/scale-bump
+ * removes the spatial one - gems are never closer together than their
+ * even base spacing, and the only size variation left is the natural
+ * perspective falloff below (nearer = bigger), not an extra effect
+ * layered on top.
  *
  * This used to be a real CSS 3D carousel (rotateY + translateZ on a
  * transform-style: preserve-3d ancestor, letting the browser's own 3D
  * depth-sort pick paint order). That native sort turned out to be
- * unreliable in practice: once CLUSTER_POWER packs several gems into
- * near-identical depths near the showcase spot, the browser can paint a
- * farther-back gem over a nearer one regardless of z-index or DOM order
- * (verified in the running app - both were tried and both failed to fix
- * it). So the "3D" here is now faked manually: each gem's angle is
- * projected to a 2D x-offset and scale using the standard perspective
- * formula (scale = P / (P - z)), and paint order is controlled with a
- * plain z-index - which, outside of a shared 3D rendering context, is
- * simply always honored. A per-frame loop advances the rotation phase
- * (pausing on hover/focus so a curious visitor can read a label) and
- * lights up whichever gem currently sits in the showcase spot, dimming
- * the rest into shadow.
- *
- * CLUSTER_POWER's bunching also means several gems' natural projected
- * positions land close enough to visually overlap near the showcase
- * spot. An earlier version of this component forcibly pushed overlapping
- * neighbors sideways to keep them apart, but that fights the circular
- * path every gem is actually moving along - the forced position and the
- * natural rotated position disagree, so gems visibly jump/jutter instead
- * of moving smoothly. Left alone (just the z-index fix above), an
- * overlap during the crowded moment just looks like one gem correctly
- * sliding in front of another as they rotate through the showcase spot,
- * which reads as normal carousel motion rather than a glitch.
+ * unreliable in practice: once several gems land at near-identical
+ * depths, the browser can paint a farther-back gem over a nearer one
+ * regardless of z-index or DOM order (verified in the running app - both
+ * were tried and both failed to fix it). So the "3D" here is faked
+ * manually instead: each gem's angle is projected to a 2D x-offset and
+ * scale using the standard perspective formula (scale = P / (P - z)),
+ * and paint order is controlled with a plain z-index - which, outside of
+ * a shared 3D rendering context, is simply always honored.
  */
 const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -247,6 +249,9 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
   const radiusRef = useRef(140);
   const rotationRef = useRef(0);
   const pausedRef = useRef(false);
+  // Seconds remaining in the current showcase-spot dwell (0 = actively
+  // rotating toward the next slot).
+  const stepPauseRef = useRef(0);
   const rafRef = useRef(0);
   const lastTimeRef = useRef<number | null>(null);
   const count = techStack.length;
@@ -279,23 +284,34 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
       const deltaSec = Math.min((time - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = time;
 
+      const slotAngle = 360 / count;
+
       if (!pausedRef.current && !prefersReducedMotion) {
-        rotationRef.current =
-          (rotationRef.current + ROTATION_DEG_PER_SEC * deltaSec) % 360;
+        if (stepPauseRef.current > 0) {
+          stepPauseRef.current = Math.max(0, stepPauseRef.current - deltaSec);
+        } else {
+          const prevRotation = rotationRef.current;
+          const nextRotation = prevRotation + ROTATION_DEG_PER_SEC * deltaSec;
+          // Snap exactly onto the next showcase spot the instant we'd
+          // otherwise overshoot it, then hold there for a beat, so gems
+          // only ever move at a constant rate between two evenly-spaced,
+          // stationary slots instead of drifting past center.
+          if (Math.floor(nextRotation / slotAngle) > Math.floor(prevRotation / slotAngle)) {
+            rotationRef.current =
+              (Math.floor(nextRotation / slotAngle) * slotAngle) % 360;
+            stepPauseRef.current = SHOWCASE_PAUSE_SEC;
+          } else {
+            rotationRef.current = nextRotation % 360;
+          }
+        }
       }
 
       itemRefs.current.forEach((item, index) => {
         if (!item) return;
-        const inner = item.firstElementChild as HTMLElement | null;
-        if (!inner) return;
 
-        const baseAngle = (360 / count) * index;
-        let raw = (baseAngle + rotationRef.current) % 360;
-        if (raw > 180) raw -= 360;
-
-        const fraction = Math.abs(raw) / 180;
-        const warpedFraction = Math.pow(fraction, CLUSTER_POWER);
-        const displayAngle = Math.sign(raw) * warpedFraction * 180;
+        const baseAngle = slotAngle * index;
+        let displayAngle = (baseAngle + rotationRef.current) % 360;
+        if (displayAngle > 180) displayAngle -= 360;
         const rad = (displayAngle * Math.PI) / 180;
 
         // z: signed depth along the camera axis (+radius = closest to the
@@ -307,12 +323,18 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
         item.style.transform = `translateX(${x * projScale}px) scale(${projScale})`;
         item.style.zIndex = String(Math.round(z * 1000));
 
-        const focus = Math.max(
-          0,
-          1 - Math.abs(displayAngle) / FOCUS_WINDOW_DEG,
-        );
-        inner.style.transform = `scale(${SCALE_SHADOW + focus * (SCALE_SHOWCASE - SCALE_SHADOW)})`;
-        inner.style.filter = `brightness(${BRIGHTNESS_SHADOW + focus * (BRIGHTNESS_SHOWCASE - BRIGHTNESS_SHADOW)})`;
+        const opacity =
+          1 -
+          Math.min(
+            1,
+            Math.max(
+              0,
+              (Math.abs(displayAngle) - FADE_START_DEG) /
+                (FADE_END_DEG - FADE_START_DEG),
+            ),
+          );
+        item.style.opacity = String(opacity);
+        item.style.pointerEvents = opacity < 0.05 ? "none" : "auto";
       });
 
       rafRef.current = requestAnimationFrame(tick);
@@ -349,9 +371,7 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
                 itemRefs.current[index] = el;
               }}
             >
-              <div className="tech-carousel-item-inner">
-                <TechGem tech={tech} index={index} idle={false} />
-              </div>
+              <TechGem tech={tech} index={index} idle={false} />
             </div>
           ))}
         </div>

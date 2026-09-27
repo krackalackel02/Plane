@@ -49,10 +49,6 @@
   will-change: transform;
 }
 
-.tech-carousel-item-inner {
-  will-change: transform, filter;
-}
-
 .tech-gem {
   position: relative;
   border: none;
