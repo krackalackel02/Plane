@@ -24,9 +24,15 @@
   animation: autopilot-flash 0.9s steps(2, jump-none) infinite;
 }
 
+/* On mobile the HUD corner cluster (audio/exhaust/help buttons, z-index 30)
+   docks top-right and its bottom edge reaches ~50px below the safe-area
+   inset - taller than this banner's old top:32px offset, so its top-right
+   corner painted over the banner text. Push the banner below that cluster
+   instead of fighting it over z-index, since the buttons need to stay on
+   top for taps. */
 @media (max-width: 768px) {
   #autopilot-banner {
-    top: 32px;
+    top: calc(58px + env(safe-area-inset-top));
     font-size: clamp(0.85rem, 5.5vw, 1.4rem);
     letter-spacing: clamp(0.1rem, 1.5vw, 0.25rem);
   }
