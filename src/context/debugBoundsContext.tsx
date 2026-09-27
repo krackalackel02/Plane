@@ -26,6 +26,16 @@ const readStoredEnabled = (): boolean | null => {
   return null;
 };
 
+// Vite's DEV flag is tied to the command (serve vs build), not --mode - a
+// production bundle (`vite build`, what .github/workflows/main.yaml ships
+// to GitHub Pages) is always DEV=false regardless of how it was built. So
+// this gate, unlike `showBounds` below, can't be flipped on by anything a
+// deployed site's visitor could do (pressing "B", or setting localStorage
+// via devtools) - only by a dev actually running `vite`/`vite dev`, or by
+// someone deliberately building with VITE_SHOW_BOUNDS=true (same opt-in
+// convention as VITE_INCLUDE_SANDBOX in vite.config.ts).
+const canActivate = import.meta.env.DEV;
+
 // Lets the "B" hotkey toggle wireframe bounding boxes around debuggable
 // objects (ship, boards, ...) live, without needing VITE_SHOW_BOUNDS + a
 // reload. Falls back to that env var only the first time, before the
@@ -35,19 +45,25 @@ export const DebugBoundsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { showBounds } = useEnvironment();
+  const toggleAllowed = canActivate || showBounds;
   const [enabled, setEnabled] = useState<boolean>(
-    () => readStoredEnabled() ?? showBounds,
+    () => toggleAllowed && (readStoredEnabled() ?? showBounds),
   );
 
   const toggle = useCallback(() => {
+    if (!toggleAllowed) return;
     setEnabled((prev) => {
       const next = !prev;
       window.localStorage.setItem(STORAGE_KEY, String(next));
       return next;
     });
-  }, []);
+  }, [toggleAllowed]);
 
   useEffect(() => {
+    // Never even attaches the listener on a real production build (no
+    // VITE_SHOW_BOUNDS override baked in) - a deployed site's visitor has
+    // no way to switch this overlay on, not even via localStorage.
+    if (!toggleAllowed) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== "b") return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -57,7 +73,7 @@ export const DebugBoundsProvider: React.FC<{ children: React.ReactNode }> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggle]);
+  }, [toggleAllowed, toggle]);
 
   return (
     <DebugBoundsContext.Provider value={{ enabled, toggle }}>
