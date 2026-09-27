@@ -70,6 +70,10 @@ const hasAnyRealControlKey = (activeKeys: Set<string>) =>
       activeKeys.has(positive) || activeKeys.has(negative),
   );
 
+// How much faster throttle accelerates and how much higher its top speed
+// goes while the boost key is held.
+const BOOST_MULTIPLIER = 1.6;
+
 /**
  * Props for Physics component
  * - groupRef: Reference to the ship's group object
@@ -192,9 +196,18 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
       }
     }
 
+    const isBoosting = activeKeys.has(keys.boost);
+
     Object.entries(motions.current).forEach(([type, motion]) => {
       if (type === Motion.ROLL && activeTrickRef.current !== null) return;
-      const config = params[type as keyof typeof params];
+      let config = params[type as keyof typeof params];
+      if (type === Motion.THROTTLE && isBoosting) {
+        config = {
+          ...config,
+          acceleration: config.acceleration * BOOST_MULTIPLIER,
+          maxSpeed: config.maxSpeed * BOOST_MULTIPLIER,
+        };
+      }
       motion.updateConfig(config);
       motion.update(delta, activeKeys);
     });

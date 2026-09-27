@@ -29,6 +29,31 @@
   font-size: 1.6rem;
 }
 
+/* Mini preview of the exhaust-mode HUD button's own icons, so this row
+   reads as "here's what that button looks like" rather than needing its
+   own separate visual language. */
+.help-exhaust-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.help-exhaust-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.help-exhaust-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
 .help-copy {
   margin: 0;
   font-weight: 500;

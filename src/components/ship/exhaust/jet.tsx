@@ -2,13 +2,14 @@
 import constants from "../../../utils/constants.json"; // Import constants for exhaust configuration
 import { deg2rad } from "../../../utils/3d"; // Utility to convert degrees to radians
 
-import ParticleGenerator from "./particleGenerator"; // Particle generator component
+import ExhaustGenerator from "./generator"; // Mode-dispatching exhaust generator
 
 interface JetProps {
   coneAngle?: number; // Cone angle in radians
   position: [number, number, number]; // Position of the jet
   active: boolean; // Whether the jet is active
   reverse: boolean; // Whether the jet is in reverse mode
+  boost?: boolean; // Whether the boost key is held
 }
 
 const Jet: React.FC<JetProps> = ({
@@ -16,14 +17,15 @@ const Jet: React.FC<JetProps> = ({
   position = [0, 0, 0],
   active,
   reverse,
+  boost = false,
 }) => {
   return (
-    <ParticleGenerator
+    <ExhaustGenerator
       active={active}
       reverse={reverse}
       position={position}
-      count={200}
       coneAngle={coneAngle}
+      boost={boost}
     />
   );
 };

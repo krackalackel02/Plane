@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { useControlState } from "../../../context/keyContext"; // Import control state hook
+import { useControlState, useKeyContext } from "../../../context/keyContext"; // Import control state hook
 import { useAutopilot } from "../../../context/autopilotContext";
 import { useTrick } from "../../../context/trickContext";
 import { audioEngine } from "../../../audio/audioEngine";
+import keys from "../../../utils/keys.json";
 
 import Jet from "./jet"; // Import Jet component
 
@@ -11,6 +12,7 @@ const Exhaust: React.FC = () => {
   const leftJetPosition: [number, number, number] = [0.5, 0.75, -0.5]; // Left position
   const { direction, turn } = useControlState(); // Only consume exhaust state
   const { isFlying } = useAutopilot();
+  const activeKeys = useKeyContext();
   const { activeTrickDirection } = useTrick();
 
   // Determine if jets are active based on direction and turn
@@ -25,6 +27,10 @@ const Exhaust: React.FC = () => {
     isLeftJetActive = !isLeftJetActive;
     isRightJetActive = !isRightJetActive;
   }
+
+  // Boosting only reads as "boosting" while the jet firing it is actually
+  // pushing the ship forward - not on reverse thrust or an idle jet.
+  const isBoosting = activeKeys.has(keys.boost) && !isReverse;
 
   // A barrel roll is driven by firing the jet opposite the roll direction
   // (more thrust on that side pushes the ship over) - flare it for the
@@ -48,11 +54,13 @@ const Exhaust: React.FC = () => {
         position={leftJetPosition}
         active={isLeftJetActive}
         reverse={isReverse}
+        boost={isBoosting && isLeftJetActive}
       />
       <Jet
         position={rightJetPosition}
         active={isRightJetActive}
         reverse={isReverse}
+        boost={isBoosting && isRightJetActive}
       />
     </>
   );

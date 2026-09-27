@@ -7,6 +7,7 @@ export type ControlKeys = {
   yaw: { positive: string; negative: string };
   throttle: { positive: string; negative: string };
   exhaust: string;
+  boost: string;
 };
 
 export type ControlState = {
