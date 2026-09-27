@@ -189,7 +189,7 @@ const TechGem: React.FC<{ tech: string; index: number; idle?: boolean }> = ({
 };
 
 // Full loop time in degrees/sec - a complete revolution takes 360/this seconds.
-const ROTATION_DEG_PER_SEC = 15;
+const ROTATION_DEG_PER_SEC = 32;
 // Arc (in degrees either side of dead-center-front) over which the
 // "showcase" scale/brightness bump ramps in.
 const FOCUS_WINDOW_DEG = 60;
