@@ -35,7 +35,13 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run build:e2e && npx vite preview --port 5173 --strictPort",
+    // In CI, a dedicated build-e2e job builds once and each shard
+    // downloads the resulting dist/ (see the workflows), so shards only
+    // need to preview it. Locally there's no such upstream job, so
+    // default to building it here too.
+    command: process.env.CI
+      ? "npm run preview:e2e"
+      : "npm run build:e2e && npm run preview:e2e",
     url: "http://localhost:5173/Plane/",
     reuseExistingServer: !process.env.CI,
     // Build + preview startup take longer than the dev server did.

@@ -8,6 +8,7 @@
 		"start": "vite --open",
 		"build": "tsc -b && vite build",
 		"build:e2e": "tsc -b && VITE_E2E_TEST_HOOKS=true vite build",
+		"preview:e2e": "vite preview --port 5173 --strictPort",
 		"lint": "eslint .",
 		"preview": "vite preview",
 		"test": "vitest --run ",

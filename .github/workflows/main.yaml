@@ -53,17 +53,46 @@ jobs:
       - name: Run tests
         run: npx vitest --run
 
+  # Job: builds the app once with the e2e test hooks enabled (see
+  # src/utils/e2eTestHooks.ts), so the 4 e2e shards below don't each
+  # redundantly rebuild it themselves.
+  build-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app with e2e test hooks enabled
+        run: npm run build:e2e
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-dist
+          path: dist/
+          retention-days: 1
+
   # Job: End-to-end tests (real mobile-device emulation: touch controls).
   # Runs in parallel with test/build.
   #
-  # Sharded across 4 runners instead of one. Each shard gets its own
-  # runner and its own `npm run dev` instance (webServer's
-  # reuseExistingServer is false in CI), so shards never share a dev
-  # server — the exact thing that made concurrent workers flaky inside
-  # a single process (see playwright.config.ts). workers stays 1 within
-  # each shard; the parallelism comes from running 4 shards at once.
-  # `needs: e2e` further down waits for every shard, not just one.
+  # Sharded across 4 runners instead of one, each running multiple
+  # Playwright workers (see playwright.config.ts). Runs against the
+  # build-e2e artifact via `vite preview` (static files) rather than the
+  # dev server — concurrent contexts against the dev server raced its
+  # on-demand module compilation and caused real flakiness, which static
+  # preview can't hit. `needs: e2e` further down waits for every shard,
+  # not just one.
   e2e:
+    needs: build-e2e
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -81,6 +110,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Download build
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-dist
+          path: dist/
 
       - name: Cache Playwright browsers
         id: playwright-cache
