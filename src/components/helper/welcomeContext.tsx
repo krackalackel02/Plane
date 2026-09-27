@@ -22,7 +22,7 @@ const WORDS_PER_MINUTE = 220;
 const READ_GRACE_MS = 5000;
 
 export const WELCOME_BODY = {
-  pc: "You're piloting a ship through a living, explorable portfolio. Steer with WASD and the arrow keys, boost with Space, and fly into any glowing board to open a project. Check the map in the corner anytime to see where everything is.",
+  pc: "You're piloting a ship through a living, explorable portfolio. Steer with WASD and the arrow keys, boost with Shift, and fly into any glowing board to open a project. Check the map in the corner anytime to see where everything is.",
   mobile:
     "You're piloting a ship through a living, explorable portfolio. Drag the joystick to fly, swipe the ship to look around, and tap any glowing board to open a project. Check the map in the corner anytime to see where everything is.",
 };

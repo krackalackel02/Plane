@@ -1,5 +1,5 @@
 import { useKeyContext } from "../../context/keyContext";
-import keys from "../../utils/keys.json";
+import { isBoostEngaged } from "../../utils/boost";
 import "./boostBanner.css";
 
 // Bright, flashing green HUD text shown while boost is engaged - either the
@@ -7,7 +7,7 @@ import "./boostBanner.css";
 // Plain HTML (not inside the Canvas) - same pattern as AutopilotBanner.
 const BoostBanner = () => {
   const activeKeys = useKeyContext();
-  const isBoosting = activeKeys.has(keys.boost);
+  const isBoosting = isBoostEngaged(activeKeys);
 
   if (!isBoosting) return null;
 

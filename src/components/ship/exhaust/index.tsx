@@ -3,7 +3,7 @@ import { useControlState, useKeyContext } from "../../../context/keyContext"; //
 import { useAutopilot } from "../../../context/autopilotContext";
 import { useTrick } from "../../../context/trickContext";
 import { audioEngine } from "../../../audio/audioEngine";
-import keys from "../../../utils/keys.json";
+import { isBoostEngaged } from "../../../utils/boost";
 
 import Jet from "./jet"; // Import Jet component
 
@@ -29,8 +29,10 @@ const Exhaust: React.FC = () => {
   }
 
   // Boosting only reads as "boosting" while the jet firing it is actually
-  // pushing the ship forward - not on reverse thrust or an idle jet.
-  const isBoosting = activeKeys.has(keys.boost) && !isReverse;
+  // pushing the ship forward - not on reverse thrust or an idle jet - and
+  // only while some real steering/throttle input is held alongside the
+  // boost key (see isBoostEngaged).
+  const isBoosting = isBoostEngaged(activeKeys) && !isReverse;
 
   // A barrel roll is driven by firing the jet opposite the roll direction
   // (more thrust on that side pushes the ship over) - flare it for the
