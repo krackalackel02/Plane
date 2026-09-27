@@ -12,6 +12,17 @@
   height: 100%;
 }
 
+/* Held at opacity 0 until the 3D scene is ready, then fades in alongside
+   it instead of appearing before the ship/timeline have loaded. */
+.scene-chrome {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.scene-chrome--visible {
+  opacity: 1;
+}
+
 .card {
   margin-top: 1rem;
 }

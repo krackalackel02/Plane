@@ -1,18 +1,20 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useLoader, ThreeEvent } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
 import { useAutopilot } from "../../context/autopilotContext";
 import { Geometry, Base, Subtraction } from "@react-three/csg";
 
-// Leva for UI controls
-import { useControls } from "leva";
+// Leva's debug panel is only used when helper=true (never in production
+// usage). Lazy-load it so leva and its deps (radix-ui, etc.) split into
+// their own chunk instead of bloating the main bundle every visitor pays for.
+const BoardDebugControls = lazy(() => import("./boardDebugControls"));
 
 // Import board parameters from JSON
 import boardParams from "../../utils/boardParams.json"; // Import JSON file
 import { RoundedBoxGeometry } from "three-stdlib";
 import { BoardParams } from "../types/boardTypes";
-import { createSaveButton, getBoardMatWorldPosition } from "../../utils/3d";
+import { getBoardMatWorldPosition } from "../../utils/3d";
 import ActivationZone from "./activationZone";
 
 /**
@@ -32,8 +34,13 @@ const defaultValues: BoardParams = {
   depth: 0.25,
 };
 
-// Material component for the board
-const Material = () => {
+// Every board (8 of them) uses the same aluminium frame material. Share a
+// single MeshStandardMaterial instance across all of them instead of
+// building 8 identical ones - cuts redundant material/shader setup work
+// during the scene's first render.
+let sharedAluminiumMaterial: THREE.MeshStandardMaterial | null = null;
+
+const useAluminiumMaterial = () => {
   const baseColorMap = useLoader(
     TextureLoader,
     "./textures/aluminium/base.jpg",
@@ -48,15 +55,18 @@ const Material = () => {
     "./textures/aluminium/rough.png",
   );
 
-  return (
-    <meshStandardMaterial
-      map={baseColorMap} // Base color
-      metalnessMap={metallicMap} // Metallic property
-      normalMap={normalMap} // Surface details
-      roughnessMap={roughnessMap} // Roughness property
-      side={THREE.DoubleSide} // Ensure visibility on both sides
-    />
-  );
+  return useMemo(() => {
+    if (!sharedAluminiumMaterial) {
+      sharedAluminiumMaterial = new THREE.MeshStandardMaterial({
+        map: baseColorMap,
+        metalnessMap: metallicMap,
+        normalMap,
+        roughnessMap,
+        side: THREE.DoubleSide,
+      });
+    }
+    return sharedAluminiumMaterial;
+  }, [baseColorMap, metallicMap, normalMap, roughnessMap]);
 };
 
 interface PictureFrameProps {
@@ -71,6 +81,7 @@ const PictureFrame = ({
   debugValue, // NEW: Add debugValue prop
 }: PictureFrameProps) => {
   const { outerX, outerY, outerZ, frame, depth } = params;
+  const material = useAluminiumMaterial();
 
   const delta = 0.05;
   const validateDimensions = () => {
@@ -131,7 +142,7 @@ const PictureFrame = ({
 
   return (
     <mesh rotation={[0, -Math.PI / 2, 0]}>
-      <Material />
+      <primitive object={material} attach="material" />
       <Geometry>
         <Base geometry={new RoundedBoxGeometry(...outer, 4, 0.2)}></Base>
         <Subtraction
@@ -200,40 +211,17 @@ const Board = ({
   const updateParam = (key: keyof BoardParams) => (value: number) =>
     setParams((prev) => ({ ...prev, [key]: value }));
 
-  // Helper function to create a control for Leva
-  const createControl = (
-    key: keyof BoardParams,
-    min: number,
-    max: number,
-    step: number,
-  ) => ({
-    value: params[key],
-    min,
-    max,
-    step,
-    onChange: updateParam(key),
-  });
-
-  // Leva controls for board parameters
-  if (helper)
-    useControls(
-      {
-        outerX: createControl("outerX", 1, 10, 0.1),
-        outerY: createControl("outerY", 1, 10, 0.1),
-        outerZ: createControl("outerZ", 0.1, 2, 0.05),
-        frame: createControl("frame", 0.1, 2, 0.05),
-        depth: createControl("depth", 0.1, 1, 0.05),
-        Save: createSaveButton(params, "boardParams.json"),
-      },
-      [params],
-    );
-
   return (
     <group
       position={position}
       rotation={rotation}
       onClick={handleAutopilotClick}
     >
+      {helper && (
+        <Suspense fallback={null}>
+          <BoardDebugControls params={params} updateParam={updateParam} />
+        </Suspense>
+      )}
       <PictureFrame
         params={params}
         texture={texture}

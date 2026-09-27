@@ -3,10 +3,17 @@ import * as THREE from "three";
 import anim from "./kframe.json";
 import gsap from "gsap";
 const kframe = anim.frames;
+const duration = 1.5;
+
+// Total wall-clock length of the intro flythrough - kept here (rather than
+// re-derived where it's needed) so anything that has to wait for the camera
+// to settle, e.g. the welcome popup, can't drift out of sync if the
+// keyframe count or per-frame duration ever changes.
+export const INTRO_ANIMATION_DURATION_MS = kframe.length * duration * 1000;
+
 const animate = (
   camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
 ) => {
-  const duration = 1.5;
   useEffect(() => {
     const timeline = gsap.timeline({ repeat: 0 });
 

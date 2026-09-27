@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { useControlState, useKeyContext } from "../../../context/keyContext"; // Import control state hook
 import { useAutopilot } from "../../../context/autopilotContext";
+import { audioEngine } from "../../../audio/audioEngine";
 import keys from "../../../utils/keys.json";
 
 import Jet from "./jet"; // Import Jet component
@@ -27,6 +29,13 @@ const Exhaust: React.FC = () => {
   // Boosting only reads as "boosting" while the jet firing it is actually
   // pushing the ship forward - not on reverse thrust or an idle jet.
   const isBoosting = activeKeys.has(keys.boost) && !isReverse;
+
+  // Space-engine "wirr" hum tracks whether either jet is firing.
+  const isEngineActive = isLeftJetActive || isRightJetActive;
+  useEffect(() => {
+    audioEngine.setEngineActive(isEngineActive);
+  }, [isEngineActive]);
+  useEffect(() => () => audioEngine.setEngineActive(false), []);
 
   return (
     <>

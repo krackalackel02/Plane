@@ -99,6 +99,7 @@ const Sphere: React.FC<SphereProps> = ({
                 background: "rgba(0, 0, 0, 0.75)",
                 color: "white",
                 borderRadius: "6px",
+                fontFamily: '"Orbitron", sans-serif',
                 fontSize: "14px",
                 whiteSpace: "nowrap",
                 transform: "translate(-50%, -150%)", // Position label above the sphere

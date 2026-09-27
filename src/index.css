@@ -1,5 +1,7 @@
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Brand typeface for the whole app - one family everywhere, hierarchy
+     comes from weight/size/color/letter-spacing, not from switching fonts. */
+  font-family: "Orbitron", system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
