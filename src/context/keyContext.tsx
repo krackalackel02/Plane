@@ -135,6 +135,20 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     [pressKey, releaseKey],
   );
 
+  // Backstop against any stuck-key path we haven't found yet - independent
+  // of whether keyup/blur actually fired. The page cannot genuinely have a
+  // key held down while it lacks focus, so periodically verify that ground
+  // truth and self-heal instead of trusting event delivery alone.
+  useEffect(() => {
+    const STUCK_KEY_POLL_MS = 7000;
+    const interval = setInterval(() => {
+      if (!document.hasFocus()) {
+        setActiveKeys((prev) => (prev.size === 0 ? prev : new Set()));
+      }
+    }, STUCK_KEY_POLL_MS);
+    return () => clearInterval(interval);
+  }, []);
+
   // Dev-only hook so Playwright (a real browser, unlike the component
   // tests' jsdom) can assert which keys a touch control actually produced.
   // import.meta.env.DEV is false in a production build, so this never
