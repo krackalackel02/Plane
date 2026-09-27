@@ -198,7 +198,9 @@ const RadialNodeMenu: React.FC<RadialNodeMenuProps> = ({
           return (
             <div
               key={node.key}
-              className="radial-node-menu__fan-item"
+              className={`radial-node-menu__fan-item${
+                expanded ? " radial-node-menu__fan-item--expanded" : ""
+              }`}
               style={
                 {
                   "--fan-x": `${dx + shiftX}px`,

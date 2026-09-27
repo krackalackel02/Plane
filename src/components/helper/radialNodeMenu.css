@@ -14,10 +14,21 @@
    crossing it on the way to a node would fire onMouseLeave and collapse
    the branch before the cursor arrives. Sized generously around
    FAN_RADIUS (see radialNodeMenu.tsx) rather than tightly, since erring
-   toward "stays open a bit too long" is the safe direction here. Placed
-   first in DOM order so the trigger/fan nodes (painted after it) stay on
-   top and remain clickable; only the empty gaps between them fall through
-   to the bridge. */
+   toward "stays open a bit too long" is the safe direction here.
+
+   Deliberately starts at `top: 100%` (the trigger's own bottom edge, same
+   anchor as .radial-node-menu__fan below) rather than covering the
+   trigger's own row - a position:absolute element like this one paints
+   above its plain in-flow siblings (the mute/help buttons docked either
+   side of this one in the shared HUD pill) regardless of DOM order, so if
+   it reached sideways at the trigger's own height it would silently
+   swallow hover meant for them and this button would never unhover when
+   the mouse moves onto a neighbour. Only reaching down into the open
+   space below - where nothing else lives - avoids that entirely.
+
+   Placed first in DOM order so the trigger/fan nodes (painted after it)
+   stay on top and remain clickable; only the empty gaps between them fall
+   through to the bridge. */
 .radial-node-menu__hover-bridge {
   position: absolute;
   inset: 0;
@@ -25,10 +36,10 @@
 }
 
 .radial-node-menu--expanded .radial-node-menu__hover-bridge {
-  top: 0;
-  left: -90px;
-  right: -90px;
-  bottom: -110px;
+  top: 100%;
+  left: -70px;
+  right: -70px;
+  height: 100px;
 }
 
 /* --- Fan: sub-options arc out below the trigger, one arc = the picker,
@@ -51,7 +62,7 @@
     transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.radial-node-menu--expanded .radial-node-menu__fan-item {
+.radial-node-menu__fan-item--expanded {
   opacity: 1;
   pointer-events: auto;
   transform: translate(-50%, -50%) translate(var(--fan-x), var(--fan-y))
