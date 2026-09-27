@@ -1,4 +1,5 @@
 import { Group, MathUtils } from "three";
+import { TrickDirection } from "../../../../../context/trickContext";
 
 export type TrickStatus = "playing" | "done";
 
@@ -10,6 +11,7 @@ export class TrickMotion {
   private group: Group | undefined;
   private progress = 0;
   private duration: number;
+  private direction: TrickDirection = 1;
 
   constructor(duration = 1.1) {
     this.duration = duration;
@@ -19,8 +21,9 @@ export class TrickMotion {
     this.group = group;
   }
 
-  start() {
+  start(direction: TrickDirection) {
     this.progress = 0;
+    this.direction = direction;
   }
 
   update(delta: number): TrickStatus {
@@ -30,7 +33,7 @@ export class TrickMotion {
     // Ease in/out so the roll spins up and settles rather than snapping to
     // a constant angular speed.
     const eased = MathUtils.smootherstep(this.progress, 0, 1);
-    this.group.rotation.z = eased * Math.PI * 2;
+    this.group.rotation.z = eased * Math.PI * 2 * this.direction;
 
     if (this.progress >= 1) {
       // 2*PI and 0 are the same orientation, so this is a seamless reset,

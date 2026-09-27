@@ -114,10 +114,11 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   // toward the stale destination.
   const activeTargetRef = useRef<AutopilotTarget | null>(null);
 
-  const { trickToken, clearTrick } = useTrick();
+  const { trickRequest, clearTrickRequest, setActiveTrickDirection } =
+    useTrick();
   const trickMotion = useRef(new TrickMotion());
-  // Tracks which trickToken is currently playing, mirroring
-  // activeTargetRef's pattern, so a fresh token (a new tap) is told apart
+  // Tracks which trickRequest id is currently playing, mirroring
+  // activeTargetRef's pattern, so a fresh request (a new tap) is told apart
   // from the one already animating.
   const activeTrickRef = useRef<number | null>(null);
 
@@ -173,19 +174,21 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
       return; // skip the four normal motions entirely this frame
     }
 
-    if (trickToken !== null && activeTrickRef.current !== trickToken) {
+    if (trickRequest !== null && activeTrickRef.current !== trickRequest.id) {
       // New tap on the ship - hand the roll axis to the trick animation so
       // it can't fight a held roll key while it plays.
       (motions.current[Motion.ROLL] as HarmonicMotion).pause();
-      trickMotion.current.start();
-      activeTrickRef.current = trickToken;
+      trickMotion.current.start(trickRequest.direction);
+      activeTrickRef.current = trickRequest.id;
+      setActiveTrickDirection(trickRequest.direction);
     }
 
     if (activeTrickRef.current !== null) {
       const status = trickMotion.current.update(delta);
       if (status === "done") {
         activeTrickRef.current = null;
-        clearTrick();
+        clearTrickRequest();
+        setActiveTrickDirection(null);
       }
     }
 

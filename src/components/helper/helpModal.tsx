@@ -59,6 +59,11 @@ const PcControls = () => (
       <div className="help-cluster help-cluster--text">🖱️</div>
       <p className="help-copy">Click a glowing board to fly there</p>
     </div>
+
+    <div className="help-row">
+      <div className="help-cluster help-cluster--text">🌀</div>
+      <p className="help-copy">Click the ship for a barrel roll trick</p>
+    </div>
   </div>
 );
 
@@ -71,7 +76,7 @@ const MobileControls = () => (
 
     <div className="help-row">
       <div className="help-cluster help-cluster--text">👆</div>
-      <p className="help-copy">Swipe directly on the ship to pitch and roll</p>
+      <p className="help-copy">Tap the ship for a barrel roll trick</p>
     </div>
 
     <div className="help-row">

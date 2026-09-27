@@ -13,7 +13,7 @@ describe("TrickMotion", () => {
   });
 
   test("rolls partway through the barrel roll mid-animation", () => {
-    motion.start();
+    motion.start(1);
 
     const status = motion.update(0.5);
     expect(status).toBe("playing");
@@ -21,8 +21,17 @@ describe("TrickMotion", () => {
     expect(group.rotation.z).toBeLessThan(Math.PI * 2);
   });
 
+  test("rolls the opposite way when started with direction -1", () => {
+    motion.start(-1);
+
+    const status = motion.update(0.5);
+    expect(status).toBe("playing");
+    expect(group.rotation.z).toBeLessThan(0);
+    expect(group.rotation.z).toBeGreaterThan(-Math.PI * 2);
+  });
+
   test("completes a full roll and resets to 0 rotation", () => {
-    motion.start();
+    motion.start(1);
 
     let status;
     for (let i = 0; i < 20 && status !== "done"; i++) {
@@ -35,7 +44,7 @@ describe("TrickMotion", () => {
 
   test("is done immediately if update is called before attaching to a group", () => {
     const unattached = new TrickMotion(1);
-    unattached.start();
+    unattached.start(1);
     expect(unattached.update(0.1)).toBe("done");
   });
 });
