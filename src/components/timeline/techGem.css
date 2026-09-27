@@ -12,10 +12,79 @@
   margin-bottom: 0.6rem;
 }
 
-.tech-gem-list {
+.tech-carousel {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tech-carousel-arrow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.tech-carousel-arrow:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  transform: scale(1.06);
+}
+
+.tech-carousel-arrow svg {
+  flex-shrink: 0;
+}
+
+.tech-carousel-track {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  perspective: 900px;
+  /* Extra top padding gives the hover/click tooltip room to render without
+     being clipped by this scroll container's box. */
+  padding-block: 2.4rem 0.4rem;
+}
+
+.tech-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+.tech-carousel-spacer {
+  flex: 0 0 calc(50% - 2rem);
+}
+
+.tech-carousel-item {
+  flex: 0 0 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: center;
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+  cursor: pointer;
+}
+
+.tech-carousel-item.is-centered {
+  cursor: default;
 }
 
 .tech-gem {
@@ -60,6 +129,10 @@
   50% {
     transform: rotate(7deg) scale(1.05);
   }
+}
+
+.tech-gem.no-idle .tech-gem-shape {
+  animation: none;
 }
 
 .tech-gem:hover .tech-gem-shape,
@@ -124,5 +197,9 @@
 @media (prefers-reduced-motion: reduce) {
   .tech-gem-shape {
     animation: none;
+  }
+
+  .tech-carousel-track {
+    scroll-behavior: auto;
   }
 }

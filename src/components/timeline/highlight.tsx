@@ -113,7 +113,9 @@ const Highlight: React.FC = () => {
           />
         )}
 
-        <div className="highlight-body">
+        {/* Scrolls independently so the CTA footer below stays put while
+            the (potentially long) description scrolls underneath it. */}
+        <div className="highlight-scroll">
           <Header text={projectData.title} />
 
           {projectData.techStack && (
@@ -123,13 +125,13 @@ const Highlight: React.FC = () => {
           {descriptionPoints && (
             <Description descriptionPoints={descriptionPoints} />
           )}
+        </div>
 
-          <div className="button-group">
-            {projectData.link && <DemoButton link={projectData.link} />}
-            {projectData.githubLink && (
-              <CodeButton link={projectData.githubLink} />
-            )}
-          </div>
+        <div className="button-group">
+          {projectData.link && <DemoButton link={projectData.link} />}
+          {projectData.githubLink && (
+            <CodeButton link={projectData.githubLink} />
+          )}
         </div>
       </div>
     </div>

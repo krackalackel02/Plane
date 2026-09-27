@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { IconType } from "react-icons";
+import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
 import {
   SiTypescript,
   SiJavascript,
@@ -143,9 +144,10 @@ const getFallbackLabel = (tech: string): string => {
   return tech.slice(0, 2).replace(/^./, (c) => c.toUpperCase());
 };
 
-const TechGem: React.FC<{ tech: string; index: number }> = ({
+const TechGem: React.FC<{ tech: string; index: number; idle?: boolean }> = ({
   tech,
   index,
+  idle = true,
 }) => {
   const [revealed, setRevealed] = useState(false);
   const meta = TECH_META[tech.toLowerCase()];
@@ -159,7 +161,7 @@ const TechGem: React.FC<{ tech: string; index: number }> = ({
   return (
     <button
       type="button"
-      className={`tech-gem${revealed ? " is-revealed" : ""}`}
+      className={`tech-gem${revealed ? " is-revealed" : ""}${idle ? "" : " no-idle"}`}
       style={
         {
           "--gem-from": gradient[0],
@@ -187,15 +189,151 @@ const TechGem: React.FC<{ tech: string; index: number }> = ({
   );
 };
 
-const TechStackRow: React.FC<{ techStack: string[] }> = ({ techStack }) => (
-  <div className="tech-stack-row">
-    <span className="tech-stack-label">Tech Stack</span>
-    <div className="tech-gem-list">
-      {techStack.map((tech, index) => (
-        <TechGem key={tech} tech={tech} index={index} />
-      ))}
-    </div>
-  </div>
-);
+const CENTER_THRESHOLD = 0.12;
+// Distance (px) from the carousel's center at which a gem reaches its
+// fully-receded state; beyond this, items just clamp at that same look.
+const FALLOFF_PX = 130;
+const MAX_ROTATE_DEG = 55;
 
-export default TechStackRow;
+/**
+ * Horizontal "coverflow" carousel: the centered gem sits flat and at full
+ * size, while neighbors recede in Z, rotate to face the center, shrink, and
+ * fade - then swap places as the user scrolls/swipes/drags through the
+ * strip. Built on native horizontal scroll + scroll-snap (for touch/trackpad
+ * momentum and keyboard/focus support) with a scroll listener driving the
+ * per-item 3D transform, since CSS alone can't express "transform based on
+ * distance from viewport center" across browsers yet.
+ */
+const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const centerIndexRef = useRef(0);
+  const rafRef = useRef(0);
+
+  const updateTransforms = useCallback(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const trackRect = track.getBoundingClientRect();
+    const centerX = trackRect.left + trackRect.width / 2;
+
+    let bestIndex = 0;
+    let bestDistance = Infinity;
+
+    itemRefs.current.forEach((item, index) => {
+      if (!item) return;
+      const itemRect = item.getBoundingClientRect();
+      const itemCenter = itemRect.left + itemRect.width / 2;
+      const distance = itemCenter - centerX;
+      const absDistance = Math.abs(distance);
+      const normalized = Math.max(-1, Math.min(1, distance / FALLOFF_PX));
+      const absNormalized = Math.abs(normalized);
+
+      const rotateY = normalized * -MAX_ROTATE_DEG;
+      const scale = 1 - absNormalized * 0.4;
+      const translateZ = -absNormalized * 40;
+      const opacity = 1 - absNormalized * 0.7;
+      const zIndex = Math.round((1 - absNormalized) * 50);
+
+      item.style.transform = `translateZ(${translateZ}px) rotateY(${rotateY}deg) scale(${scale})`;
+      item.style.opacity = String(opacity);
+      item.style.zIndex = String(zIndex);
+      item.classList.toggle("is-centered", absNormalized < CENTER_THRESHOLD);
+
+      if (absDistance < bestDistance) {
+        bestDistance = absDistance;
+        bestIndex = index;
+      }
+    });
+
+    centerIndexRef.current = bestIndex;
+  }, []);
+
+  useEffect(() => {
+    updateTransforms();
+    const track = trackRef.current;
+    if (!track) return;
+
+    const onScroll = () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(updateTransforms);
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      track.scrollLeft += event.deltaY;
+      event.preventDefault();
+    };
+
+    track.addEventListener("scroll", onScroll, { passive: true });
+    track.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      track.removeEventListener("scroll", onScroll);
+      track.removeEventListener("wheel", onWheel);
+      window.removeEventListener("resize", onScroll);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [updateTransforms, techStack.length]);
+
+  const scrollToIndex = (index: number) => {
+    itemRefs.current[index]?.scrollIntoView({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest",
+    });
+  };
+
+  return (
+    <div className="tech-stack-row">
+      <span className="tech-stack-label">Tech Stack</span>
+      <div className="tech-carousel">
+        {techStack.length > 1 && (
+          <button
+            type="button"
+            className="tech-carousel-arrow tech-carousel-arrow-prev"
+            aria-label="Previous tech"
+            onClick={() =>
+              scrollToIndex(Math.max(0, centerIndexRef.current - 1))
+            }
+          >
+            <FaChevronLeft aria-hidden="true" size={11} />
+          </button>
+        )}
+
+        <div className="tech-carousel-track" ref={trackRef}>
+          <div className="tech-carousel-spacer" aria-hidden="true" />
+          {techStack.map((tech, index) => (
+            <div
+              className="tech-carousel-item"
+              key={tech}
+              ref={(el) => {
+                itemRefs.current[index] = el;
+              }}
+              onClick={() => scrollToIndex(index)}
+              onFocus={() => scrollToIndex(index)}
+            >
+              <TechGem tech={tech} index={index} idle={false} />
+            </div>
+          ))}
+          <div className="tech-carousel-spacer" aria-hidden="true" />
+        </div>
+
+        {techStack.length > 1 && (
+          <button
+            type="button"
+            className="tech-carousel-arrow tech-carousel-arrow-next"
+            aria-label="Next tech"
+            onClick={() =>
+              scrollToIndex(
+                Math.min(techStack.length - 1, centerIndexRef.current + 1),
+              )
+            }
+          >
+            <FaChevronRight aria-hidden="true" size={11} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default TechCarousel;
