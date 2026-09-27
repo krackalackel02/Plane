@@ -3,12 +3,22 @@ import * as THREE from "three";
 import anim from "./kframe.json";
 import gsap from "gsap";
 const kframe = anim.frames;
+const duration = 1.5;
+
 const animate = (
   camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
+  ready: boolean,
+  // Fires when the flythrough's last keyframe transition actually finishes
+  // (the timeline's real GSAP onComplete) - not a fixed-duration estimate.
+  // Anything that needs to wait for the camera to settle (e.g. the welcome
+  // popup) should listen for this rather than guessing at a delay, since the
+  // animation's own start time already shifts with `ready`.
+  onComplete?: () => void,
 ) => {
-  const duration = 1.5;
   useEffect(() => {
-    const timeline = gsap.timeline({ repeat: 0 });
+    if (!ready) return;
+
+    const timeline = gsap.timeline({ repeat: 0, onComplete });
 
     kframe.forEach((frame, index) => {
       // Calculate the start time for each frame transition
@@ -51,7 +61,7 @@ const animate = (
     return () => {
       timeline.kill();
     };
-  }, [camera]);
+  }, [camera, ready, onComplete]);
 };
 
 export default animate;

@@ -61,7 +61,7 @@ class AudioEngine {
     this.masterGain = master;
 
     const music = ctx.createGain();
-    music.gain.value = 0.04; // always-on background, kept deliberately quiet
+    music.gain.value = 0.06; // always-on background, kept deliberately quiet
     music.connect(master);
     this.musicGain = music;
 
@@ -100,14 +100,23 @@ class AudioEngine {
 
   /**
    * Attempts to unlock playback. Call this from a real user-gesture event
-   * handler (click/keydown/touchstart) - browsers ignore the attempt
+   * handler (click/keydown/touchend) - browsers ignore the attempt
    * otherwise, so it's harmless to call speculatively (e.g. from `init`)
-   * before one has happened.
+   * before one has happened. Returns the underlying resume promise so
+   * callers can tell whether this particular attempt actually unlocked
+   * playback (a gesture type the browser doesn't recognize, e.g. a
+   * touchstart or a wheel tick, will resolve without moving the context
+   * out of "suspended").
    */
-  resume() {
+  resume(): Promise<void> | undefined {
     if (this.ctx && this.ctx.state === "suspended") {
-      void this.ctx.resume().catch(() => {});
+      return this.ctx.resume().catch(() => {});
     }
+    return undefined;
+  }
+
+  isRunning() {
+    return this.ctx?.state === "running";
   }
 
   isMuted() {
@@ -156,7 +165,7 @@ class AudioEngine {
     const now = ctx.currentTime;
     this.engineGain.gain.cancelScheduledValues(now);
     this.engineGain.gain.setTargetAtTime(
-      active ? 0.13 : 0,
+      active ? 0.1 : 0,
       now,
       active ? 0.4 : 0.6,
     );

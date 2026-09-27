@@ -1,0 +1,39 @@
+.help-modal {
+  width: min(440px, calc(100vw - 48px));
+}
+
+.help-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.help-cluster {
+  flex: 0 0 auto;
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.help-cluster--text {
+  font-size: 1.6rem;
+}
+
+.help-copy {
+  margin: 0;
+  font-weight: 500;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.85);
+}
