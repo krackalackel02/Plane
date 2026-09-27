@@ -36,15 +36,23 @@ test("the UI chrome does not appear before the 3D scene is ready", async ({
   // on a slow/CPU-throttled CI runner (headless WebGL, no real GPU) "ready"
   // can legitimately land right around that mark - give real headroom above
   // it rather than racing it, or this flakes under nothing but runner
-  // variance (observed in CI: chrome flipped in time but the very next
-  // check below then had only the default 5s left and missed).
+  // variance.
   await expect(page.locator(CHROME)).toHaveClass(/scene-chrome--visible/, {
     timeout: 20_000,
   });
-  await expect(page.locator(LOADING_SCREEN)).toHaveClass(
-    /loading-screen--hidden/,
-    { timeout: 10_000 },
-  );
+  // Not a toHaveClass(/loading-screen--hidden/) check: LoadingScreen only
+  // wears that class for FADE_OUT_MS (250ms, see loadingScreen.tsx) before
+  // unmounting itself outright, so a class-based assertion races that fixed
+  // 250ms window against whatever gap CI happens to insert between this
+  // check and the one above - and reliably loses under any real load, no
+  // matter how far the timeout above is raised, since by then the element
+  // is gone from the DOM for good rather than just slow to update. Asserting
+  // "not visible" instead accepts either transient state (opacity:0 while
+  // still mounted, or fully unmounted) as the pass condition, so it isn't
+  // racing an internal implementation timer at all.
+  await expect(page.locator(LOADING_SCREEN)).not.toBeVisible({
+    timeout: 10_000,
+  });
 });
 
 test("the scene becomes ready within an acceptable load-time budget", async ({
