@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useMemo } from "react";
 import { Points } from "three";
 import { useFrame } from "@react-three/fiber";
 
@@ -53,6 +53,17 @@ const ParticleGenerator: React.FC<ParticleGeneratorProps> = ({
   const lastGeneratedIndex = useRef(0);
   const isInitialized = useRef(false);
 
+  // Stable across re-renders (only recreated if `count` changes) - passing
+  // a fresh `new Float32Array(...)` inline in JSX on every render replaced
+  // the geometry's actual position/color buffers on every re-render of this
+  // component (which happens on every key press/release, since Exhaust
+  // re-renders on any activeKeys change), snapping every particle back to
+  // [0,0,0] and black. That produced a visible flash/pop at the jet origin
+  // right at each control transition - most noticeable exactly at the
+  // moment a key comes up.
+  const positionsArray = useMemo(() => new Float32Array(count * 3), [count]);
+  const colorsArray = useMemo(() => new Float32Array(count * 3), [count]);
+
   // Initialize particle positions and colors
   useEffect(() => {
     if (isInitialized.current) return; // Prevent re-initialization
@@ -97,14 +108,15 @@ const ParticleGenerator: React.FC<ParticleGeneratorProps> = ({
       velocities.current[idx + 1] *= speedDecay;
       velocities.current[idx + 2] *= speedDecay;
 
-      // Update position based on velocity
+      // Update position based on velocity. The Z sign for reverse is baked
+      // into velocities.current[idx + 2] at spawn time below, not decided
+      // here from the live `reverse` prop - otherwise every already-alive
+      // particle would flip its direction of travel the instant `reverse`
+      // toggles (e.g. releasing reverse throttle), producing a visible
+      // burst of particles suddenly reversing course mid-flight.
       positions[idx] += velocities.current[idx];
       positions[idx + 1] += velocities.current[idx + 1];
-      if (reverse) {
-        positions[idx + 2] -= velocities.current[idx + 2];
-      } else {
-        positions[idx + 2] += velocities.current[idx + 2];
-      }
+      positions[idx + 2] += velocities.current[idx + 2];
 
       // Decrease lifetime
       lifetimes.current[i] = Math.max(0, lifetimes.current[i] - decaySpeed);
@@ -130,12 +142,15 @@ const ParticleGenerator: React.FC<ParticleGeneratorProps> = ({
       const idx = lastGeneratedIndex.current * 3;
       const theta = Math.random() * 2 * Math.PI;
       const phi = Math.random() * coneAngle;
+      // Direction is fixed at spawn time from the current `reverse` prop -
+      // see the update loop above for why it must not be re-read live.
+      const zSign = reverse ? 1 : -1;
 
       velocities.current.set(
         [
           Math.sin(phi) * Math.cos(theta) * 0.2,
           Math.sin(phi) * Math.sin(theta) * 0.2,
-          -Math.cos(phi) * 0.2,
+          zSign * Math.cos(phi) * 0.2,
         ],
         idx,
       );
@@ -157,13 +172,13 @@ const ParticleGenerator: React.FC<ParticleGeneratorProps> = ({
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            array={new Float32Array(count * 3)}
+            array={positionsArray}
             count={count}
             itemSize={3}
           />
           <bufferAttribute
             attach="attributes-color"
-            array={new Float32Array(count * 3)}
+            array={colorsArray}
             count={count}
             itemSize={3}
           />
