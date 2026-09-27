@@ -85,6 +85,11 @@ const PcControls = () => (
     <div className="help-row">
       <div className="help-cluster help-cluster--text">🌀</div>
       <p className="help-copy">Click the ship for a barrel roll trick</p>
+    </div>
+
+    <div className="help-row">
+      <div className="help-cluster help-cluster--text">🌀</div>
+      <p className="help-copy">Click the ship for a barrel roll trick</p>
       <div className="help-cluster help-cluster--text">🗺️</div>
       <p className="help-copy">
         Click the map in the corner to expand it, then click a book icon to
