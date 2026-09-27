@@ -13,6 +13,7 @@
 		"test-watch": "vitest --watch",
 		"test:e2e": "playwright test",
 		"test:perf": "playwright test e2e/performance.spec.ts",
+		"test:all": "concurrently -n unit,e2e,build \"npm:test\" \"npm:test:e2e\" \"npm:build\"",
 		"perf:bundle-size": "node scripts/check-bundle-size.mjs",
 		"prepare": "husky"
 	},
@@ -55,6 +56,7 @@
 		"@typescript-eslint/eslint-plugin": "^8.18.1",
 		"@vitejs/plugin-react": "^4.3.4",
 		"@vitejs/plugin-vue": "^5.2.1",
+		"concurrently": "^10.0.5",
 		"eslint": "^9.17.0",
 		"eslint-config-prettier": "^9.1.0",
 		"eslint-plugin-import": "^2.31.0",

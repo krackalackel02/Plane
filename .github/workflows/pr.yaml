@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Job 1: Install Dependencies
-  install:
+  # Job: Unit tests (no dependency on e2e/build — starts immediately)
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -26,45 +26,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
 
-  # Job 2: Testing Job
-  test:
-    needs: install
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Restore node_modules cache
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
       - name: Run tests
         run: npx vitest --run
 
-  # Job 3: End-to-end Job (real mobile-device emulation: touch controls)
+  # Job: End-to-end tests (real mobile-device emulation: touch controls).
+  # Runs in parallel with test/build — no dependency between them.
   e2e:
-    needs: install
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -74,17 +46,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
-      - name: Restore node_modules cache
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
         uses: actions/cache@v4
         with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium webkit
+
+      - name: Install Playwright OS dependencies (browsers already cached)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium webkit
 
       - name: Run e2e tests
         run: npx playwright test
@@ -97,9 +77,11 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  # Job 4: Build Job (verifies the app actually builds; PRs don't deploy)
+  # Job: Build (verifies the app actually builds; PRs don't deploy).
+  # Doesn't consume test/e2e output, so it runs in parallel with them
+  # instead of waiting — a failing build shows up just as fast as a
+  # failing test.
   build:
-    needs: [test, e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -109,14 +91,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
-      - name: Restore node_modules cache
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build project with Npx Vite
         env:
