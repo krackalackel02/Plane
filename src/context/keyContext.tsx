@@ -7,6 +7,7 @@ import React, {
   useMemo,
 } from "react";
 import { print } from "../utils/common"; // Debug print utility
+import { E2E_TEST_HOOKS_ENABLED } from "../utils/e2eTestHooks";
 import keys from "../utils/keys.json"; // Key mappings
 import { ControlKeys, ControlState } from "../components/types/controlTypes"; // Control types/states
 
@@ -122,12 +123,12 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     [pressKey, releaseKey],
   );
 
-  // Dev-only hook so Playwright (a real browser, unlike the component
+  // Test-only hook so Playwright (a real browser, unlike the component
   // tests' jsdom) can assert which keys a touch control actually produced.
-  // import.meta.env.DEV is false in a production build, so this never
-  // ships to the deployed GitHub Pages bundle.
+  // See src/utils/e2eTestHooks.ts — never ships to the deployed GitHub
+  // Pages bundle.
   useEffect(() => {
-    if (import.meta.env.DEV) {
+    if (E2E_TEST_HOOKS_ENABLED) {
       (window as unknown as { __activeKeys?: Set<string> }).__activeKeys =
         activeKeys;
     }
