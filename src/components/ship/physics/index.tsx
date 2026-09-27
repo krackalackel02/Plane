@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 
 // Leva's debug panel is only used when helper=true (never in production
@@ -9,6 +9,7 @@ const PhysicsDebugControls = lazy(() => import("./physicsDebugControls"));
 import { Motion, createMotion } from "./helper/motion";
 import { useKeyContext } from "../../../context/keyContext";
 import { useScene } from "../../../context/sceneContext";
+import { useProjects } from "../../../context/projectContext";
 import {
   useAutopilot,
   AutopilotTarget,
@@ -18,6 +19,9 @@ import motionConstants from "../../../utils/motionConstants.json";
 import { HarmonicMotion } from "./motions/harmonic/harmonic";
 import { AutopilotMotion } from "./motions/autopilot/autopilot";
 import { TrickMotion } from "./motions/trick/trick";
+import { buildBoardObbs } from "./collision/boardCollision";
+import { calculatedBoardPositionsAndRotations } from "../../timeline/calculatedBoardPositionsAndRotations";
+import boardGeometry from "../../../utils/boardParams.json";
 import keys from "../../../utils/keys.json";
 
 /**
@@ -107,6 +111,14 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   const activeKeys = useKeyContext();
   const { target, cancelAutopilot, setIsFlying } = useAutopilot();
   const autopilotMotion = useRef(new AutopilotMotion());
+  const { items } = useProjects();
+  // Board footprints the autopilot flight path must route around (see
+  // AutopilotMotion.start) - same data ship/physics/collision derives
+  // independently for its own, per-frame reactive collision.
+  const boardObbs = useMemo(() => {
+    const boardsData = calculatedBoardPositionsAndRotations(items, "arc");
+    return buildBoardObbs(boardsData, boardGeometry);
+  }, [items]);
   // Tracks which request object is currently being flown to (not just a
   // flying/not-flying boolean), so a new requestAutopilot() call mid-flight
   // - a different target reference - is detected and restarts the path
@@ -156,6 +168,7 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
           groupRef.current!.position.clone(),
           target.position,
           target.arcRadius,
+          boardObbs,
           params.autopilot.speed,
         );
         activeTargetRef.current = target;

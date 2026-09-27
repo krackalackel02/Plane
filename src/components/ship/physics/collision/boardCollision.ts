@@ -98,3 +98,52 @@ export const resolveCircleObb = (
     normal: { x: worldPushX / pushMagnitude, z: worldPushZ / pushMagnitude },
   };
 };
+
+/**
+ * Nudges a point sideways, out from behind any board it's currently
+ * "shadowed" by, so a straight line from it to the world origin can't cut
+ * through that board's frame.
+ *
+ * Every board's own local facing axis (+u, away from the origin - see the
+ * class doc comment above) passes exactly through the origin by
+ * construction (calculatedBoardPositionsAndRotations places each board on
+ * a ray from the origin through its own center). So a point that is both
+ * on a board's far/outward side (u > halfDepth) and within its lateral
+ * span (|v| within halfWidth + clearance) has the origin sitting directly
+ * "behind" that board from its own point of view - a straight line home
+ * would clip straight through it. Used by AutopilotMotion to keep its
+ * "detour via the origin" fallback honest once the ship can roam past the
+ * board shell entirely (see ship/physics/collision's much larger world
+ * boundary).
+ *
+ * Points already on the origin side of every board (the overwhelmingly
+ * common case) pass through unchanged.
+ */
+export const clearBoardBearings = (
+  point: Vec2,
+  boardObbs: BoardObb[],
+  clearance: number,
+): Vec2 => {
+  let { x, z } = point;
+
+  for (const obb of boardObbs) {
+    const dx = x - obb.centerX;
+    const dz = z - obb.centerZ;
+    const cos = Math.cos(obb.rotationY);
+    const sin = Math.sin(obb.rotationY);
+    const u = dx * cos - dz * sin;
+    const v = dx * sin + dz * cos;
+    const clearSpan = obb.halfWidth + clearance;
+
+    if (u <= obb.halfDepth || Math.abs(v) >= clearSpan) continue;
+
+    // Shift laterally (shortest direction) just past the board's span,
+    // keeping the same distance "outward" (u) - board-local -> world,
+    // same forward rotation as resolveCircleObb's push-out above.
+    const clearedV = v >= 0 ? clearSpan : -clearSpan;
+    x = obb.centerX + u * cos + clearedV * sin;
+    z = obb.centerZ + -u * sin + clearedV * cos;
+  }
+
+  return { x, z };
+};

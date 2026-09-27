@@ -1,5 +1,10 @@
 import { describe, test, expect } from "vitest";
-import { buildBoardObbs, resolveCircleObb, type BoardObb } from "./boardCollision";
+import {
+  buildBoardObbs,
+  clearBoardBearings,
+  resolveCircleObb,
+  type BoardObb,
+} from "./boardCollision";
 
 describe("buildBoardObbs", () => {
   test("swaps outerZ/outerX onto depth/width per the board's baked -90deg rotation", () => {
@@ -69,5 +74,43 @@ describe("resolveCircleObb", () => {
       radius,
     );
     expect(hit).toBeNull();
+  });
+});
+
+describe("clearBoardBearings", () => {
+  // Unrotated board at the origin: its facing axis (+u, "away from the
+  // origin" - see resolveCircleObb's doc comment) is world +x, its lateral
+  // axis (v) is world +z.
+  const obb: BoardObb = {
+    centerX: 0,
+    centerZ: 0,
+    rotationY: 0,
+    halfDepth: 0.2,
+    halfWidth: 3.35,
+  };
+  const clearance = 3;
+
+  test("nudges a point sideways when it's shadowed directly behind a board", () => {
+    // Well past the board (u=10 >> halfDepth) and dead-center laterally
+    // (v=0) - a straight line to the origin would cut right through it.
+    const result = clearBoardBearings({ x: 10, z: 0 }, [obb], clearance);
+
+    expect(result.x).toBeCloseTo(10); // "how far out" (u) is unchanged
+    expect(Math.abs(result.z)).toBeGreaterThanOrEqual(obb.halfWidth + clearance);
+  });
+
+  test("leaves a point on the origin side of the board untouched", () => {
+    const point = { x: -10, z: 0 };
+    expect(clearBoardBearings(point, [obb], clearance)).toEqual(point);
+  });
+
+  test("leaves a point already clear of the board's lateral span untouched", () => {
+    const point = { x: 10, z: obb.halfWidth + clearance + 5 };
+    expect(clearBoardBearings(point, [obb], clearance)).toEqual(point);
+  });
+
+  test("leaves a point untouched when there are no boards to check", () => {
+    const point = { x: 10, z: 0 };
+    expect(clearBoardBearings(point, [], clearance)).toEqual(point);
   });
 });
