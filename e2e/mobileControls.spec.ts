@@ -131,3 +131,22 @@ test("throttle and yaw engage together on a diagonal drag", async ({
   await pointerUp(track);
   await expect.poll(() => activeKeys(page)).toEqual([]);
 });
+
+// Track is 130px (see movementStick.tsx: travel = 65 - KNOB_RADIUS(25) =
+// 40, boost ring width = 24, so the engage point is at ~54.4px and the
+// disengage point at ~47.2px).
+test("dragging into the boost ring snaps in boost, and releasing snaps it back out", async ({
+  page,
+}) => {
+  const track = page.locator(".circular-stick-track");
+  const knob = page.locator(".circular-stick-knob");
+
+  await dragBy(track, 0, -55); // past the engage point
+  await expect.poll(() => activeKeys(page)).toContain("Shift");
+  await expect(track).toHaveClass(/is-boosting/);
+  await expect(knob).toHaveClass(/is-boosting/);
+
+  await pointerUp(track);
+  await expect.poll(() => activeKeys(page)).not.toContain("Shift");
+  await expect(track).not.toHaveClass(/is-boosting/);
+});

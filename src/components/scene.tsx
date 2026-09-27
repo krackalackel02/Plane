@@ -20,6 +20,7 @@ import Ship from "./ship";
 import Camera from "./camera";
 import Overlay from "./helper/overlay";
 import AutopilotBanner from "./helper/autopilotBanner";
+import BoostBanner from "./helper/boostBanner";
 import Lights from "./lights";
 import Timeline from "./timeline";
 import Sphere from "./helper/sphere";
@@ -112,6 +113,7 @@ const Scene = () => {
                         {/* Camera Helper */}
                         <Overlay /> {/* Overlay for camera helper and HUD */}
                         <AutopilotBanner />
+                        <BoostBanner />
                         {/* Bottom-left GTA5-style minimap */}
                         <Minimap />
                         {/* Touch controls */}

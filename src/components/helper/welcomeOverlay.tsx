@@ -62,7 +62,7 @@ const WelcomeOverlay = () => {
                       <Keycap label="D" compact />
                     </div>
                   </div>
-                  <Keycap label="Space" wide compact />
+                  <Keycap label="Shift" wide compact />
                 </>
               )}
             </div>

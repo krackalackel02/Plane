@@ -9,6 +9,17 @@ const DEADZONE = 0.35;
 // Must match the knob's diameter in mobileControls.css, so it can't be
 // dragged past the edge of the circular track.
 const KNOB_RADIUS = 25;
+// How far past the base radius (in px) the knob can be pulled into the
+// outer "boost ring" - must match the ::after ring size in
+// mobileControls.css.
+const BOOST_RING_WIDTH = 24;
+// Fraction of the boost ring that must be crossed before the stick snaps
+// out to the boost detent and engages boost.
+const BOOST_ENGAGE_FRACTION = 0.6;
+// Fraction of the boost ring the pull must fall back under to disengage -
+// lower than the engage fraction so hovering near the boundary doesn't
+// rapidly flicker boost on/off.
+const BOOST_DISENGAGE_FRACTION = 0.3;
 
 interface StickAxes {
   throttleUp: boolean;
@@ -34,6 +45,8 @@ const MovementStick = () => {
   const activeAxes = useRef<StickAxes>({ ...neutralAxes });
   const pointerId = useRef<number | null>(null);
   const [knobOffset, setKnobOffset] = useState({ x: 0, y: 0 });
+  const isBoosting = useRef(false);
+  const [isBoostActive, setIsBoostActive] = useState(false);
 
   const applyAxes = useCallback(
     (next: StickAxes) => {
@@ -59,6 +72,16 @@ const MovementStick = () => {
     [pressKey, releaseKey],
   );
 
+  const applyBoost = useCallback(
+    (next: boolean) => {
+      if (next === isBoosting.current) return;
+      (next ? pressKey : releaseKey)(keys.boost);
+      isBoosting.current = next;
+      setIsBoostActive(next);
+    },
+    [pressKey, releaseKey],
+  );
+
   const updateFromPointer = useCallback(
     (clientX: number, clientY: number) => {
       const track = trackRef.current;
@@ -72,14 +95,36 @@ const MovementStick = () => {
       const rawDx = clientX - centerX;
       const rawDy = clientY - centerY;
       const distance = Math.hypot(rawDx, rawDy);
-      const scale = distance > travel ? travel / distance : 1;
-      const clampedDx = rawDx * scale;
-      const clampedDy = rawDy * scale;
 
-      const normalizedX = clampedDx / travel;
-      const normalizedY = -clampedDy / travel; // up (smaller clientY) is positive
+      // Direction (throttle/yaw) always saturates at the base radius,
+      // regardless of how far into the boost ring the drag continues - so
+      // pulling further only toggles boost, it doesn't also add turn or
+      // throttle magnitude on top of an already-full deflection.
+      const axisScale = distance > travel ? travel / distance : 1;
+      const normalizedX = (rawDx * axisScale) / travel;
+      const normalizedY = -(rawDy * axisScale) / travel; // up (smaller clientY) is positive
 
-      setKnobOffset({ x: clampedDx, y: clampedDy });
+      // How far past the base radius the drag has gone, as a fraction of
+      // the boost ring's width (0 at the base radius, 1 at its outer edge
+      // and beyond) - snapping boost on/off off this with hysteresis so the
+      // engage and disengage points aren't the same threshold.
+      const boostPull = Math.min(
+        Math.max((distance - travel) / BOOST_RING_WIDTH, 0),
+        1,
+      );
+      const shouldBoost = isBoosting.current
+        ? boostPull > BOOST_DISENGAGE_FRACTION
+        : boostPull >= BOOST_ENGAGE_FRACTION;
+      applyBoost(shouldBoost);
+
+      // The knob itself snaps out to sit at the boost ring's outer edge
+      // once boost engages (rather than continuing to track the finger
+      // 1:1), giving a tactile "detent" confirming boost is on.
+      const renderTravel = isBoosting.current
+        ? travel + BOOST_RING_WIDTH
+        : travel;
+      const renderScale = distance > renderTravel ? renderTravel / distance : 1;
+      setKnobOffset({ x: rawDx * renderScale, y: rawDy * renderScale });
 
       if (Math.hypot(normalizedX, normalizedY) < DEADZONE) {
         applyAxes({ ...neutralAxes });
@@ -93,13 +138,14 @@ const MovementStick = () => {
         yawLeft: normalizedX < -DEADZONE,
       });
     },
-    [applyAxes],
+    [applyAxes, applyBoost],
   );
 
   const reset = useCallback(() => {
     setKnobOffset({ x: 0, y: 0 });
     applyAxes({ ...neutralAxes });
-  }, [applyAxes]);
+    applyBoost(false);
+  }, [applyAxes, applyBoost]);
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -136,13 +182,19 @@ const MovementStick = () => {
   );
 
   // If the component unmounts mid-drag, release whatever keys are held.
-  useEffect(() => () => applyAxes({ ...neutralAxes }), [applyAxes]);
+  useEffect(
+    () => () => {
+      applyAxes({ ...neutralAxes });
+      applyBoost(false);
+    },
+    [applyAxes, applyBoost],
+  );
 
   return (
     <div className="mobile-stick circular-stick">
       <div
         ref={trackRef}
-        className="circular-stick-track"
+        className={`circular-stick-track${isBoostActive ? " is-boosting" : ""}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -153,7 +205,7 @@ const MovementStick = () => {
         <span className="stick-label stick-label--left">↺</span>
         <span className="stick-label stick-label--right">↻</span>
         <div
-          className="circular-stick-knob"
+          className={`circular-stick-knob${isBoostActive ? " is-boosting" : ""}`}
           style={{
             transform: `translate(-50%, -50%) translate(${knobOffset.x}px, ${knobOffset.y}px)`,
           }}
