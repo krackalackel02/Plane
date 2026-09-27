@@ -97,13 +97,21 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   /// Event handlers
+  // Caps Lock (and Shift) makes event.key return an uppercase letter for
+  // single-character keys, but keys.json binds controls (w/a/s/d, etc.) to
+  // lowercase strings - normalize so activeKeys still matches those bindings
+  // regardless of Caps Lock state. Multi-character keys (e.g. "ArrowLeft",
+  // "Shift") are left untouched.
+  const normalizeKey = (key: string) =>
+    key.length === 1 ? key.toLowerCase() : key;
+
   const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => pressKey(event.key),
+    (event: KeyboardEvent) => pressKey(normalizeKey(event.key)),
     [pressKey],
   );
 
   const handleKeyUp = useCallback(
-    (event: KeyboardEvent) => releaseKey(event.key),
+    (event: KeyboardEvent) => releaseKey(normalizeKey(event.key)),
     [releaseKey],
   );
 
