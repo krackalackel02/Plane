@@ -29,7 +29,10 @@ describe("computeWorldBounds", () => {
     const bounds = computeWorldBounds(boards);
 
     boards.forEach((b) => {
-      const dist = Math.hypot(b.position[0] - bounds.centerX, b.position[2] - bounds.centerZ);
+      const dist = Math.hypot(
+        b.position[0] - bounds.centerX,
+        b.position[2] - bounds.centerZ,
+      );
       expect(dist).toBeLessThan(bounds.radius);
     });
   });

@@ -66,11 +66,7 @@ export class AutopilotMotion {
     if (wasCleared) waypoints.push(launchPoint);
     if (!isAlreadySafe) waypoints.push(new Vector3(0, from.y, 0));
 
-    this.curve = new CatmullRomCurve3([
-      from.clone(),
-      ...waypoints,
-      to.clone(),
-    ]);
+    this.curve = new CatmullRomCurve3([from.clone(), ...waypoints, to.clone()]);
     this.progress = 0;
     this.duration = Math.max(this.curve.getLength() / speed, 0.1);
   }

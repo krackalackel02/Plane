@@ -96,7 +96,9 @@ describe("clearBoardBearings", () => {
     const result = clearBoardBearings({ x: 10, z: 0 }, [obb], clearance);
 
     expect(result.x).toBeCloseTo(10); // "how far out" (u) is unchanged
-    expect(Math.abs(result.z)).toBeGreaterThanOrEqual(obb.halfWidth + clearance);
+    expect(Math.abs(result.z)).toBeGreaterThanOrEqual(
+      obb.halfWidth + clearance,
+    );
   });
 
   test("leaves a point on the origin side of the board untouched", () => {
