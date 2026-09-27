@@ -15,6 +15,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Job: standalone install check, purely for a clear pass/fail signal.
+  # Nothing has `needs: install` — test/e2e/build each still run their
+  # own npm ci in parallel, so this doesn't gate or slow anything down.
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
   # Job: Unit tests. Runs in parallel with e2e/build — no shared install
   # job to wait on.
   test:
