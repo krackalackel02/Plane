@@ -6,12 +6,17 @@ import { defineConfig, devices } from "@playwright/test";
 // verify — that react-device-detect's MobileView gate actually activates.
 export default defineConfig({
   testDir: "./e2e",
-  // All projects share one dev server (needed for the DEV-only
-  // window.__activeKeys hook — a production preview build wouldn't have
-  // it). Too many concurrent browser contexts against that single server
-  // caused real flakiness (slow module compilation, not a logic bug), so
-  // keep this suite serial rather than fullyParallel.
-  workers: 1,
+  // Runs against a built + `vite preview`d app (see `build:e2e` in
+  // package.json), not the dev server. The build sets
+  // VITE_E2E_TEST_HOOKS=true so window.__activeKeys / __setActiveProjectId
+  // still ship (see src/utils/e2eTestHooks.ts — Vite's DEV/PROD flags
+  // track serve-vs-build, not --mode, so they can't be used for this).
+  // Switching off the dev server matters because concurrent contexts
+  // against it raced its on-demand module compilation and caused real
+  // flakiness (not a logic bug). `vite preview` just serves static
+  // files, so there's nothing left to race and multiple workers are safe.
+  fullyParallel: true,
+  workers: 2,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
@@ -30,9 +35,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev",
+    command: "npm run build:e2e && npx vite preview --port 5173 --strictPort",
     url: "http://localhost:5173/Plane/",
     reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    // Build + preview startup take longer than the dev server did.
+    timeout: 90_000,
   },
 });
