@@ -11,8 +11,12 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  # Scoped to this PR/ref, not shared with the "pages" deploy pipeline in
+  # main.yaml — PR checks never touch Pages, so they shouldn't queue
+  # behind (or block) deploys or other PRs' checks. A new push cancels
+  # the previous run for the same ref instead of wasting a queue slot.
+  group: verify-pr-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Job: Unit tests (no dependency on e2e/build — starts immediately)
