@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { useLoader, ThreeEvent } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
@@ -16,6 +16,7 @@ import { RoundedBoxGeometry } from "three-stdlib";
 import { BoardParams } from "../types/boardTypes";
 import { getBoardMatWorldPosition } from "../../utils/3d";
 import ActivationZone from "./activationZone";
+import DebugBoundingBox from "../helper/debugBoundingBox";
 
 /**
  * Default board parameters
@@ -195,6 +196,9 @@ const Board = ({
   const finalImage = imagePath || "./images/placeholder.jpg";
   const texture = useLoader(TextureLoader, finalImage);
   const { requestAutopilot } = useAutopilot();
+  // Wraps just the picture frame (not ActivationZone's floor mat) so the
+  // "B"-hotkey debug bounding box traces the board's own physical footprint.
+  const frameRef = useRef<THREE.Group>(null);
 
   // Clicking either the picture frame or its floor mat (ActivationZone)
   // bubbles up to this single handler - both should fly to the same mat
@@ -212,25 +216,34 @@ const Board = ({
     setParams((prev) => ({ ...prev, [key]: value }));
 
   return (
-    <group
-      position={position}
-      rotation={rotation}
-      onClick={handleAutopilotClick}
-    >
-      {helper && (
-        <Suspense fallback={null}>
-          <BoardDebugControls params={params} updateParam={updateParam} />
-        </Suspense>
-      )}
-      <PictureFrame
-        params={params}
-        texture={texture}
-        debugValue={debug ? id : undefined}
-      />
-      <ActivationZone
-        id={id} // Positioned on the floor in front of the board
-      />
-    </group>
+    <>
+      <group
+        position={position}
+        rotation={rotation}
+        onClick={handleAutopilotClick}
+      >
+        {helper && (
+          <Suspense fallback={null}>
+            <BoardDebugControls params={params} updateParam={updateParam} />
+          </Suspense>
+        )}
+        <group ref={frameRef}>
+          <PictureFrame
+            params={params}
+            texture={texture}
+            debugValue={debug ? id : undefined}
+          />
+        </group>
+        <ActivationZone
+          id={id} // Positioned on the floor in front of the board
+        />
+      </group>
+      {/* Rendered as a sibling of the (position/rotation-transformed) group
+        above rather than nested inside it - DebugBoundingBox's BoxHelper
+        already computes world-space vertices, so nesting it would apply
+        that transform a second time. */}
+      <DebugBoundingBox target={frameRef} color="#ffae00" />
+    </>
   );
 };
 

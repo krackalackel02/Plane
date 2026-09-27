@@ -13,7 +13,11 @@ import Physics from "./physics"; // Physics and movement component
 import ShipCollision from "./physics/collision"; // Boundary/board collision & bounce physics
 
 const Ship: React.FC = () => {
-  const { shipRef } = useScene();
+  // bodyRef wraps just the ship model (not the exhaust flame, which would
+  // otherwise balloon the debug bounding box every time it fires) - see
+  // scene.tsx, which renders the "B"-hotkey bounding-box overlay for it
+  // outside this group's transform.
+  const { shipRef, bodyRef } = useScene();
   const scaleTo = { x: 5, y: 3, z: 2 }; // Scale the model to fit the scene
   const { showShip } = useEnvironment(); // Get showShip from environment context
 
@@ -41,7 +45,9 @@ const Ship: React.FC = () => {
     showShip && (
       <>
         <group ref={shipRef}>
-          <Body />
+          <group ref={bodyRef}>
+            <Body />
+          </group>
           <Exhaust />
           <Physics />
           <ShipCollision />

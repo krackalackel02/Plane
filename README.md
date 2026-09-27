@@ -13,9 +13,12 @@ Display/debug flags are read in `src/context/envContext.tsx` via Vite's `import.
 | `VITE_SHOW_STATS` | Renders the three.js perf stats panel (FPS counter) | `false` |
 | `VITE_SHOW_DEBUG` | Enables `print()` debug console logging (`src/utils/common.ts`) | `false` |
 | `VITE_SHOW_SPHERES` | Renders debug axis-helper spheres | `false` |
+| `VITE_SHOW_BOUNDS` | Renders wireframe bounding boxes around the ship and each board | `false` |
 | `VITE_MUSIC_ENABLED` | Plays the ambient background music | `true` |
 
 To opt into any of these locally (e.g. for perf debugging), set `VITE_SHOW_STATS=true` etc. in your own `.env.development` or `.env.local` — Vite loads `.env.local`/`.env.development.local` automatically and they're gitignored too, so they won't affect anyone else.
+
+`VITE_SHOW_BOUNDS` only sets the *initial* value — press **B** in-app to toggle the bounding boxes live (persisted in `localStorage`, same pattern as the exhaust-style HUD button).
 
 Currently, two official plugins are available:
 
