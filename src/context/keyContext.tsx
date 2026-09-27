@@ -62,22 +62,24 @@ const determineControlState = (activeKeys: Set<string>): ControlState => {
 export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  /// State for active keys and control state
+  /// State for active keys; controlState is derived from it below rather
+  /// than tracked as its own state - setting it from inside the
+  /// setActiveKeys updater (as this used to) is a React anti-pattern
+  /// (updater functions must be pure; StrictMode double-invokes them
+  /// specifically to catch side effects like this) and left the two state
+  /// values only ever in sync by both being computed from the same call.
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
-  const [controlState, setControlState] = useState<ControlState>({
-    direction: "neutral",
-    turn: "neutral",
-  });
+  const controlState = useMemo(
+    () => determineControlState(activeKeys),
+    [activeKeys],
+  );
 
   const pressKey = useCallback((key: string) => {
     setActiveKeys((prev) => {
       if (prev.has(key)) return prev;
-
       const updatedKeys = new Set(prev).add(key);
       print(`${key} down`);
       print("Updated Keys (after add):", updatedKeys);
-
-      setControlState(determineControlState(updatedKeys));
       return updatedKeys;
     });
   }, []);
@@ -85,13 +87,10 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
   const releaseKey = useCallback((key: string) => {
     setActiveKeys((prev) => {
       if (!prev.has(key)) return prev;
-
       const updatedKeys = new Set(prev);
       updatedKeys.delete(key);
       print(`${key} up`);
       print("Updated Keys (after delete):", updatedKeys);
-
-      setControlState(determineControlState(updatedKeys));
       return updatedKeys;
     });
   }, []);
