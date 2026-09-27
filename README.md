@@ -17,6 +17,30 @@ Display/debug flags are read in `src/context/envContext.tsx` via Vite's `import.
 
 To opt into any of these locally (e.g. for perf debugging), set `VITE_SHOW_STATS=true` etc. in your own `.env.development` or `.env.local` — Vite loads `.env.local`/`.env.development.local` automatically and they're gitignored too, so they won't affect anyone else.
 
+## Component sandbox
+
+A separate page for developing and tuning a single 3D component in isolation, without the rest of the scene (ship physics, timeline layout, audio, etc.) around it. Useful for iterating on a component's look by hand or from an agent, since it's a plain URL rather than something requiring you to fly the ship over to it in the full scene.
+
+Run it with:
+
+```sh
+npm run sandbox      # opens /Plane/sandbox.html
+# or, with an existing `npm run dev` already running:
+open http://localhost:5173/Plane/sandbox.html?component=board
+```
+
+With no `?component=` param it shows a picker linking to every registered component. Once a component is picked, the page gives you:
+
+- An orbit camera (drag to rotate, scroll to zoom in/out — `OrbitControls` with a very close `minDistance`, for inspecting detail) centered on the component.
+- A grid + axes helper for scale/orientation reference (toggleable, "Scene" folder).
+- A [leva](https://github.com/pmndrs/leva) panel exposing whatever parameters that component takes — e.g. the Board's `outerX/outerY/outerZ/frame/depth` dimensions with a Save-to-JSON button, or the Ship's scale/rotation/exhaust-mode.
+
+Currently registered: `board` (`src/components/timeline/board.tsx`) and `ship` (`src/components/ship`).
+
+**Adding a new component:** write a thin wrapper under `src/sandbox/components/` that renders the real component centered at the origin (call `useControls()` there for any props worth tuning live — see `boardSandbox.tsx` and `shipSandbox.tsx` for two different shapes of this: one reuses the component's own existing debug controls, the other adds new ones for a component with no props of its own), then add one entry to the registry in `src/sandbox/registry.tsx`. The shell (`src/sandbox/sandboxApp.tsx` + `sandboxScene.tsx`) handles the camera, lights, grid and picker for you. Only wrap the isolated component in the specific context providers it actually reads from (check with `grep -rn "use<ContextName>" src/components/<path>`) — the sandbox intentionally leaves out the heavier full-scene providers (physics, audio, loading screen, world boundary) since those drive gameplay concerns outside an isolated component's own rendering.
+
+Built as its own Vite entry (`sandbox.html` → `src/sandbox/main.tsx`, wired up via `build.rollupOptions.input` in `vite.config.ts`) so leva and the sandbox registry never reach the main app's bundle — only `/sandbox.html` visitors pay for them.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
