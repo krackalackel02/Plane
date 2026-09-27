@@ -88,18 +88,33 @@
   height: 15px;
 }
 
-/* Whichever node is the active mode gets a highlighted ring, not just a
-   tint - a general "this one is selected" treatment any consumer's
-   active node gets for free, not something exhaust-specific. Compounded
-   with .hud-icon-button.radial-node-menu__fan-node (three classes) so it
+/* Whichever node is active gets a highlighted ring, not just a tint - a
+   general "this one is selected/on" treatment any consumer's active node
+   gets for free, not something exhaust-specific. Compounded with
+   .hud-icon-button.radial-node-menu__fan-node (three classes) so it
    reliably outranks the two-class base rule above regardless of source
-   order, the same specificity-safety pattern used there. */
+   order, the same specificity-safety pattern used there.
+
+   Ring color is a CSS variable so a tone modifier (below) can override
+   just the color without duplicating the box-shadow/border declarations -
+   default is the accent yellow used by an exclusive picker (e.g. exhaust
+   style); "danger"/"success" push it red/green for a toggle's off/on
+   state (e.g. mute vs. background music/sound effects). */
 .hud-icon-button.radial-node-menu__fan-node--active {
-  color: #fff200;
-  border-color: #fff200;
+  --ring-color: #fff200;
+  color: var(--ring-color);
+  border-color: var(--ring-color);
   box-shadow:
-    0 0 0 2px #fff200,
+    0 0 0 2px var(--ring-color),
     0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.hud-icon-button.radial-node-menu__fan-node--active.radial-node-menu__fan-node--tone-danger {
+  --ring-color: #ff5c5c;
+}
+
+.hud-icon-button.radial-node-menu__fan-node--active.radial-node-menu__fan-node--tone-success {
+  --ring-color: #4ade80;
 }
 
 @media (max-width: 768px) {

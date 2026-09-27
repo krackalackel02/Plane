@@ -13,6 +13,10 @@
  */
 
 const MUTE_STORAGE_KEY = "plane:audio-muted";
+const MUSIC_ENABLED_STORAGE_KEY = "plane:music-enabled";
+const SFX_ENABLED_STORAGE_KEY = "plane:sfx-enabled";
+const MUSIC_GAIN = 0.06; // matches the always-on background level below
+const SFX_GAIN = 0.5;
 
 interface EngineNodes {
   noiseSource: AudioBufferSourceNode;
@@ -38,9 +42,22 @@ class AudioEngine {
   private muted = false;
   private listeners = new Set<(muted: boolean) => void>();
 
+  // Independent on/off toggles for the two channels a listener can tell
+  // apart - the ambient pad (musicGain, "background music") and the
+  // activation-zone bleep (sfxGain, "sound effects"). Both default on,
+  // matching the levels those gain nodes have always carried.
+  private musicEnabled = true;
+  private sfxEnabled = true;
+  private musicListeners = new Set<(enabled: boolean) => void>();
+  private sfxListeners = new Set<(enabled: boolean) => void>();
+
   constructor() {
     if (typeof window !== "undefined") {
       this.muted = window.localStorage.getItem(MUTE_STORAGE_KEY) === "1";
+      this.musicEnabled =
+        window.localStorage.getItem(MUSIC_ENABLED_STORAGE_KEY) !== "0";
+      this.sfxEnabled =
+        window.localStorage.getItem(SFX_ENABLED_STORAGE_KEY) !== "0";
     }
   }
 
@@ -61,7 +78,7 @@ class AudioEngine {
     this.masterGain = master;
 
     const music = ctx.createGain();
-    music.gain.value = 0.06; // always-on background, kept deliberately quiet
+    music.gain.value = this.musicEnabled ? MUSIC_GAIN : 0; // deliberately quiet even at full "on"
     music.connect(master);
     this.musicGain = music;
 
@@ -71,7 +88,7 @@ class AudioEngine {
     this.engineGain = engine;
 
     const sfx = ctx.createGain();
-    sfx.gain.value = 0.5;
+    sfx.gain.value = this.sfxEnabled ? SFX_GAIN : 0;
     sfx.connect(master);
     this.sfxGain = sfx;
 
@@ -143,6 +160,73 @@ class AudioEngine {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  isMusicEnabled() {
+    return this.musicEnabled;
+  }
+
+  isSfxEnabled() {
+    return this.sfxEnabled;
+  }
+
+  /** Turning a sound channel on always implies audio overall should be
+   *  audible - otherwise flipping it "on" would silently do nothing while
+   *  still muted, which reads as broken rather than as two independent
+   *  controls. Turning a channel off does NOT touch mute - it only
+   *  silences that one channel, same as it always could via mute alone. */
+  setMusicEnabled(enabled: boolean) {
+    this.musicEnabled = enabled;
+    window.localStorage.setItem(MUSIC_ENABLED_STORAGE_KEY, enabled ? "1" : "0");
+    if (enabled && this.muted) this.setMuted(false);
+
+    if (this.ctx && this.musicGain) {
+      const now = this.ctx.currentTime;
+      this.musicGain.gain.cancelScheduledValues(now);
+      this.musicGain.gain.linearRampToValueAtTime(
+        enabled ? MUSIC_GAIN : 0,
+        now + 0.15,
+      );
+    }
+    this.musicListeners.forEach((listener) => listener(this.musicEnabled));
+  }
+
+  toggleMusic() {
+    this.setMusicEnabled(!this.musicEnabled);
+  }
+
+  subscribeMusic(listener: (enabled: boolean) => void) {
+    this.musicListeners.add(listener);
+    return () => {
+      this.musicListeners.delete(listener);
+    };
+  }
+
+  setSfxEnabled(enabled: boolean) {
+    this.sfxEnabled = enabled;
+    window.localStorage.setItem(SFX_ENABLED_STORAGE_KEY, enabled ? "1" : "0");
+    if (enabled && this.muted) this.setMuted(false);
+
+    if (this.ctx && this.sfxGain) {
+      const now = this.ctx.currentTime;
+      this.sfxGain.gain.cancelScheduledValues(now);
+      this.sfxGain.gain.linearRampToValueAtTime(
+        enabled ? SFX_GAIN : 0,
+        now + 0.15,
+      );
+    }
+    this.sfxListeners.forEach((listener) => listener(this.sfxEnabled));
+  }
+
+  toggleSfx() {
+    this.setSfxEnabled(!this.sfxEnabled);
+  }
+
+  subscribeSfx(listener: (enabled: boolean) => void) {
+    this.sfxListeners.add(listener);
+    return () => {
+      this.sfxListeners.delete(listener);
     };
   }
 

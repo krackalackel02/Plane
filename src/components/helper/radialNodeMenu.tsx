@@ -12,9 +12,18 @@ export interface RadialMenuNode {
   key: string;
   icon: React.ReactNode;
   label: string;
-  /** Present -> rendered as a menuitemradio (a mutually-exclusive picker
-   *  like exhaust style). Omitted -> a plain menuitem action. */
+  /** Present -> rendered as a picker with a highlighted ring when true
+   *  (role menuitemradio by default, or menuitemcheckbox if `toggle` is
+   *  set). Omitted -> a plain menuitem action with no ring. */
   active?: boolean;
+  /** True for an independent on/off toggle - several nodes in the same
+   *  menu can be active at once (menuitemcheckbox), unlike the default
+   *  mutually-exclusive picker (menuitemradio, e.g. exhaust's particle/
+   *  cloud/voxel styles, where only one is ever active). */
+  toggle?: boolean;
+  /** Ring color when active: "accent" (default, yellow) for a picker
+   *  option, or "danger"/"success" for a toggle's off/on state. */
+  activeTone?: "accent" | "danger" | "success";
   onSelect: () => void;
 }
 
@@ -56,14 +65,20 @@ const fanOffset = (index: number, count: number) => {
 
 const renderNode = (node: RadialMenuNode, extraClassName: string) => {
   const isPicker = node.active !== undefined;
+  const toneClass =
+    node.active && node.activeTone && node.activeTone !== "accent"
+      ? ` ${extraClassName}--tone-${node.activeTone}`
+      : "";
   return (
     <button
       key={node.key}
       type="button"
       className={`hud-icon-button ${extraClassName}${
         node.active ? ` ${extraClassName}--active` : ""
-      }`}
-      role={isPicker ? "menuitemradio" : "menuitem"}
+      }${toneClass}`}
+      role={
+        isPicker ? (node.toggle ? "menuitemcheckbox" : "menuitemradio") : "menuitem"
+      }
       aria-checked={isPicker ? node.active : undefined}
       onClick={() => node.onSelect()}
       aria-label={node.label}

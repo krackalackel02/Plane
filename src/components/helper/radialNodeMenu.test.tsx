@@ -149,6 +149,60 @@ describe("RadialNodeMenu", () => {
     expect(item).not.toHaveAttribute("aria-checked");
   });
 
+  it("a `toggle` node renders as menuitemcheckbox instead of menuitemradio", () => {
+    const onSelect = vi.fn();
+    render(
+      <RadialNodeMenu
+        trigger={<span>Trigger</span>}
+        triggerLabel="Open menu"
+        nodes={[
+          {
+            key: "mute",
+            icon: <span>M</span>,
+            label: "Mute",
+            active: true,
+            toggle: true,
+            activeTone: "danger",
+            onSelect,
+          },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Open menu"));
+
+    const item = screen.getByLabelText("Mute");
+    expect(item).toHaveAttribute("role", "menuitemcheckbox");
+    expect(item).toHaveAttribute("aria-checked", "true");
+    expect(item.className).toContain("radial-node-menu__fan-node--active");
+    expect(item.className).toContain(
+      "radial-node-menu__fan-node--tone-danger",
+    );
+  });
+
+  it("an active node with no activeTone (or 'accent') gets no tone modifier class", () => {
+    const onSelect = vi.fn();
+    render(
+      <RadialNodeMenu
+        trigger={<span>Trigger</span>}
+        triggerLabel="Open menu"
+        nodes={[
+          {
+            key: "a",
+            icon: <span>A</span>,
+            label: "A",
+            active: true,
+            onSelect,
+          },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Open menu"));
+
+    const item = screen.getByLabelText("A");
+    expect(item.className).toContain("radial-node-menu__fan-node--active");
+    expect(item.className).not.toMatch(/--tone-/);
+  });
+
   it("spreads every node out (not just the first two) across the fan", () => {
     renderMenu();
     fireEvent.click(screen.getByLabelText("Open menu"));
