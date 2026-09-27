@@ -188,79 +188,66 @@ const TechGem: React.FC<{ tech: string; index: number; idle?: boolean }> = ({
   );
 };
 
-// Base cycling speed in slots/sec (1 slot == moving the focus from one
-// gem to the next) while between focal zones - see FOCAL_ZONE_FRACTION,
-// which slows this down approaching a slot and speeds back up leaving it.
-const BASE_SLOTS_PER_SEC = 0.5;
-// How close (as a fraction of one slot) the focus has to be to a gem
-// before velocity starts easing down toward MIN_SPEED_FRACTION - the
-// "+-15%" focal zone.
+// Base rotation speed in degrees/sec while between focal zones - see
+// FOCAL_ZONE_FRACTION, which slows this down approaching a showcase spot
+// and speeds back up leaving it.
+const BASE_DEG_PER_SEC = 30;
+// How close (as a fraction of one slot's arc) the rotation has to be to
+// a showcase spot before velocity eases down toward MIN_SPEED_FRACTION.
 const FOCAL_ZONE_FRACTION = 0.15;
 const MIN_SPEED_FRACTION = 0.06;
-// Local per-gem perspective depth for the side-item inward tilt below
-// (a transform-list `perspective()` function, not the CSS `perspective`
+// Mirrors the carousel's old `perspective: 640px` CSS value, applied
+// manually (see the class doc comment below) instead of via a real CSS
+// perspective/3D rendering context.
+const PERSPECTIVE_PX = 640;
+// Front-half (facing the viewer) gems are lit up toward this brightness;
+// back-half gems dim down toward the other end, continuously by depth.
+const BRIGHTNESS_BACK = 0.65;
+const BRIGHTNESS_FRONT = 1.0;
+// On top of that front/back lighting, the gem nearest dead-center gets
+// an extra "pop": bigger and brighter than natural perspective alone
+// would make it, ramping in over this arc either side of dead-center.
+const FOCUS_WINDOW_DEG = 26;
+const FOCUS_SCALE_BOOST = 0.45;
+const FOCUS_BRIGHTNESS_BOOST = 0.3;
+// Local per-gem perspective depth for the side-item tilt below (a
+// transform-list `perspective()` function, not the CSS `perspective`
 // property - see the class doc comment for why that distinction matters
-// here).
-const PERSPECTIVE_PX = 1000;
+// here). Tilt peaks at the +-90deg side profile and is flat at dead
+// center and dead back, matching how a rotating card would foreshorten.
+const TILT_PERSPECTIVE_PX = 1000;
 const TILT_MAX_DEG = 15;
-// Scale/brightness/opacity interpolate from the *_CENTER value at
-// distance 0 down to the *_SIDE value by distance 1, then hold flat -
-// every gem beyond the immediate neighbors reads as the same "resting"
-// side card rather than continuing to shrink into the distance.
-const SCALE_CENTER = 1.28;
-const SCALE_SIDE = 0.88;
-const BRIGHTNESS_CENTER = 1.2;
-const BRIGHTNESS_SIDE = 0.72;
-const OPACITY_SIDE = 0.85;
-// Extra clearance (px) specifically for a gem's first slot of distance,
-// on top of its own shrinking half-width, so the still-large center card
-// never clips into its immediate neighbors - see spacingForDistance().
-const NEAR_SLOT_SPACING_PX = 60;
-const FAR_SLOT_SPACING_PX = 40;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const lerp = (from: number, to: number, t: number) => from + (to - from) * t;
 const smoothstep = (t: number) => t * t * (3 - 2 * t);
 
 /**
- * Distance-from-focus (0 = dead center, growing by 1 per slot either
- * side) drives every visual: scale, brightness, opacity, z-index and
- * horizontal offset all interpolate smoothly over the first slot of
- * distance and then hold constant - see the shared clamp01(distance)
- * factor used throughout tick() below.
- */
-const spacingForDistance = (distance: number) => {
-  const near = Math.min(distance, 1) * NEAR_SLOT_SPACING_PX;
-  const far = Math.max(0, distance - 1) * FAR_SLOT_SPACING_PX;
-  return near + far;
-};
-
-/**
- * Cover Flow-style focal carousel: gems sit along a line, evenly spaced
- * by index, with a continuous (fractional) "focus" position that glides
- * from one gem to the next rather than jumping. Whichever gem is
- * currently closest scales up, brightens, and rises to the top of the
- * stack; neighbors shrink and dim the further they are from focus.
+ * Auto-rotating "3D" carousel: gems sit evenly spaced around an ellipse
+ * whose axis is vertical (Y) and rotate continuously, slowing down as
+ * each one nears the front showcase spot (dead center) and speeding
+ * back up leaving it - a soft, springy landing rather than a hard stop.
+ * Whichever gem is currently closest to center gets an extra "pop" on
+ * top of natural perspective: bigger, brighter, with a brand-colored
+ * glow, on the highest stacking layer.
  *
- * The anti-overlap spacing (spacingForDistance above) is baked directly
- * into each gem's own position formula, as a function of its own
- * fractional distance from focus - not computed as a correction applied
- * on top of some other "natural" position. An earlier version pushed
- * overlapping gems apart *after* computing their circular-motion
- * position, and the two disagreed frame to frame (particularly whenever
- * the pushed-against anchor gem changed), which made the whole thing
- * visibly jump/jutter. Deriving position from distance directly means
- * there's only ever one position for a given distance, so nothing to
- * disagree with - motion stays continuous even as the focal point moves
- * (see the velocity easing in tick() below).
+ * It's an ellipse rather than a circle so the horizontal spread and the
+ * depth (how much gems shrink/grow and how bunched-up the perspective
+ * makes them look) can be tuned independently: the x radius is the
+ * carousel's own on-page width (so gems use the full card), while the z
+ * radius is the stage's height - a much smaller, independently-tunable
+ * value that keeps the perspective effect gentle instead of a circle's
+ * single radius forcing depth to scale up right along with width.
  *
- * Gems never disappear or fade to nothing - correct z-index ordering
- * (a plain 2D stacking context; see the note below) already means a
- * focused gem properly overlaps a side gem where they're close, the way
- * a nearer card naturally would. Side gems just also rotate slightly
- * inward (a per-gem local `perspective()` + rotateY, independent of any
- * shared 3D rendering context) and dim, to read as "receding" rather
- * than vanishing.
+ * Gems never disappear or fade to nothing, even swinging around the
+ * back - that's still "the carousel", just its far side. Correct
+ * z-index ordering (see below) already means a nearer gem properly
+ * occludes a farther one where they visually overlap, the same way a
+ * nearer object naturally would in a real 3D scene - so nothing needs
+ * to hide or fade out for that to look right. Side gems also tilt
+ * slightly (a per-gem local `perspective()` + rotateY, independent of
+ * any shared 3D rendering context) peaking at the side profile, to
+ * reinforce that they're turning rather than just sliding.
  *
  * This used to be a real CSS 3D carousel relying on the browser's own
  * preserve-3d depth-sort to pick paint order between overlapping gems.
@@ -276,13 +263,34 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
   const stageRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-  // Fractional index of whichever slot currently has focus - e.g. 2.4
-  // means 40% of the way from gem 2 to gem 3.
-  const focusRef = useRef(0);
+  // Ellipse radii: x (horizontal spread) tracks the stage's own width, z
+  // (depth) its height - see the class doc comment above for why these
+  // are deliberately independent instead of a single shared radius.
+  const radiusXRef = useRef(140);
+  const radiusZRef = useRef(48);
+  const rotationRef = useRef(0);
   const pausedRef = useRef(false);
   const rafRef = useRef(0);
   const lastTimeRef = useRef<number | null>(null);
   const count = techStack.length;
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const measure = () => {
+      // 2 * radiusX == the carousel's own width, so the ring's horizontal
+      // diameter matches the card it's shown inside; radiusZ is the
+      // stage's height, an independent (and much smaller) depth budget.
+      const rect = stage.getBoundingClientRect();
+      radiusXRef.current = rect.width / 2;
+      radiusZRef.current = rect.height;
+    };
+
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia(
@@ -292,53 +300,59 @@ const TechCarousel: React.FC<{ techStack: string[] }> = ({ techStack }) => {
     const tick = (time: number) => {
       if (lastTimeRef.current === null) lastTimeRef.current = time;
       // Clamp so a backgrounded/throttled tab resuming after a long gap
-      // continues smoothly instead of the carousel jumping through
-      // several slots' worth of "missed" time in one frame.
+      // continues smoothly instead of the ring jumping through several
+      // rotations worth of "missed" time in one frame.
       const deltaSec = Math.min((time - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = time;
 
+      const slotAngle = count > 0 ? 360 / count : 360;
+
       if (!pausedRef.current && !prefersReducedMotion && count > 0) {
-        const distToNearestSlot = Math.abs(
-          focusRef.current - Math.round(focusRef.current),
+        const mod = ((rotationRef.current % slotAngle) + slotAngle) % slotAngle;
+        const distToNearestSlot = Math.min(mod, slotAngle - mod);
+        const zoneFrac = clamp01(
+          distToNearestSlot / (slotAngle * FOCAL_ZONE_FRACTION),
         );
-        const zoneFrac = clamp01(distToNearestSlot / FOCAL_ZONE_FRACTION);
         const speedFactor = lerp(MIN_SPEED_FRACTION, 1, smoothstep(zoneFrac));
-        focusRef.current =
-          (focusRef.current + BASE_SLOTS_PER_SEC * speedFactor * deltaSec) %
-          count;
+        rotationRef.current =
+          (rotationRef.current + BASE_DEG_PER_SEC * speedFactor * deltaSec) %
+          360;
       }
 
       let closestIndex = 0;
-      let closestDist = Infinity;
+      let closestAbsAngle = Infinity;
 
       itemRefs.current.forEach((item, index) => {
-        if (!item || count === 0) return;
+        if (!item) return;
 
-        let distance = (index - focusRef.current) % count;
-        if (distance > count / 2) distance -= count;
-        if (distance < -count / 2) distance += count;
+        const baseAngle = slotAngle * index;
+        let displayAngle = (baseAngle + rotationRef.current) % 360;
+        if (displayAngle > 180) displayAngle -= 360;
+        const rad = (displayAngle * Math.PI) / 180;
+        const cos = Math.cos(rad);
 
-        const absDist = Math.abs(distance);
-        if (absDist < closestDist) {
-          closestDist = absDist;
+        const absAngle = Math.abs(displayAngle);
+        if (absAngle < closestAbsAngle) {
+          closestAbsAngle = absAngle;
           closestIndex = index;
         }
 
-        const t = clamp01(absDist);
-        const eased = smoothstep(t);
-        const scale = lerp(SCALE_CENTER, SCALE_SIDE, eased);
-        const brightness = lerp(BRIGHTNESS_CENTER, BRIGHTNESS_SIDE, eased);
-        const opacity = lerp(1, OPACITY_SIDE, eased);
-        const tilt =
-          Math.sign(distance) *
-          Math.min(TILT_MAX_DEG, Math.abs(distance) * TILT_MAX_DEG);
+        // z: signed depth along the camera axis (+radiusZ = closest to
+        // the viewer, at displayAngle 0; -radiusZ = farthest, at +-180).
+        const z = radiusZRef.current * cos;
+        const x = radiusXRef.current * Math.sin(rad);
+        const projScale = PERSPECTIVE_PX / (PERSPECTIVE_PX - z);
 
-        const x = Math.sign(distance) * spacingForDistance(absDist);
+        const focusT = smoothstep(clamp01(1 - absAngle / FOCUS_WINDOW_DEG));
+        const scale = projScale * (1 + focusT * FOCUS_SCALE_BOOST);
+        const brightness =
+          lerp(BRIGHTNESS_BACK, BRIGHTNESS_FRONT, (cos + 1) / 2) *
+          (1 + focusT * FOCUS_BRIGHTNESS_BOOST);
+        const tilt = -TILT_MAX_DEG * Math.sin(rad);
 
-        item.style.transform = `translateX(${x}px) scale(${scale}) perspective(${PERSPECTIVE_PX}px) rotateY(${-tilt}deg)`;
-        item.style.zIndex = String(Math.round(1000 - absDist * 100));
+        item.style.transform = `translateX(${x * projScale}px) scale(${scale}) perspective(${TILT_PERSPECTIVE_PX}px) rotateY(${tilt}deg)`;
+        item.style.zIndex = String(Math.round(z * 1000));
         item.style.filter = `brightness(${brightness})`;
-        item.style.opacity = String(opacity);
       });
 
       itemRefs.current.forEach((item, index) => {
