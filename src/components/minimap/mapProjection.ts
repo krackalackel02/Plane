@@ -1,3 +1,5 @@
+import { WorldBounds } from "../../utils/worldBounds";
+
 export interface WorldPoint {
   id: string;
   position: [number, number, number];
@@ -12,12 +14,22 @@ export interface MapPoint {
 export interface WorldToMapProjection {
   toMap: (x: number, z: number) => [number, number];
   boardPoints: MapPoint[];
+  // The world boundary's radius (see utils/worldBounds), scaled into the
+  // same map CSS-pixel space as toMap/boardPoints. Always centered at
+  // (size/2, size/2) by construction, since the world boundary is itself
+  // centered on (bounds.centerX, bounds.centerZ).
+  boundaryRadius: number;
 }
 
 /**
  * Build a fixed-scale world (x, z) -> map (x, y) CSS-pixel projection that
- * fits every board plus the ship's (0, 0, 0) starting point inside a
- * `size` x `size` square, with `paddingRatio` reserved as empty margin.
+ * fits the whole world boundary circle (see utils/worldBounds) inside a
+ * `size` x `size` square, with `paddingRatio` reserved as empty margin -
+ * i.e. the boundary maps exactly onto the minimap's own circular dock, so
+ * "how close to the rim you are on the map" directly reads as "how close
+ * to the wall you are in the world". Since the boundary already contains
+ * every board plus the ship's (0, 0, 0) starting point with room to
+ * spare, this guarantees both fit too.
  *
  * Both world axes are negated:
  *
@@ -36,30 +48,17 @@ export interface WorldToMapProjection {
  * from these same two flips.
  */
 export const computeWorldToMapProjection = (
+  bounds: WorldBounds,
   boards: WorldPoint[],
   size: number,
   paddingRatio: number,
 ): WorldToMapProjection => {
-  const xs = [0, ...boards.map((b) => b.position[0])];
-  const zs = [0, ...boards.map((b) => b.position[2])];
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minZ = Math.min(...zs);
-  const maxZ = Math.max(...zs);
-
-  // Floor the span so a single board (or none) doesn't zoom the map in to
-  // an unusably tiny world.
-  const spanX = Math.max(maxX - minX, 10);
-  const spanZ = Math.max(maxZ - minZ, 10);
-  const centerX = (minX + maxX) / 2;
-  const centerZ = (minZ + maxZ) / 2;
-
-  const usable = size * (1 - paddingRatio);
-  const scale = usable / Math.max(spanX, spanZ);
+  const boundaryRadius = (size / 2) * (1 - paddingRatio);
+  const scale = boundaryRadius / bounds.radius;
 
   const toMap = (x: number, z: number): [number, number] => [
-    size / 2 - (x - centerX) * scale,
-    size / 2 - (z - centerZ) * scale,
+    size / 2 - (x - bounds.centerX) * scale,
+    size / 2 - (z - bounds.centerZ) * scale,
   ];
 
   const boardPoints: MapPoint[] = boards.map((b) => {
@@ -67,7 +66,7 @@ export const computeWorldToMapProjection = (
     return { id: b.id, x, y };
   });
 
-  return { toMap, boardPoints };
+  return { toMap, boardPoints, boundaryRadius };
 };
 
 /**
