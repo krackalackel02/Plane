@@ -53,19 +53,6 @@ export const getColorFromLifetime = (
 };
 
 /**
- * Generate a random position within a cube defined by the given range.
- * @param range - The size of the cube
- * @returns A random position within the cube
- */
-export const generateRandomPosition = (
-  range: number,
-): [number, number, number] => [
-  (Math.random() - 0.5) * range,
-  (Math.random() - 0.5) * range,
-  (Math.random() - 0.5) * range,
-];
-
-/**
  * Compute the scale factor for a 3D object based on its dimensions and bounding box.
  * @param dimensions - The desired dimensions of the object
  * @param bbox - The bounding box of the object

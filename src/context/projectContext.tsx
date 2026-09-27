@@ -9,6 +9,7 @@ import React, {
 import { boardJsonProps } from "../components/types/boardTypes";
 import { parseBoardItems } from "../components/timeline/parseBoardItems";
 import boardData from "../components/timeline/boardItems.json";
+import { E2E_TEST_HOOKS_ENABLED } from "../utils/e2eTestHooks";
 
 // --- Context Definition ---
 interface ProjectContextType {
@@ -24,13 +25,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
-  // Dev-only hook so Playwright can activate a project's popup directly,
+  // Test-only hook so Playwright can activate a project's popup directly,
   // without having to fly the ship into its activation zone (see
-  // src/context/keyContext.tsx for the same pattern with __activeKeys).
-  // import.meta.env.DEV is false in a production build, so this never
-  // ships to the deployed GitHub Pages bundle.
+  // src/context/keyContext.tsx for the same pattern with __activeKeys,
+  // and src/utils/e2eTestHooks.ts for why). Never ships to the deployed
+  // GitHub Pages bundle.
   useEffect(() => {
-    if (import.meta.env.DEV) {
+    if (E2E_TEST_HOOKS_ENABLED) {
       (
         window as unknown as {
           __setActiveProjectId?: Dispatch<SetStateAction<string | null>>;

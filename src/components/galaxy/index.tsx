@@ -8,7 +8,11 @@ import Stars from "./star";
  * @returns JSX.Element
  */
 const Galaxy: React.FC = () => {
-  const numberOfStars = 2000; // Number of stars in the galaxy
+  // Stars now spread over a disk several times wider than the ship's
+  // travel boundary (see star.tsx), so the count is bumped up to match -
+  // otherwise the same star count spread over a much bigger area reads as
+  // a visibly thinner sky even close to the ship.
+  const numberOfStars = 4000;
   return (
     <>
       {/* Galaxy background with stars */}

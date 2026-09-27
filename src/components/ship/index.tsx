@@ -10,6 +10,7 @@ import { computeScale } from "../../utils/3d";
 import Exhaust from "./exhaust"; // Exhaust effects component
 import Body from "./body"; // Ship body model component
 import Physics from "./physics"; // Physics and movement component
+import ShipCollision from "./physics/collision"; // Boundary/board collision & bounce physics
 
 const Ship: React.FC = () => {
   const { shipRef } = useScene();
@@ -43,6 +44,7 @@ const Ship: React.FC = () => {
           <Body />
           <Exhaust />
           <Physics />
+          <ShipCollision />
         </group>
       </>
     )
