@@ -21,6 +21,8 @@ To opt into any of these locally (e.g. for perf debugging), set `VITE_SHOW_STATS
 
 A separate page for developing and tuning a single 3D component in isolation, without the rest of the scene (ship physics, timeline layout, audio, etc.) around it. Useful for iterating on a component's look by hand or from an agent, since it's a plain URL rather than something requiring you to fly the ship over to it in the full scene.
 
+**Dev-only, never deployed:** `sandbox.html` is served by `vite`/`vite dev` (and `npm run sandbox`) unconditionally, but `npm run build` — what `.github/workflows/main.yaml` runs to produce the GitHub Pages artifact — leaves it out of `dist/` by default (see the `includeSandbox` flag in `vite.config.ts`), so it's never part of the deployed site or reachable by a visitor. Build a local copy anyway (e.g. to run it through `vite preview`) with `VITE_INCLUDE_SANDBOX=true npm run build`.
+
 Run it with:
 
 ```sh
