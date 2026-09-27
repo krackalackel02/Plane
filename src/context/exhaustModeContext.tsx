@@ -22,7 +22,7 @@ interface ExhaustModeContextType {
 }
 
 const ExhaustModeContext = createContext<ExhaustModeContextType>({
-  mode: "clouds",
+  mode: "voxels",
   setMode: () => {},
 });
 
