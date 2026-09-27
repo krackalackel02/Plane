@@ -132,8 +132,10 @@ const RadialNodeMenu: React.FC<RadialNodeMenuProps> = ({
     <div
       ref={rootRef}
       className={`radial-node-menu radial-node-menu--align-${align}${
-        expanded ? " radial-node-menu--expanded" : ""
-      }${className ? ` ${className}` : ""}`}
+        arcNodes.length > 0 ? " radial-node-menu--has-arc" : ""
+      }${expanded ? " radial-node-menu--expanded" : ""}${
+        className ? ` ${className}` : ""
+      }`}
       onMouseEnter={open}
       onMouseLeave={close}
     >
@@ -144,7 +146,10 @@ const RadialNodeMenu: React.FC<RadialNodeMenuProps> = ({
             index === 0 ? "left" : "right"
           }`}
         >
-          {renderNode(node, "radial-node-menu__arc-node")}
+          {renderNode(
+            { ...node, onSelect: () => selectNode(node) },
+            "radial-node-menu__arc-node",
+          )}
         </div>
       ))}
 

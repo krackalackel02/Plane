@@ -10,28 +10,25 @@
   align-items: center;
 }
 
-/* --- Arc nodes: pop out inline to the left/right of the trigger --- */
+/* --- Arc nodes: fan out diagonally below-left/below-right of the trigger.
+   Same-row (flanking the trigger inline in the bar) was the first attempt,
+   but this trigger normally sits packed between sibling HUD buttons with
+   only a couple px of gap - popping sideways landed squarely on top of the
+   neighbouring icon. Fanning downward instead uses the open space below
+   the bar (already proven clipping-safe by the vertical list) so a node
+   never has to fight a sibling for room. */
 .radial-node-menu__arc {
   position: absolute;
-  top: 50%;
+  top: 100%;
+  left: 50%;
   display: flex;
   align-items: center;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-50%) scale(0.5);
+  transform: translate(-50%, 0) scale(0.4);
   transition:
     opacity 0.16s ease,
     transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.radial-node-menu__arc--left {
-  right: 100%;
-  transform: translateY(-50%) translateX(8px) scale(0.5);
-}
-
-.radial-node-menu__arc--right {
-  left: 100%;
-  transform: translateY(-50%) translateX(-8px) scale(0.5);
 }
 
 .radial-node-menu--expanded .radial-node-menu__arc {
@@ -40,11 +37,31 @@
 }
 
 .radial-node-menu--expanded .radial-node-menu__arc--left {
-  transform: translateY(-50%) translateX(-6px) scale(1);
+  transform: translate(calc(-50% - 30px), 26px) scale(1);
 }
 
 .radial-node-menu--expanded .radial-node-menu__arc--right {
-  transform: translateY(-50%) translateX(6px) scale(1);
+  transform: translate(calc(-50% + 30px), 26px) scale(1);
+}
+
+/* Unlike list nodes (which share one background panel), each arc node
+   floats on its own directly over the scene - it needs its own background
+   or a thin icon-only glyph disappears against the 3D canvas behind it.
+   Compounded with .hud-icon-button (not just .radial-node-menu__arc-node
+   alone) so this reliably outranks hud-icon-button's own same-specificity
+   width/background rule regardless of which stylesheet's <style> tag the
+   bundler happens to inject first. */
+.hud-icon-button.radial-node-menu__arc-node {
+  width: 30px;
+  height: 30px;
+  background: rgba(10, 14, 26, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.radial-node-menu__arc-node svg {
+  width: 15px;
+  height: 15px;
 }
 
 /* --- Vertical list: connected panel dropped beneath the trigger --- */
@@ -68,6 +85,13 @@
   transition:
     opacity 0.18s ease,
     transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* When arc nodes are in play they occupy the space just below the trigger
+   (see .radial-node-menu__arc above) - push the list further down so it
+   drops below the fanned-out petals instead of colliding with them. */
+.radial-node-menu--has-arc .radial-node-menu__list {
+  top: calc(100% + 48px);
 }
 
 /* Edge-avoidance: swap the anchor point instead of the centered transform
@@ -103,9 +127,12 @@
     transform 0.16s ease;
 }
 
-.radial-node-menu__list-node {
+.hud-icon-button.radial-node-menu__list-node {
   width: 30px;
   height: 30px;
+}
+
+.radial-node-menu__list-node {
   opacity: 0;
   transform: scale(0.6) translateY(-6px);
   transition:
@@ -129,12 +156,14 @@
 }
 
 @media (max-width: 768px) {
-  .radial-node-menu__list-node {
+  .hud-icon-button.radial-node-menu__list-node,
+  .hud-icon-button.radial-node-menu__arc-node {
     width: 26px;
     height: 26px;
   }
 
-  .radial-node-menu__list-node svg {
+  .radial-node-menu__list-node svg,
+  .radial-node-menu__arc-node svg {
     width: 13px;
     height: 13px;
   }

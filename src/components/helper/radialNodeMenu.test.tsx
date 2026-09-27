@@ -146,6 +146,28 @@ describe("RadialNodeMenu", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
+  it("selecting an arc node also closes the branch, same as a list node", () => {
+    const onSelect = vi.fn();
+    render(
+      <RadialNodeMenu
+        trigger={<span>Trigger</span>}
+        triggerLabel="Open menu"
+        nodes={[]}
+        arcNodes={[
+          { key: "left", icon: <span>L</span>, label: "Left action", onSelect },
+        ]}
+      />,
+    );
+    const trigger = screen.getByLabelText("Open menu");
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(screen.getByLabelText("Left action"));
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+  });
+
   describe("edge-avoidance alignment", () => {
     let originalInnerWidth: number;
 
