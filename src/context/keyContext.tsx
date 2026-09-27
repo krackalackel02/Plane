@@ -106,16 +106,29 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
     [releaseKey],
   );
 
+  // A key held down when focus leaves the window (e.g. the project popup's
+  // "View Demo"/"View Code" links, or the Enter-to-open-link shortcut in
+  // Highlight, open a new tab) never gets its keyup delivered here - the OS
+  // sends that keyup to whatever now has focus instead. Without this, the
+  // key reads as permanently "held", leaving the ship stuck turning/
+  // throttling on its own and autopilot unable to re-engage (it treats the
+  // phantom input as the player taking manual control).
+  const handleBlur = useCallback(() => {
+    setActiveKeys((prev) => (prev.size === 0 ? prev : new Set()));
+  }, []);
+
   // Attach and detach event listeners
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
     };
-  }, [handleKeyDown, handleKeyUp]);
+  }, [handleKeyDown, handleKeyUp, handleBlur]);
 
   const keyControls = useMemo(
     () => ({ pressKey, releaseKey }),
