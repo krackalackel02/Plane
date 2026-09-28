@@ -165,9 +165,16 @@ export interface BoardProps {
   imagePath?: string;
   helper?: boolean;
   position?: [number, number, number];
-  rotation?: [number, number, number];
+  quaternion?: [number, number, number, number];
   debug?: boolean;
-  arcRadius?: number;
+  // How far to the side of the trail centerline the visual frame sits (its
+  // own local Z, the lateral/width axis - see boardCollision.ts's doc
+  // comment), positive or negative to alternate sides. The board's own
+  // position/quaternion stay pinned to the trail centerline throughout -
+  // this only shifts the rendered PictureFrame, not ActivationZone, so the
+  // interactive mat stays centered on the flight path while the boards
+  // flank it left and right as you fly past.
+  sideOffset?: number;
 }
 
 /**
@@ -175,9 +182,10 @@ export interface BoardProps {
  * @param id Unique identifier for the board
  * @param imagePath Path to the image texture
  * @param helper Boolean to enable Leva controls
- * @param position 3D position of the board
- * @param rotation 3D rotation of the board
+ * @param position 3D position of the trail-centerline anchor for this stop
+ * @param quaternion Orientation of that anchor, facing along the trail
  * @param debug Boolean to enable debug mode (shows ID on board)
+ * @param sideOffset Lateral offset of the visual board off the centerline
  * @returns JSX.Element
  */
 const Board = ({
@@ -185,9 +193,9 @@ const Board = ({
   imagePath,
   helper = false,
   position = [4.0, 2.5, 0.5],
-  rotation = [0, 0, 0], // Add rotation prop with a default
+  quaternion = [0, 0, 0, 1],
   debug = false,
-  arcRadius = 0,
+  sideOffset = 0,
 }: BoardProps) => {
   // Combine default and custom parameters
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
@@ -201,10 +209,7 @@ const Board = ({
   // center. Mirrors ActivationZone's own fixed local offset/rotation.
   const handleAutopilotClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
-    requestAutopilot(
-      getBoardMatWorldPosition(position, rotation[1]),
-      arcRadius,
-    );
+    requestAutopilot(getBoardMatWorldPosition(position, quaternion));
   };
 
   // Function to update a specific parameter
@@ -214,7 +219,7 @@ const Board = ({
   return (
     <group
       position={position}
-      rotation={rotation}
+      quaternion={quaternion}
       onClick={handleAutopilotClick}
     >
       {helper && (
@@ -222,13 +227,15 @@ const Board = ({
           <BoardDebugControls params={params} updateParam={updateParam} />
         </Suspense>
       )}
-      <PictureFrame
-        params={params}
-        texture={texture}
-        debugValue={debug ? id : undefined}
-      />
+      <group position={[0, 0, sideOffset]}>
+        <PictureFrame
+          params={params}
+          texture={texture}
+          debugValue={debug ? id : undefined}
+        />
+      </group>
       <ActivationZone
-        id={id} // Positioned on the floor in front of the board
+        id={id} // Centered on the trail, in front of the anchor - not the (offset) board
       />
     </group>
   );

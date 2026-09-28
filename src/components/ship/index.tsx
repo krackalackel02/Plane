@@ -10,11 +10,16 @@ import { computeScale } from "../../utils/3d";
 import Exhaust from "./exhaust"; // Exhaust effects component
 import Body from "./body"; // Ship body model component
 import Physics from "./physics"; // Physics and movement component
-import ShipCollision from "./physics/collision"; // Boundary/board collision & bounce physics
+import ShipCollision from "./physics/collision"; // Board collision & bounce physics
+import shipParams from "../../utils/shipParams.json";
 
 const Ship: React.FC = () => {
   const { shipRef } = useScene();
-  const scaleTo = { x: 5, y: 3, z: 2 }; // Scale the model to fit the scene
+  const scaleTo = {
+    x: shipParams.halfExtents.x * 2,
+    y: shipParams.halfExtents.y * 2,
+    z: shipParams.halfExtents.z * 2,
+  }; // Scale the model to fit the scene
   const { showShip } = useEnvironment(); // Get showShip from environment context
 
   if (!showShip) return null;

@@ -1,5 +1,5 @@
 import { Color, ColorMapEntry, Range } from "../components/types/colourTypes";
-import { Box3, Vector3 } from "three";
+import { Box3, Quaternion, Vector3 } from "three";
 
 /**
  * Precompute ranges for color mapping based on lifetime limits
@@ -103,17 +103,18 @@ export const lerpAngle = (from: number, to: number, t: number) => {
 
 /**
  * World position of a board's ActivationZone mat, given the board's own
- * position/rotation. Mirrors ActivationZone's own fixed local offset
- * ([-5, -2.5, 0]) and the fact that board rotation is Y-axis only, so this
- * is the same open, floor-level spot ActivationZone itself checks for ship
- * proximity - landing here (rather than on the board's own position, which
- * sits in the solid frame's plane) is what keeps autopilot from clipping
- * the board.
+ * position/orientation. Mirrors ActivationZone's own fixed local offset
+ * ([-5, -2.5, 0]), so this is the same open, floor-level spot
+ * ActivationZone itself checks for ship proximity - landing here (rather
+ * than on the board's own position, which sits in the solid frame's plane)
+ * is what keeps autopilot from clipping the board. Boards standing upright
+ * around a planet are tilted differently at every longitude, so the full
+ * orientation quaternion is needed here, not just a Y angle.
  */
 export const getBoardMatWorldPosition = (
   position: [number, number, number],
-  rotationY: number,
+  quaternion: [number, number, number, number],
 ): Vector3 =>
   new Vector3(-5, -2.5, 0)
-    .applyAxisAngle(new Vector3(0, 1, 0), rotationY)
+    .applyQuaternion(new Quaternion(...quaternion))
     .add(new Vector3(...position));

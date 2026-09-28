@@ -2,37 +2,38 @@ import Board from "./board";
 import AutopilotHotkeys from "./autopilotHotkeys";
 import { useProjects } from "../../context/projectContext";
 import {
+  boardSideOffset,
   calculatedBoardPositionsAndRotations,
-  computeArcRadius,
 } from "./calculatedBoardPositionsAndRotations";
 
 /**
  * Timeline component for managing multiple boards
- * Renders a series of boards positioned along the z-axis
+ * Renders a series of boards spaced evenly around the planet's equator,
+ * alternating left/right of the trail so the centerline itself - where the
+ * ship flies and each board's activation zone sits - stays clear.
  * @returns JSX.Element
  */
 const Timeline = () => {
   const { items } = useProjects();
 
-  const boardsData = calculatedBoardPositionsAndRotations(items, "arc");
-  const arcRadius = computeArcRadius(items.length);
+  const boardsData = calculatedBoardPositionsAndRotations(items);
 
   return (
     <>
       <group>
-        {boardsData.map((board) => (
+        {boardsData.map((board, i) => (
           <Board
             key={board.id}
             id={board.id}
             position={board.position}
-            rotation={board.rotation} // Pass the calculated rotation to the Board
+            quaternion={board.quaternion}
             helper={false}
             imagePath={board.imagePath}
-            arcRadius={arcRadius}
+            sideOffset={boardSideOffset(i)}
           />
         ))}
       </group>
-      <AutopilotHotkeys boards={boardsData} arcRadius={arcRadius} />
+      <AutopilotHotkeys boards={boardsData} />
     </>
   );
 };

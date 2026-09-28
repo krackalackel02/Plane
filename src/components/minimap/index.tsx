@@ -8,34 +8,29 @@ import {
   type RefObject,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { Vector3 } from "three";
 import { useScene } from "../../context/sceneContext";
 import { useProjects } from "../../context/projectContext";
 import { useAutopilot } from "../../context/autopilotContext";
-import { useWorldBounds } from "../../utils/worldBounds";
-import {
-  calculatedBoardPositionsAndRotations,
-  computeArcRadius,
-} from "../timeline/calculatedBoardPositionsAndRotations";
+import { calculatedBoardPositionsAndRotations } from "../timeline/calculatedBoardPositionsAndRotations";
 import { getBoardMatWorldPosition } from "../../utils/3d";
+import { getActivePlanet } from "../../utils/planets";
 import {
-  arrowRotationForYaw,
-  computeWorldToMapProjection,
-} from "./mapProjection";
+  computePlanetToMapProjection,
+  headingBearing,
+} from "./planetMapProjection";
 import "./minimap.css";
 
 // CSS pixel size of the map's drawing surface when collapsed - actual
 // canvas backing store is this times devicePixelRatio. The expanded size
 // is driven by CSS (see minimap.css) and measured live, see useMapSize.
 const COLLAPSED_SIZE = 200;
-// Fraction of the map reserved as empty margin around the world bounds,
-// so board icons/the ship arrow never touch the rim.
-const PADDING_RATIO = 0.22;
 
 /**
  * Track the minimap's actual rendered box size in CSS pixels. Collapsed
  * vs. expanded sizing lives entirely in CSS (including the mobile media
  * query), so rather than duplicating those breakpoints in JS, a
- * ResizeObserver reports whatever size the box ends up at - the world-to
+ * ResizeObserver reports whatever size the box ends up at - the planet-to
  * map projection and the canvas backing store both key off this.
  */
 const useMapSize = (ref: RefObject<HTMLDivElement>) => {
@@ -56,43 +51,23 @@ const useMapSize = (ref: RefObject<HTMLDivElement>) => {
 };
 
 /**
- * Project world (x, z) coordinates onto the map's CSS-pixel space. The map
- * does not pan or rotate with the ship - it is scaled once to fit the
- * whole world boundary (see utils/worldBounds), GTA5-style "whole area"
- * minimap rather than a close-up chase view. `size` is re-derived from
- * the live rendered box (see useMapSize) so the same projection serves
- * both the collapsed dock and the expanded, tappable overlay.
+ * The whole planet, unwrapped: an equirectangular map fits the entire
+ * surface by construction, so - unlike the old flat minimap - this never
+ * needs to re-fit itself to board positions or a world boundary.
  */
-const useWorldToMap = (size: number) => {
+const usePlanetToMap = (size: number) => {
   const { items } = useProjects();
-  const bounds = useWorldBounds();
+  const planet = getActivePlanet();
 
   return useMemo(() => {
-    const boardsData = calculatedBoardPositionsAndRotations(items, "arc");
-    const arcRadius = computeArcRadius(items.length);
-    const projection = computeWorldToMapProjection(
-      bounds,
+    const boardsData = calculatedBoardPositionsAndRotations(items, planet);
+    const projection = computePlanetToMapProjection(
       boardsData,
       size,
-      PADDING_RATIO,
+      planet.center,
     );
-    return { ...projection, boardsData, arcRadius };
-  }, [items, bounds, size]);
-};
-
-const drawBoundary = (
-  ctx: CanvasRenderingContext2D,
-  size: number,
-  radius: number,
-) => {
-  ctx.save();
-  ctx.strokeStyle = "rgba(120, 190, 255, 0.55)";
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([4, 4]);
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, radius, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
+    return { ...projection, boardsData, planet };
+  }, [items, planet, size]);
 };
 
 const drawBook = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
@@ -124,11 +99,11 @@ const drawShipArrow = (
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  yaw: number,
+  bearing: number,
 ) => {
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(arrowRotationForYaw(yaw));
+  ctx.rotate(bearing);
   ctx.fillStyle = "#ff3b3b";
   ctx.strokeStyle = "#7a0000";
   ctx.lineWidth = 1;
@@ -144,9 +119,15 @@ const drawShipArrow = (
 };
 
 /**
- * GTA5-style minimap docked in the bottom-left corner: a fixed-scale
- * top-down view of the whole timeline arc, with a red arrow for the ship
- * (rotates to match heading) and book icons for each project board.
+ * GTA5-style minimap docked in the bottom-left corner: an equirectangular
+ * "unwrapped planet" map, with a red arrow for the ship (rotates to match
+ * its compass heading) and book icons for each project board - all on one
+ * horizontal line across the middle, since every board sits on the
+ * planet's equator (see calculatedBoardPositionsAndRotations). Flying that
+ * line left-to-right, in order, is "how you see everything on this
+ * planet" - and wrapping off one edge of the map back onto the other
+ * reads exactly like flying off the edge of a world map, because that's
+ * what it is.
  *
  * Tapping the dock expands it to a large, centered overlay (GTAV-style),
  * where each project icon becomes tappable: picking one engages autopilot
@@ -164,8 +145,7 @@ const Minimap = () => {
   // consumed by the FLIP effect below.
   const preToggleRectRef = useRef<DOMRect | null>(null);
   const size = useMapSize(containerRef);
-  const { boardPoints, boardsData, toMap, arcRadius, boundaryRadius } =
-    useWorldToMap(size);
+  const { boardPoints, boardsData, toMap, planet } = usePlanetToMap(size);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -183,27 +163,34 @@ const Minimap = () => {
     const draw = () => {
       ctx.clearRect(0, 0, size, size);
 
-      // Range rings, purely decorative.
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      // The equator - the ring every board sits on and the ship's usual
+      // cruise line - drawn as a fixed horizontal reference, since it maps
+      // to the exact same y (lat 0) regardless of the ship's own position.
+      const [, equatorY] = toMap(
+        new Vector3(
+          planet.center.x + planet.radius,
+          planet.center.y,
+          planet.center.z,
+        ),
+      );
+      ctx.strokeStyle = "rgba(125, 211, 252, 0.35)";
       ctx.lineWidth = 1;
-      [0.33, 0.66, 1].forEach((f) => {
-        ctx.beginPath();
-        ctx.arc(size / 2, size / 2, (size / 2 - 4) * f, 0, Math.PI * 2);
-        ctx.stroke();
-      });
-
-      // The world boundary the ship is physically confined to (see
-      // utils/worldBounds and ship/physics/collision) - always concentric
-      // with the range rings above, since it maps directly onto the
-      // minimap's own circular dock.
-      drawBoundary(ctx, size, boundaryRadius);
+      ctx.beginPath();
+      ctx.moveTo(0, equatorY);
+      ctx.lineTo(size, equatorY);
+      ctx.stroke();
 
       boardPoints.forEach(({ x, y }) => drawBook(ctx, x, y));
 
       const ship = shipRef.current;
       if (ship) {
-        const [x, y] = toMap(ship.position.x, ship.position.z);
-        drawShipArrow(ctx, x, y, ship.rotation.y);
+        const [x, y] = toMap(ship.position);
+        const bearing = headingBearing(
+          ship.quaternion,
+          ship.position,
+          planet.center,
+        );
+        drawShipArrow(ctx, x, y, bearing);
       }
 
       frameId = requestAnimationFrame(draw);
@@ -211,7 +198,7 @@ const Minimap = () => {
 
     frameId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frameId);
-  }, [boardPoints, toMap, shipRef, size, boundaryRadius]);
+  }, [boardPoints, toMap, shipRef, size, planet]);
 
   // Both directions go through the same rect capture so the FLIP effect
   // below can animate the toggle as one continuous element resizing,
@@ -272,8 +259,7 @@ const Minimap = () => {
 
   const flyToBoard = (board: (typeof boardsData)[number]) => {
     requestAutopilot(
-      getBoardMatWorldPosition(board.position, board.rotation[1]),
-      arcRadius,
+      getBoardMatWorldPosition(board.position, board.quaternion),
     );
     collapse();
   };

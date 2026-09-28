@@ -3,14 +3,11 @@ import { Vector3 } from "three";
 
 export interface AutopilotTarget {
   position: Vector3;
-  // Board-shell radius at request time, so the autopilot motion can decide
-  // whether a direct path is already safe or needs to detour via the origin.
-  arcRadius: number;
 }
 
 interface AutopilotContextType {
   target: AutopilotTarget | null;
-  requestAutopilot: (position: Vector3, arcRadius: number) => void;
+  requestAutopilot: (position: Vector3) => void;
   cancelAutopilot: () => void;
   isFlying: boolean;
   setIsFlying: (flying: boolean) => void;
@@ -24,12 +21,9 @@ export const AutopilotProvider: React.FC<{ children: React.ReactNode }> = ({
   const [target, setTarget] = useState<AutopilotTarget | null>(null);
   const [isFlying, setIsFlying] = useState(false);
 
-  const requestAutopilot = useCallback(
-    (position: Vector3, arcRadius: number) => {
-      setTarget({ position, arcRadius });
-    },
-    [],
-  );
+  const requestAutopilot = useCallback((position: Vector3) => {
+    setTarget({ position });
+  }, []);
 
   const cancelAutopilot = useCallback(() => {
     setTarget(null);

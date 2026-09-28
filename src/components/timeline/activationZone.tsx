@@ -29,6 +29,13 @@ interface ActivationZoneProps {
   numberOfSquares?: number; // New prop for multiple squares
 }
 
+// How far the ship is allowed to be off the mat's own plane (its normal
+// axis) and still register as hovering it, in world units - generous
+// enough to cover the ship's actual cruise altitude above the mat plus
+// some slack for bounce jitter, but nowhere near enough to reach anything
+// on the far side of the planet.
+const NORMAL_TOLERANCE = 5;
+
 const ActivationZone: React.FC<ActivationZoneProps> = ({
   id,
   size = [8, 6],
@@ -135,9 +142,18 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
     zoneMeshRef.current.worldToLocal(
       shipRef.current.getWorldPosition(shipToSquareLocalPosition),
     );
+    // On a sphere, checking only the mat's own 2D footprint (x, y here) is
+    // not enough: a ship on the far side of the planet - nowhere near this
+    // board - can land almost exactly within that flat footprint purely by
+    // coincidence, because "opposite side of a sphere" is entirely a
+    // difference along the mat's own normal axis (z here, after the mat's
+    // -90deg X rotation - see the offsetRotation below). Requiring the ship
+    // to also be close along that axis (not just above/below it by any
+    // amount) is what tells a genuine flyover apart from that.
     const currentlyHovered =
       Math.abs(shipToSquareLocalPosition.x) <= size[1] / 2 &&
-      Math.abs(shipToSquareLocalPosition.y) <= size[0] / 2;
+      Math.abs(shipToSquareLocalPosition.y) <= size[0] / 2 &&
+      Math.abs(shipToSquareLocalPosition.z) <= NORMAL_TOLERANCE;
 
     if (currentlyHovered !== isHovered) {
       setIsHovered(currentlyHovered);

@@ -1,116 +1,151 @@
 import { describe, test, expect } from "vitest";
+import { Quaternion, Vector3 } from "three";
 import {
   buildBoardObbs,
-  clearBoardBearings,
-  resolveCircleObb,
+  resolveShipBoardCollision,
   type BoardObb,
 } from "./boardCollision";
+
+const identity: [number, number, number, number] = [0, 0, 0, 1];
+// A small, simple ship box - easy to reason about penetration depths
+// without it dominating the numbers in every test.
+const shipHalf = { x: 0.5, y: 0.5, z: 0.5 };
 
 describe("buildBoardObbs", () => {
   test("swaps outerZ/outerX onto depth/width per the board's baked -90deg rotation", () => {
     const [obb] = buildBoardObbs(
-      [{ position: [10, 0, -3], rotation: [0, Math.PI / 4, 0] }],
-      { outerX: 6.7, outerZ: 0.4 },
+      [{ position: [10, 0, -3], quaternion: identity }],
+      { outerX: 6.7, outerY: 4.4, outerZ: 0.4 },
     );
 
-    expect(obb.centerX).toBe(10);
-    expect(obb.centerZ).toBe(-3);
-    expect(obb.rotationY).toBeCloseTo(Math.PI / 4);
-    expect(obb.halfDepth).toBeCloseTo(0.2);
-    expect(obb.halfWidth).toBeCloseTo(3.35);
+    expect(obb.position.x).toBe(10);
+    expect(obb.position.z).toBe(-3);
+    expect(obb.halfExtents.x).toBeCloseTo(0.2);
+    expect(obb.halfExtents.y).toBeCloseTo(2.2);
+    expect(obb.halfExtents.z).toBeCloseTo(3.35);
   });
 });
 
-describe("resolveCircleObb", () => {
+describe("resolveShipBoardCollision", () => {
   const obb: BoardObb = {
-    centerX: 0,
-    centerZ: 0,
-    rotationY: 0,
-    halfDepth: 0.2,
-    halfWidth: 3.35,
+    position: new Vector3(0, 0, 0),
+    quaternion: new Quaternion(),
+    invQuaternion: new Quaternion(),
+    halfExtents: { x: 0.2, y: 2.2, z: 3.35 },
   };
-  const radius = 2;
 
   test("no collision when far away", () => {
-    expect(resolveCircleObb({ x: 100, z: 100 }, obb, radius)).toBeNull();
+    const hit = resolveShipBoardCollision(
+      new Vector3(100, 0, 100),
+      new Quaternion(),
+      shipHalf,
+      obb,
+    );
+    expect(hit).toBeNull();
   });
 
-  test("pushes straight out along the facing axis when centered on an unrotated board", () => {
-    const hit = resolveCircleObb({ x: 0, z: 0 }, obb, radius);
+  test("pushes straight out along the facing (local X) axis when centered on an unrotated board", () => {
+    const hit = resolveShipBoardCollision(
+      new Vector3(0, 0, 0),
+      new Quaternion(),
+      shipHalf,
+      obb,
+    );
     expect(hit).not.toBeNull();
-    // halfDepth (0.2) + radius (2) is far smaller than halfWidth (3.35) +
-    // radius, so the nearer edge - and thus the push/bounce direction - is
-    // along the facing axis, not the lateral one.
+    // halfExtents.x (0.2) + ship's half (0.5) is far smaller than
+    // halfExtents.z (3.35) + ship's half, so the nearer edge - and thus the
+    // push/bounce direction - is along the facing axis, not lateral.
     expect(hit!.normal.x).toBeCloseTo(1);
     expect(hit!.normal.z).toBeCloseTo(0);
-    expect(hit!.pushOut.x).toBeCloseTo(obb.halfDepth + radius);
+    expect(hit!.pushOut.x).toBeCloseTo(obb.halfExtents.x + shipHalf.x);
     expect(hit!.pushOut.z).toBeCloseTo(0);
   });
 
   test("a 90deg-rotated board's facing axis points along world -z", () => {
-    const rotated: BoardObb = { ...obb, rotationY: Math.PI / 2 };
-    const hit = resolveCircleObb({ x: 0, z: 0 }, rotated, radius);
+    const q = new Quaternion().setFromAxisAngle(
+      new Vector3(0, 1, 0),
+      Math.PI / 2,
+    );
+    const rotated: BoardObb = {
+      ...obb,
+      quaternion: q,
+      invQuaternion: q.clone().invert(),
+    };
+    const hit = resolveShipBoardCollision(
+      new Vector3(0, 0, 0),
+      new Quaternion(),
+      shipHalf,
+      rotated,
+    );
     expect(hit).not.toBeNull();
     expect(hit!.normal.x).toBeCloseTo(0);
     expect(hit!.normal.z).toBeCloseTo(-1);
   });
 
-  test("approaching face-on from a distance just inside the expanded box still collides", () => {
-    // Just short of (halfDepth + radius) along the facing axis, dead
-    // center laterally.
-    const hit = resolveCircleObb(
-      { x: obb.halfDepth + radius - 0.05, z: 0 },
-      obb,
-      radius,
-    );
-    expect(hit).not.toBeNull();
-    expect(hit!.normal.x).toBeCloseTo(1);
-  });
-
   test("clearing the expanded box laterally (past the board's edge) has no collision", () => {
-    const hit = resolveCircleObb(
-      { x: 0, z: obb.halfWidth + radius + 0.5 },
+    const hit = resolveShipBoardCollision(
+      new Vector3(0, 0, obb.halfExtents.z + shipHalf.z + 0.5),
+      new Quaternion(),
+      shipHalf,
       obb,
-      radius,
     );
     expect(hit).toBeNull();
   });
-});
 
-describe("clearBoardBearings", () => {
-  // Unrotated board at the origin: its facing axis (+u, "away from the
-  // origin" - see resolveCircleObb's doc comment) is world +x, its lateral
-  // axis (v) is world +z.
-  const obb: BoardObb = {
-    centerX: 0,
-    centerZ: 0,
-    rotationY: 0,
-    halfDepth: 0.2,
-    halfWidth: 3.35,
-  };
-  const clearance = 3;
-
-  test("nudges a point sideways when it's shadowed directly behind a board", () => {
-    // Well past the board (u=10 >> halfDepth) and dead-center laterally
-    // (v=0) - a straight line to the origin would cut right through it.
-    const result = clearBoardBearings({ x: 10, z: 0 }, [obb], clearance);
-
-    expect(result.x).toBeCloseTo(10); // "how far out" (u) is unchanged
-    expect(Math.abs(result.z)).toBeGreaterThanOrEqual(obb.halfWidth + clearance);
+  // Regression test: this is the actual bug being fixed - a ship on the far
+  // side of the planet from a board can land almost exactly on top of it in
+  // a flat (depth, width) footprint check, because "opposite side of a
+  // sphere" is entirely a difference along the board's own height/normal
+  // axis. Checking that third axis is what tells them apart.
+  test("a ship far along the board's own height axis does not collide, even with matching depth/width", () => {
+    const hit = resolveShipBoardCollision(
+      new Vector3(0, 85, 0), // e.g. roughly the diameter of a small planet
+      new Quaternion(),
+      shipHalf,
+      obb,
+    );
+    expect(hit).toBeNull();
   });
 
-  test("leaves a point on the origin side of the board untouched", () => {
-    const point = { x: -10, z: 0 };
-    expect(clearBoardBearings(point, [obb], clearance)).toEqual(point);
+  test("works in an arbitrary orientation, not just axis-aligned", () => {
+    // A board tipped 90deg so its local X (facing) now points along world Y -
+    // e.g. a board standing at a planet's pole, tilted relative to a board
+    // on the equator.
+    const q = new Quaternion().setFromAxisAngle(
+      new Vector3(0, 0, 1),
+      Math.PI / 2,
+    );
+    const tilted: BoardObb = {
+      ...obb,
+      position: new Vector3(5, 5, 5),
+      quaternion: q,
+      invQuaternion: q.clone().invert(),
+    };
+    const hit = resolveShipBoardCollision(
+      new Vector3(5, 5, 5),
+      new Quaternion(),
+      shipHalf,
+      tilted,
+    );
+    expect(hit).not.toBeNull();
+    // The facing axis (local X) is now world +Y.
+    expect(hit!.normal.y).toBeCloseTo(1);
   });
 
-  test("leaves a point already clear of the board's lateral span untouched", () => {
-    const point = { x: 10, z: obb.halfWidth + clearance + 5 };
-    expect(clearBoardBearings(point, [obb], clearance)).toEqual(point);
-  });
-
-  test("leaves a point untouched when there are no boards to check", () => {
-    const point = { x: 10, z: 0 };
-    expect(clearBoardBearings(point, [], clearance)).toEqual(point);
+  test("a wide ship pokes further into the board's expanded footprint than a narrow one", () => {
+    const narrowHit = resolveShipBoardCollision(
+      new Vector3(0, 0, obb.halfExtents.z + 0.3),
+      new Quaternion(),
+      { x: 0.1, y: 0.1, z: 0.1 },
+      obb,
+    );
+    const wideHit = resolveShipBoardCollision(
+      new Vector3(0, 0, obb.halfExtents.z + 0.3),
+      new Quaternion(),
+      { x: 0.1, y: 0.1, z: 2 },
+      obb,
+    );
+    expect(narrowHit).toBeNull();
+    expect(wideHit).not.toBeNull();
   });
 });

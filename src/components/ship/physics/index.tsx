@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
+import { Euler, Group, Quaternion } from "three";
 
 // Leva's debug panel is only used when helper=true (never in production
 // usage). Lazy-load it so leva and its deps don't bloat the main bundle.
@@ -9,28 +10,28 @@ const PhysicsDebugControls = lazy(() => import("./physicsDebugControls"));
 import { Motion, createMotion } from "./helper/motion";
 import { useKeyContext } from "../../../context/keyContext";
 import { useScene } from "../../../context/sceneContext";
-import { useProjects } from "../../../context/projectContext";
 import {
   useAutopilot,
   AutopilotTarget,
 } from "../../../context/autopilotContext";
 import { useTrick } from "../../../context/trickContext";
 import motionConstants from "../../../utils/motionConstants.json";
+import keys from "../../../utils/keys.json";
 import { HarmonicMotion } from "./motions/harmonic/harmonic";
+import { PlanetMotion } from "./motions/planet/planet";
 import { AutopilotMotion } from "./motions/autopilot/autopilot";
 import { TrickMotion } from "./motions/trick/trick";
-import { buildBoardObbs } from "./collision/boardCollision";
-import { calculatedBoardPositionsAndRotations } from "../../timeline/calculatedBoardPositionsAndRotations";
-import boardGeometry from "../../../utils/boardParams.json";
 import { hasAnyRealControlKey, isBoostEngaged } from "../../../utils/boost";
+import { useProjects } from "../../../context/projectContext";
+import { spawnTransform } from "../../timeline/calculatedBoardPositionsAndRotations";
 
 /**
  * Default motion parameters for ship physics
  * Used as fallback and for initializing controls
- * - roll: Roll motion parameters
- * - pitch: Pitch motion parameters
- * - yaw: Yaw motion parameters
- * - throttle: Throttle motion parameters
+ * - roll: Roll motion parameters (cosmetic tilt)
+ * - pitch: Pitch motion parameters (cosmetic tilt)
+ * - yaw: Turning around the ship's own local up
+ * - throttle: Moving along the ship's own local forward, over the planet's surface
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react/prop-types */
@@ -54,12 +55,15 @@ const defaultMotionParams = {
     maxSpeed: 5,
   },
   throttle: {
-    acceleration: 0.5,
-    maxSpeed: 2,
+    // Tuned so a full loop of the planet's equator (~267 units) at max
+    // speed takes about 15s, not the multi-minute crawl the old flat-world
+    // numbers (maxSpeed 2) would give on a world this size.
+    acceleration: 6,
+    maxSpeed: 18,
     decayFactor: 0.85,
   },
   autopilot: {
-    speed: 12,
+    speed: 20,
   },
 };
 
@@ -90,28 +94,33 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   };
 
   const { shipRef: groupRef } = useScene();
+  const { items } = useProjects();
 
   const [params, setParams] = useState(initialParams);
 
-  // Refs to motion instances
+  // Roll and pitch are purely cosmetic banking, layered on top of the
+  // ship's actual surface heading (see PlanetMotion) rather than driving it
+  // - they're sprung onto lightweight dummy targets, not the real ship
+  // group, so Physics can compose (heading * tilt) itself each frame
+  // instead of the tilt silently becoming part of "current heading".
+  const rollTarget = useRef(new Group());
+  const pitchTarget = useRef(new Group());
   const motions = useRef({
     [Motion.ROLL]: createMotion(Motion.ROLL),
     [Motion.PITCH]: createMotion(Motion.PITCH),
-    [Motion.YAW]: createMotion(Motion.YAW),
-    [Motion.THROTTLE]: createMotion(Motion.THROTTLE),
   });
+
+  const planetMotion = useRef(
+    new PlanetMotion(
+      { yaw: initialParams.yaw, throttle: initialParams.throttle },
+      keys.yaw,
+      keys.throttle,
+    ),
+  );
 
   const activeKeys = useKeyContext();
   const { target, cancelAutopilot, setIsFlying } = useAutopilot();
   const autopilotMotion = useRef(new AutopilotMotion());
-  const { items } = useProjects();
-  // Board footprints the autopilot flight path must route around (see
-  // AutopilotMotion.start) - same data ship/physics/collision derives
-  // independently for its own, per-frame reactive collision.
-  const boardObbs = useMemo(() => {
-    const boardsData = calculatedBoardPositionsAndRotations(items, "arc");
-    return buildBoardObbs(boardsData, boardGeometry);
-  }, [items]);
   // Tracks which request object is currently being flown to (not just a
   // flying/not-flying boolean), so a new requestAutopilot() call mid-flight
   // - a different target reference - is detected and restarts the path
@@ -127,18 +136,22 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   // from the one already animating.
   const activeTrickRef = useRef<number | null>(null);
 
-  // Attach motions to the group on mount
+  // Spawn the ship on the planet's shell and attach motions on mount.
   useEffect(() => {
     if (!groupRef.current) return;
 
-    Object.values(motions.current).forEach((motion) => {
-      if (groupRef.current) motion.attachTo(groupRef.current);
-    });
-    autopilotMotion.current.attachTo(groupRef.current);
-    trickMotion.current.attachTo(groupRef.current);
+    const { position, orientation } = spawnTransform(items);
+    groupRef.current.position.copy(position);
+    groupRef.current.quaternion.copy(orientation);
+
+    motions.current[Motion.ROLL].attachTo(rollTarget.current);
+    motions.current[Motion.PITCH].attachTo(pitchTarget.current);
+    planetMotion.current.attachTo(groupRef.current);
+    trickMotion.current.attachTo(rollTarget.current);
 
     return () => {
       Object.values(motions.current).forEach((motion) => motion.cleanup());
+      planetMotion.current.cleanup();
       autopilotMotion.current.cleanup();
       trickMotion.current.cleanup();
     };
@@ -146,38 +159,50 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
 
   // Update motions each frame
   useFrame((_, delta) => {
+    const ship = groupRef.current;
+    if (!ship) return;
+
+    const isBoosting = isBoostEngaged(activeKeys);
+
     if (target) {
       if (activeTargetRef.current !== target) {
         // First engagement, or requestAutopilot() was called again with a
         // new destination mid-flight - (re)plan from wherever the ship
         // actually is right now, not its original starting point.
-        // Roll/pitch springs run their own independent RAF loop - if the
-        // ship was mid-roll/pitch the instant autopilot engaged, a plain
-        // "stop calling update()" wouldn't stop that stale spring from
-        // still overwriting rotation underneath the flight path.
-        (motions.current[Motion.ROLL] as HarmonicMotion).pause();
-        (motions.current[Motion.PITCH] as HarmonicMotion).pause();
         autopilotMotion.current.start(
-          groupRef.current!.position.clone(),
+          ship.position.clone(),
           target.position,
-          target.arcRadius,
-          boardObbs,
           params.autopilot.speed,
         );
         activeTargetRef.current = target;
         setIsFlying(true);
       }
 
-      const status = autopilotMotion.current.update(
+      const result = autopilotMotion.current.update(
         delta,
         hasAnyRealControlKey(activeKeys),
       );
-      if (status !== "flying") {
+      if (result.status !== "flying") {
         cancelAutopilot();
         activeTargetRef.current = null;
         setIsFlying(false);
       }
-      return; // skip the four normal motions entirely this frame
+
+      // Let roll/pitch decay smoothly back to level while under autopilot,
+      // rather than freezing wherever they were the instant it engaged.
+      motions.current[Motion.ROLL].update(delta, new Set());
+      motions.current[Motion.PITCH].update(delta, new Set());
+
+      const tilt = new Quaternion().setFromEuler(
+        new Euler(
+          pitchTarget.current.rotation.x,
+          0,
+          rollTarget.current.rotation.z,
+        ),
+      );
+      ship.position.copy(result.position);
+      ship.quaternion.copy(result.orientation).multiply(tilt);
+      return; // skip manual motions entirely this frame
     }
 
     if (trickRequest !== null && activeTrickRef.current !== trickRequest.id) {
@@ -198,21 +223,35 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
       }
     }
 
-    const isBoosting = isBoostEngaged(activeKeys);
+    if (activeTrickRef.current === null) {
+      motions.current[Motion.ROLL].updateConfig(params.roll);
+      motions.current[Motion.ROLL].update(delta, activeKeys);
+    }
+    motions.current[Motion.PITCH].updateConfig(params.pitch);
+    motions.current[Motion.PITCH].update(delta, activeKeys);
 
-    Object.entries(motions.current).forEach(([type, motion]) => {
-      if (type === Motion.ROLL && activeTrickRef.current !== null) return;
-      let config = params[type as keyof typeof params];
-      if (type === Motion.THROTTLE && isBoosting) {
-        config = {
-          ...config,
-          acceleration: config.acceleration * BOOST_MULTIPLIER,
-          maxSpeed: config.maxSpeed * BOOST_MULTIPLIER,
-        };
-      }
-      motion.updateConfig(config);
-      motion.update(delta, activeKeys);
+    const throttleConfig = isBoosting
+      ? {
+          ...params.throttle,
+          acceleration: params.throttle.acceleration * BOOST_MULTIPLIER,
+          maxSpeed: params.throttle.maxSpeed * BOOST_MULTIPLIER,
+        }
+      : params.throttle;
+    planetMotion.current.updateConfig({
+      yaw: params.yaw,
+      throttle: throttleConfig,
     });
+    const base = planetMotion.current.update(delta, activeKeys, ship.position);
+
+    const tilt = new Quaternion().setFromEuler(
+      new Euler(
+        pitchTarget.current.rotation.x,
+        0,
+        rollTarget.current.rotation.z,
+      ),
+    );
+    ship.position.copy(base.position);
+    ship.quaternion.copy(base.orientation).multiply(tilt);
   });
 
   return helper ? (
