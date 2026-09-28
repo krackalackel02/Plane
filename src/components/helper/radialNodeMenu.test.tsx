@@ -57,15 +57,25 @@ describe("RadialNodeMenu", () => {
     );
   });
 
-  it("expands on hover (desktop) and collapses on mouse leave", () => {
+  // jsdom's fireEvent can't actually populate pointerType on a dispatched
+  // PointerEvent (it always reads back as undefined in this environment),
+  // so these exercise the component's default/fallback path - which
+  // radialNodeMenu.tsx deliberately treats as hover-capable (see its
+  // handlePointerEnter/Leave: excludes "touch"/"pen" rather than requiring
+  // exactly "mouse") specifically so this coverage stays meaningful here.
+  // The actual touch-vs-mouse gating this enables - a real device's touch
+  // tap no longer racing its own click via a spurious hover-open - can
+  // only be verified against a real browser's accurate pointerType, in
+  // e2e/hudButtons.spec.ts.
+  it("expands on hover (desktop) and collapses on pointer leave", () => {
     renderMenu();
     const trigger = screen.getByLabelText("Open menu");
     const root = trigger.parentElement as HTMLElement;
 
-    fireEvent.mouseEnter(root);
+    fireEvent.pointerEnter(root);
     expect(trigger).toHaveAttribute("aria-expanded", "true");
 
-    fireEvent.mouseLeave(root);
+    fireEvent.pointerLeave(root);
     expect(trigger).toHaveAttribute("aria-expanded", "false");
   });
 
@@ -73,19 +83,19 @@ describe("RadialNodeMenu", () => {
     renderMenu();
     const trigger = screen.getByLabelText("Open menu");
     const root = trigger.parentElement as HTMLElement;
-    fireEvent.mouseEnter(root);
+    fireEvent.pointerEnter(root);
     expect(trigger).toHaveAttribute("aria-expanded", "true");
 
     const bridge = root.querySelector(".radial-node-menu__hover-bridge");
     expect(bridge).not.toBeNull();
     expect(root.contains(bridge)).toBe(true);
-    // React's onMouseLeave fires from a "mouseout" whose relatedTarget has
-    // left the element's subtree. The bridge exists precisely so that the
-    // physical gap the mouse crosses between the trigger and a fanned-out
-    // node still has a relatedTarget *inside* root - without it this
-    // transition would report leaving root entirely and collapse the
+    // React's onPointerLeave fires from a "pointerout" whose relatedTarget
+    // has left the element's subtree. The bridge exists precisely so that
+    // the physical gap the mouse crosses between the trigger and a
+    // fanned-out node still has a relatedTarget *inside* root - without it
+    // this transition would report leaving root entirely and collapse the
     // branch mid-sweep.
-    fireEvent.mouseOut(trigger, { relatedTarget: bridge });
+    fireEvent.pointerOut(trigger, { relatedTarget: bridge });
     expect(trigger).toHaveAttribute("aria-expanded", "true");
   });
 
@@ -174,9 +184,7 @@ describe("RadialNodeMenu", () => {
     expect(item).toHaveAttribute("role", "menuitemcheckbox");
     expect(item).toHaveAttribute("aria-checked", "true");
     expect(item.className).toContain("radial-node-menu__fan-node--active");
-    expect(item.className).toContain(
-      "radial-node-menu__fan-node--tone-danger",
-    );
+    expect(item.className).toContain("radial-node-menu__fan-node--tone-danger");
   });
 
   it("an active node with no activeTone (or 'accent') gets no tone modifier class", () => {

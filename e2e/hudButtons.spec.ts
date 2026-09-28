@@ -4,37 +4,36 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
 // AudioButton and ExhaustModeButton are both built on the RadialNodeMenu
 // speed-dial template (radialNodeMenu.tsx). Its trigger is meant to open on
 // a single tap on touch devices - there's no hover path on mobile, unlike
-// desktop, where opening happens via mouseenter regardless of which exact
-// descendant the cursor first lands on.
+// desktop, where opening happens via a mouse actually entering the wrapper.
 //
-// The bug this guards against: .radial-node-menu__hover-bridge used to
-// carry `pointer-events: auto` unconditionally, including while collapsed.
-// Since it's `position: absolute; inset: 0`, it painted directly on top of
-// the plain in-flow trigger <button> regardless of DOM order (a real CSS
-// stacking rule, not a fluke) and silently absorbed every tap meant for
-// the trigger. Desktop never noticed, because hovering into the wrapper
-// opens the branch before any click is needed. Mobile has no such
-// fallback, so the trigger was effectively dead until some other event
-// (an inconsistent, browser-dependent touch->mouse compatibility path)
-// happened to open it - exactly the "have to spam tap other buttons"
-// symptom this was reported as.
+// Two independent bugs used to make that fail on real touch devices, both
+// invisible to radialNodeMenu.test.tsx's jsdom-based tests - RTL's
+// fireEvent dispatches straight on a target node, bypassing both real
+// hit-testing/paint order and a real browser's pointerType, so neither of
+// these ever showed up there:
 //
-// This is also the one thing radialNodeMenu.test.tsx's jsdom-based tests
-// structurally cannot catch: RTL's fireEvent.click() dispatches straight
-// on the target node, bypassing real browser hit-testing/paint-order
-// entirely, so a sibling element sitting visually on top of the trigger
-// never shows up as broken there.
+// 1. .radial-node-menu__hover-bridge used to carry `pointer-events: auto`
+//    unconditionally, including while collapsed. Since it's `position:
+//    absolute; inset: 0`, it painted directly on top of the plain in-flow
+//    trigger <button> regardless of DOM order (a real CSS stacking rule,
+//    not a fluke) and silently absorbed every tap meant for the trigger.
+// 2. The wrapper's hover-to-open handler used to be a plain onMouseEnter/
+//    onMouseLeave. Touch taps also fire the legacy mouseover/mouseout
+//    compatibility events those are derived from, so a tap's synthesized
+//    "mouseenter" opened the branch via hover, and the trigger's onClick
+//    (a blind `!current` toggle) immediately flipped it back closed in the
+//    same tap - it took a second tap to actually land it open.
 //
-// Real device emulation (isMobile + hasTouch, which is all this project's
-// two Playwright projects run) is what actually exercises point-based hit
-// testing - but Chromium's automated touch injection (locator.tap(), via
-// CDP) does not reliably synthesize the compatibility `click` DOM event
-// React's onClick depends on, even once a real device fires the same
-// touch reliably. So rather than assert through that unreliable path, the
-// tests below ask the browser directly, via document.elementFromPoint,
-// which element a tap at the trigger's own coordinates would actually
-// land on - the literal mechanism of the bug, verified against a real
-// layout/paint engine that jsdom doesn't have.
+// Both together produced exactly the reported symptom: tapping the audio
+// or exhaust-style button did nothing, or needed repeated taps, while
+// HelpButton (no hover state, no overlay) already opened on one tap.
+//
+// The elementFromPoint checks below target bug #1 directly (the literal
+// hit-testing mechanism) rather than asserting through a live tap, since a
+// live tap's outcome is also downstream of #2. The single-tap flows
+// further down exercise the full real thing end-to-end, now that both are
+// fixed - they reliably failed (via a genuinely unopened branch, not a
+// tooling flake) against either bug alone.
 
 const waitForSceneReady = async (page: Page) => {
   await page.goto("/");
@@ -117,4 +116,43 @@ test("hovering the exhaust trigger opens it, and clicking a fanned option switch
 
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(trigger).toHaveAccessibleName(/Particles/);
+});
+
+test("a single real tap opens the audio trigger (no second tap needed)", async ({
+  page,
+}) => {
+  const trigger = page.getByRole("button", { name: /^Audio:/ });
+  await expect(trigger).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+  await trigger.tap();
+
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+});
+
+test("a single real tap opens the exhaust-style trigger (no second tap needed)", async ({
+  page,
+}) => {
+  const trigger = page.getByRole("button", { name: /^Exhaust style:/ });
+  await expect(trigger).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+  await trigger.tap();
+
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+});
+
+test("a single real tap on a fanned option selects it and closes the branch", async ({
+  page,
+}) => {
+  const trigger = page.getByRole("button", { name: /^Audio:/ });
+  await expect(trigger).toBeVisible();
+
+  await trigger.tap();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+  await page.getByRole("menuitemcheckbox", { name: "Mute" }).tap();
+
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(trigger).toHaveAccessibleName(/Muted/);
 });
