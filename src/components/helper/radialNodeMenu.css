@@ -28,11 +28,22 @@
 
    Placed first in DOM order so the trigger/fan nodes (painted after it)
    stay on top and remain clickable; only the empty gaps between them fall
-   through to the bridge. */
+   through to the bridge.
+
+   pointer-events stays "none" until expanded (mirroring
+   .radial-node-menu__fan-item below). The base `inset: 0` box exactly
+   covers the trigger button while collapsed - since this element is
+   position:absolute, it paints above that plain in-flow button
+   regardless of DOM order (see above), so leaving pointer-events "auto"
+   here would let this invisible div swallow every tap meant for the
+   trigger. Desktop never notices because opening is hover-driven
+   (mouseenter on the root wrapper fires no matter which descendant the
+   cursor first lands on) - only tap-to-open, which depends on the
+   trigger's own onClick, was actually broken by this. */
 .radial-node-menu__hover-bridge {
   position: absolute;
   inset: 0;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .radial-node-menu--expanded .radial-node-menu__hover-bridge {
@@ -40,6 +51,7 @@
   left: -70px;
   right: -70px;
   height: 100px;
+  pointer-events: auto;
 }
 
 /* --- Fan: sub-options arc out below the trigger, one arc = the picker,
