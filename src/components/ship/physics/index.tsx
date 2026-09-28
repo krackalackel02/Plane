@@ -94,7 +94,7 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
   };
 
   const { shipRef: groupRef } = useScene();
-  const { items } = useProjects();
+  const { items, activeProjectId } = useProjects();
 
   const [params, setParams] = useState(initialParams);
 
@@ -182,7 +182,14 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
         delta,
         hasAnyRealControlKey(activeKeys),
       );
-      if (result.status !== "flying") {
+      // The project popup (Highlight) opens the instant the ship enters a
+      // board's activation zone - a separate, proximity-based check from
+      // this arc's own progress - so it can appear before progress
+      // reaches 1. Treat a popup opening mid-flight as arrival: otherwise
+      // the arc keeps "flying" underneath the popup (isFlying stays
+      // true), leaving the exhaust lit and autopilot nominally still
+      // engaged for however long the popup stays open.
+      if (result.status !== "flying" || activeProjectId) {
         cancelAutopilot();
         activeTargetRef.current = null;
         setIsFlying(false);

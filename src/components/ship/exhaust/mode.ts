@@ -1,7 +1,7 @@
 import { ExhaustMode } from "./types";
 
 const VALID_MODES: readonly ExhaustMode[] = ["particles", "clouds", "voxels"];
-const DEFAULT_MODE: ExhaustMode = "clouds";
+const DEFAULT_MODE: ExhaustMode = "voxels";
 
 const isExhaustMode = (value: unknown): value is ExhaustMode =>
   typeof value === "string" &&

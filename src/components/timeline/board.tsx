@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { useLoader, ThreeEvent } from "@react-three/fiber";
 import { TextureLoader } from "three";
 import * as THREE from "three";
@@ -16,6 +16,7 @@ import { RoundedBoxGeometry } from "three-stdlib";
 import { BoardParams } from "../types/boardTypes";
 import { getBoardMatWorldPosition } from "../../utils/3d";
 import ActivationZone from "./activationZone";
+import DebugBoundingBox from "../helper/debugBoundingBox";
 
 /**
  * Default board parameters
@@ -203,6 +204,9 @@ const Board = ({
   const finalImage = imagePath || "./images/placeholder.jpg";
   const texture = useLoader(TextureLoader, finalImage);
   const { requestAutopilot } = useAutopilot();
+  // Wraps just the picture frame (not ActivationZone's floor mat) so the
+  // "B"-hotkey debug bounding box traces the board's own physical footprint.
+  const frameRef = useRef<THREE.Group>(null);
 
   // Clicking either the picture frame or its floor mat (ActivationZone)
   // bubbles up to this single handler - both should fly to the same mat
@@ -227,7 +231,10 @@ const Board = ({
           <BoardDebugControls params={params} updateParam={updateParam} />
         </Suspense>
       )}
-      <group position={[0, 0, sideOffset]}>
+      {/* frameRef sits on this offset group itself (not a level deeper) so
+          the "B"-hotkey debug box traces the picture frame's actual
+          rendered position, sideOffset included. */}
+      <group ref={frameRef} position={[0, 0, sideOffset]}>
         <PictureFrame
           params={params}
           texture={texture}
@@ -237,6 +244,7 @@ const Board = ({
       <ActivationZone
         id={id} // Centered on the trail, in front of the anchor - not the (offset) board
       />
+      <DebugBoundingBox target={frameRef} color="#ffae00" />
     </group>
   );
 };

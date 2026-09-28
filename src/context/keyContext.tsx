@@ -97,31 +97,66 @@ export const KeyProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   /// Event handlers
+  // Caps Lock (and Shift) makes event.key return an uppercase letter for
+  // single-character keys, but keys.json binds controls (w/a/s/d, etc.) to
+  // lowercase strings - normalize so activeKeys still matches those bindings
+  // regardless of Caps Lock state. Multi-character keys (e.g. "ArrowLeft",
+  // "Shift") are left untouched.
+  const normalizeKey = (key: string) =>
+    key.length === 1 ? key.toLowerCase() : key;
+
   const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => pressKey(event.key),
+    (event: KeyboardEvent) => pressKey(normalizeKey(event.key)),
     [pressKey],
   );
 
   const handleKeyUp = useCallback(
-    (event: KeyboardEvent) => releaseKey(event.key),
+    (event: KeyboardEvent) => releaseKey(normalizeKey(event.key)),
     [releaseKey],
   );
+
+  // A key held down when focus leaves the window (e.g. the project popup's
+  // "View Demo"/"View Code" links, or the Enter-to-open-link shortcut in
+  // Highlight, open a new tab) never gets its keyup delivered here - the OS
+  // sends that keyup to whatever now has focus instead. Without this, the
+  // key reads as permanently "held", leaving the ship stuck turning/
+  // throttling on its own and autopilot unable to re-engage (it treats the
+  // phantom input as the player taking manual control).
+  const handleBlur = useCallback(() => {
+    setActiveKeys((prev) => (prev.size === 0 ? prev : new Set()));
+  }, []);
 
   // Attach and detach event listeners
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
     };
-  }, [handleKeyDown, handleKeyUp]);
+  }, [handleKeyDown, handleKeyUp, handleBlur]);
 
   const keyControls = useMemo(
     () => ({ pressKey, releaseKey }),
     [pressKey, releaseKey],
   );
+
+  // Backstop against any stuck-key path we haven't found yet - independent
+  // of whether keyup/blur actually fired. The page cannot genuinely have a
+  // key held down while it lacks focus, so periodically verify that ground
+  // truth and self-heal instead of trusting event delivery alone.
+  useEffect(() => {
+    const STUCK_KEY_POLL_MS = 7000;
+    const interval = setInterval(() => {
+      if (!document.hasFocus()) {
+        setActiveKeys((prev) => (prev.size === 0 ? prev : new Set()));
+      }
+    }, STUCK_KEY_POLL_MS);
+    return () => clearInterval(interval);
+  }, []);
 
   // Test-only hook so Playwright (a real browser, unlike the component
   // tests' jsdom) can assert which keys a touch control actually produced.

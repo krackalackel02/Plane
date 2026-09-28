@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 import { Vector3 } from "three";
 
 export interface AutopilotTarget {
@@ -27,6 +34,35 @@ export const AutopilotProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const cancelAutopilot = useCallback(() => {
     setTarget(null);
+  }, []);
+
+  // Mirrors keyContext's blur handler, added for the same popup: clicking
+  // the landing popup's "View Demo"/"View Code" links (or backgrounding the
+  // tab on mobile) steals window focus, which can stall the physics
+  // useFrame loop this state otherwise depends on to ever clear itself.
+  // Without this, isFlying/target can be left stuck true for as long as the
+  // tab stays unfocused, leaving the exhaust lit the whole time.
+  const isFlyingRef = useRef(isFlying);
+  isFlyingRef.current = isFlying;
+
+  useEffect(() => {
+    const disengageIfFlying = () => {
+      if (!isFlyingRef.current) return;
+      setTarget(null);
+      setIsFlying(false);
+    };
+
+    window.addEventListener("blur", disengageIfFlying);
+
+    const STUCK_FLIGHT_POLL_MS = 7000;
+    const interval = setInterval(() => {
+      if (!document.hasFocus()) disengageIfFlying();
+    }, STUCK_FLIGHT_POLL_MS);
+
+    return () => {
+      window.removeEventListener("blur", disengageIfFlying);
+      clearInterval(interval);
+    };
   }, []);
 
   return (

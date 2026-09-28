@@ -1,52 +1,30 @@
-import React, { useEffect } from "react";
-import { Mesh } from "three";
+import React from "react";
 import { useEnvironment } from "../../context/envContext";
 import { useScene } from "../../context/sceneContext";
 
-// Utility to compute scale based on bounding box
-import { computeScale } from "../../utils/3d";
-
 // Ship sub-components
 import Exhaust from "./exhaust"; // Exhaust effects component
-import Body from "./body"; // Ship body model component
+import Body from "./body"; // Ship body model component (also fits shipRef's scale to the loaded model)
 import Physics from "./physics"; // Physics and movement component
 import ShipCollision from "./physics/collision"; // Board collision & bounce physics
-import shipParams from "../../utils/shipParams.json";
 
 const Ship: React.FC = () => {
-  const { shipRef } = useScene();
-  const scaleTo = {
-    x: shipParams.halfExtents.x * 2,
-    y: shipParams.halfExtents.y * 2,
-    z: shipParams.halfExtents.z * 2,
-  }; // Scale the model to fit the scene
+  // bodyRef wraps just the ship model (not the exhaust flame, which would
+  // otherwise balloon the debug bounding box every time it fires) - see
+  // scene.tsx, which renders the "B"-hotkey bounding-box overlay for it
+  // outside this group's transform.
+  const { shipRef, bodyRef } = useScene();
   const { showShip } = useEnvironment(); // Get showShip from environment context
 
   if (!showShip) return null;
-
-  // Scale the ship model based on its bounding box
-  useEffect(() => {
-    if (!shipRef.current) return;
-
-    shipRef.current.traverse((child) => {
-      if ((child as Mesh).isMesh) {
-        const mesh = child as Mesh;
-        mesh.geometry.computeBoundingBox();
-        const bbox = mesh.geometry.boundingBox;
-        if (bbox) {
-          // Compute and set the scale factor
-          const scaleFactor = computeScale(scaleTo, bbox);
-          shipRef.current?.scale.set(scaleFactor, scaleFactor, scaleFactor);
-        }
-      }
-    });
-  }, [scaleTo]);
 
   return (
     showShip && (
       <>
         <group ref={shipRef}>
-          <Body />
+          <group ref={bodyRef}>
+            <Body />
+          </group>
           <Exhaust />
           <Physics />
           <ShipCollision />

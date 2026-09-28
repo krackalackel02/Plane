@@ -11,28 +11,51 @@ import { useEnvironment } from "./envContext";
 interface AudioUIContextType {
   muted: boolean;
   toggleMute: () => void;
+  /** Independent on/off state for the ambient pad and the activation-zone
+   *  bleep - each toggleable on its own, unlike `muted` (which silences
+   *  everything at once). Turning either of these on also unmutes, so a
+   *  channel you just switched on is actually audible. */
+  musicEnabled: boolean;
+  toggleMusic: () => void;
+  sfxEnabled: boolean;
+  toggleSfx: () => void;
 }
 
 const AudioUIContext = createContext<AudioUIContextType>({
   muted: false,
   toggleMute: () => {},
+  musicEnabled: true,
+  toggleMusic: () => {},
+  sfxEnabled: true,
+  toggleSfx: () => {},
 });
 
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [muted, setMuted] = useState(() => audioEngine.isMuted());
-  const { musicEnabled } = useEnvironment();
+  const [musicEnabled, setMusicEnabled] = useState(() =>
+    audioEngine.isMusicEnabled(),
+  );
+  const [sfxEnabled, setSfxEnabled] = useState(() =>
+    audioEngine.isSfxEnabled(),
+  );
+  // Whether the ambient pad's scheduling starts at all is a one-time,
+  // env-driven decision (VITE_MUSIC_ENABLED) - distinct from the live,
+  // player-toggleable `musicEnabled` above, which just gates its gain.
+  const { musicEnabled: musicEnabledByEnv } = useEnvironment();
 
   useEffect(() => audioEngine.subscribe(setMuted), []);
+  useEffect(() => audioEngine.subscribeMusic(setMusicEnabled), []);
+  useEffect(() => audioEngine.subscribeSfx(setSfxEnabled), []);
 
   // Build the audio graph (+ schedule the ambient pad, unless
   // VITE_MUSIC_ENABLED=false) as soon as the app mounts - no gesture
   // needed for that part, so there's no lag waiting for the player to do
   // something first.
   useEffect(() => {
-    audioEngine.init(musicEnabled);
-  }, [musicEnabled]);
+    audioEngine.init(musicEnabledByEnv);
+  }, [musicEnabledByEnv]);
 
   // Browsers still refuse to make sound audible until a real user gesture
   // occurs, so this just unlocks the graph that's already built above.
@@ -83,9 +106,20 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const toggleMute = useCallback(() => audioEngine.toggleMute(), []);
+  const toggleMusic = useCallback(() => audioEngine.toggleMusic(), []);
+  const toggleSfx = useCallback(() => audioEngine.toggleSfx(), []);
 
   return (
-    <AudioUIContext.Provider value={{ muted, toggleMute }}>
+    <AudioUIContext.Provider
+      value={{
+        muted,
+        toggleMute,
+        musicEnabled,
+        toggleMusic,
+        sfxEnabled,
+        toggleSfx,
+      }}
+    >
       {children}
     </AudioUIContext.Provider>
   );

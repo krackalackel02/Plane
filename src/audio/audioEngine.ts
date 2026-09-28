@@ -13,6 +13,10 @@
  */
 
 const MUTE_STORAGE_KEY = "plane:audio-muted";
+const MUSIC_ENABLED_STORAGE_KEY = "plane:music-enabled";
+const SFX_ENABLED_STORAGE_KEY = "plane:sfx-enabled";
+const MUSIC_GAIN = 0.06; // matches the always-on background level below
+const SFX_GAIN = 0.5;
 
 interface EngineNodes {
   noiseSource: AudioBufferSourceNode;
@@ -38,9 +42,30 @@ class AudioEngine {
   private muted = false;
   private listeners = new Set<(muted: boolean) => void>();
 
+  // Independent on/off toggles for the two channels a listener can tell
+  // apart - the ambient pad (musicGain, "background music") and the
+  // activation-zone bleep (sfxGain, "sound effects"). Both default on,
+  // matching the levels those gain nodes have always carried.
+  private musicEnabled = true;
+  private sfxEnabled = true;
+  private musicListeners = new Set<(enabled: boolean) => void>();
+  private sfxListeners = new Set<(enabled: boolean) => void>();
+
+  // Snapshot of musicEnabled/sfxEnabled taken at the moment mute is
+  // switched on via toggleMute (see below), so switching it back off
+  // through that same control restores exactly what was playing before -
+  // rather than mute just silencing everything via masterGain while
+  // leaving both channels looking "on".
+  private preMuteMusicEnabled = true;
+  private preMuteSfxEnabled = true;
+
   constructor() {
     if (typeof window !== "undefined") {
       this.muted = window.localStorage.getItem(MUTE_STORAGE_KEY) === "1";
+      this.musicEnabled =
+        window.localStorage.getItem(MUSIC_ENABLED_STORAGE_KEY) !== "0";
+      this.sfxEnabled =
+        window.localStorage.getItem(SFX_ENABLED_STORAGE_KEY) !== "0";
     }
   }
 
@@ -61,7 +86,7 @@ class AudioEngine {
     this.masterGain = master;
 
     const music = ctx.createGain();
-    music.gain.value = 0.06; // always-on background, kept deliberately quiet
+    music.gain.value = this.musicEnabled ? MUSIC_GAIN : 0; // deliberately quiet even at full "on"
     music.connect(master);
     this.musicGain = music;
 
@@ -71,7 +96,7 @@ class AudioEngine {
     this.engineGain = engine;
 
     const sfx = ctx.createGain();
-    sfx.gain.value = 0.5;
+    sfx.gain.value = this.sfxEnabled ? SFX_GAIN : 0;
     sfx.connect(master);
     this.sfxGain = sfx;
 
@@ -135,14 +160,125 @@ class AudioEngine {
     this.listeners.forEach((listener) => listener(this.muted));
   }
 
+  /** Muting also visually/audibly turns off background music and sound
+   *  effects (rather than just silencing everything via masterGain while
+   *  their toggles keep showing "on"), but remembers what they were so
+   *  switching mute back off through this same control brings them right
+   *  back - a direct click on the music/sfx toggles themselves is a
+   *  separate, more surgical action (see setMusicEnabled/setSfxEnabled)
+   *  that doesn't touch this snapshot. */
   toggleMute() {
-    this.setMuted(!this.muted);
+    if (!this.muted) {
+      this.preMuteMusicEnabled = this.musicEnabled;
+      this.preMuteSfxEnabled = this.sfxEnabled;
+      this.setMuted(true);
+      this.applyMusicEnabled(false);
+      this.applySfxEnabled(false);
+    } else {
+      this.setMuted(false);
+      this.applyMusicEnabled(this.preMuteMusicEnabled);
+      this.applySfxEnabled(this.preMuteSfxEnabled);
+    }
   }
 
   subscribe(listener: (muted: boolean) => void) {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  isMusicEnabled() {
+    return this.musicEnabled;
+  }
+
+  isSfxEnabled() {
+    return this.sfxEnabled;
+  }
+
+  /** The actual gain ramp/persist/notify for music - shared by the public
+   *  setter below and by toggleMute's snapshot/restore, which needs to
+   *  drive this directly without re-triggering the "turning on unmutes"
+   *  rule (that rule is for a direct click on this channel's own toggle,
+   *  not for mute's own restore step). */
+  private applyMusicEnabled(enabled: boolean) {
+    this.musicEnabled = enabled;
+    window.localStorage.setItem(MUSIC_ENABLED_STORAGE_KEY, enabled ? "1" : "0");
+
+    if (this.ctx && this.musicGain) {
+      const now = this.ctx.currentTime;
+      this.musicGain.gain.cancelScheduledValues(now);
+      this.musicGain.gain.linearRampToValueAtTime(
+        enabled ? MUSIC_GAIN : 0,
+        now + 0.15,
+      );
+    }
+    this.musicListeners.forEach((listener) => listener(this.musicEnabled));
+  }
+
+  /** Turning a sound channel on always implies audio overall should be
+   *  audible - otherwise flipping it "on" would silently do nothing while
+   *  still muted, which reads as broken rather than as two independent
+   *  controls. Turning a channel off does NOT touch mute on its own -
+   *  unless it's the last channel still on, in which case switching it off
+   *  leaves nothing audible, so it engages mute the same way toggleMute
+   *  would (snapshotting this channel as the one to restore on unmute). */
+  setMusicEnabled(enabled: boolean) {
+    if (enabled && this.muted) this.setMuted(false);
+    if (!enabled && !this.muted && !this.sfxEnabled) {
+      this.preMuteMusicEnabled = true;
+      this.preMuteSfxEnabled = false;
+      this.setMuted(true);
+    }
+    this.applyMusicEnabled(enabled);
+  }
+
+  toggleMusic() {
+    this.setMusicEnabled(!this.musicEnabled);
+  }
+
+  subscribeMusic(listener: (enabled: boolean) => void) {
+    this.musicListeners.add(listener);
+    return () => {
+      this.musicListeners.delete(listener);
+    };
+  }
+
+  /** See applyMusicEnabled - same reasoning, sfx's counterpart. */
+  private applySfxEnabled(enabled: boolean) {
+    this.sfxEnabled = enabled;
+    window.localStorage.setItem(SFX_ENABLED_STORAGE_KEY, enabled ? "1" : "0");
+
+    if (this.ctx && this.sfxGain) {
+      const now = this.ctx.currentTime;
+      this.sfxGain.gain.cancelScheduledValues(now);
+      this.sfxGain.gain.linearRampToValueAtTime(
+        enabled ? SFX_GAIN : 0,
+        now + 0.15,
+      );
+    }
+    this.sfxListeners.forEach((listener) => listener(this.sfxEnabled));
+  }
+
+  /** See setMusicEnabled - same reasoning, sfx's counterpart. */
+  setSfxEnabled(enabled: boolean) {
+    if (enabled && this.muted) this.setMuted(false);
+    if (!enabled && !this.muted && !this.musicEnabled) {
+      this.preMuteMusicEnabled = false;
+      this.preMuteSfxEnabled = true;
+      this.setMuted(true);
+    }
+    this.applySfxEnabled(enabled);
+  }
+
+  toggleSfx() {
+    this.setSfxEnabled(!this.sfxEnabled);
+  }
+
+  subscribeSfx(listener: (enabled: boolean) => void) {
+    this.sfxListeners.add(listener);
+    return () => {
+      this.sfxListeners.delete(listener);
     };
   }
 
