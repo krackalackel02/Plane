@@ -1,11 +1,15 @@
 import { useMemo } from "react";
 import {
+  AdditiveBlending,
+  BackSide,
   CatmullRomCurve3,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   IcosahedronGeometry,
   MeshStandardMaterial,
   Quaternion,
+  ShaderMaterial,
   TubeGeometry,
   Vector3,
 } from "three";
@@ -18,7 +22,8 @@ import {
   pathFrameAt,
 } from "../timeline/calculatedBoardPositionsAndRotations";
 import { createPlanetTexture } from "./planetTexture";
-import { scatterTrees, type ScatteredTree } from "./planetTerrain";
+import { allBlobs, scatterTrees, type ScatteredTree } from "./planetTerrain";
+import Landmass, { LAND_STACK_HEIGHT } from "./landmass";
 
 // How far above the planet's own surface the glowing cruise ring and board
 // beacons float, purely to avoid z-fighting with the sphere mesh.
@@ -36,43 +41,43 @@ const RING_SEGMENTS = 256;
 // (collision, spawn, autopilot) - all of which reasons about a perfect
 // sphere - never sees the difference; only the shading does.
 const SPHERE_SEGMENTS = 22;
-const TREE_COUNT = 60;
+const TREE_COUNT = 90;
 
 // Shared across every tree instance (see Tree below) rather than one
 // geometry/material per mesh - a few dozen trees would otherwise mean
 // hundreds of one-off GPU resources for what's visually a handful of
 // repeated shapes.
-const trunkGeometry = new CylinderGeometry(0.08, 0.13, 1, 6);
+const trunkGeometry = new CylinderGeometry(0.1, 0.16, 1.2, 6);
 const trunkMaterial = new MeshStandardMaterial({
   color: "#6b4a2f",
   roughness: 0.85,
 });
-const pineLowerGeometry = new ConeGeometry(0.55, 0.85, 7);
-const pineUpperGeometry = new ConeGeometry(0.4, 0.65, 7);
+const pineLowerGeometry = new ConeGeometry(0.75, 1.15, 7);
+const pineUpperGeometry = new ConeGeometry(0.55, 0.9, 7);
 const pineMaterialLower = new MeshStandardMaterial({
-  color: "#2f6e3a",
+  color: "#2f8e43",
   roughness: 0.55,
   flatShading: true,
 });
 const pineMaterialUpper = new MeshStandardMaterial({
-  color: "#3c8548",
+  color: "#7cc542",
   roughness: 0.55,
   flatShading: true,
 });
-const canopyCoreGeometry = new IcosahedronGeometry(0.42, 0);
-const canopyLobeGeometry = new IcosahedronGeometry(0.27, 0);
+const canopyCoreGeometry = new IcosahedronGeometry(0.58, 0);
+const canopyLobeGeometry = new IcosahedronGeometry(0.38, 0);
 const canopyMaterialCore = new MeshStandardMaterial({
-  color: "#3c8548",
+  color: "#2f8e43",
   roughness: 0.6,
   flatShading: true,
 });
 const canopyMaterialLobeA = new MeshStandardMaterial({
-  color: "#4d9c56",
+  color: "#7cc542",
   roughness: 0.6,
   flatShading: true,
 });
 const canopyMaterialLobeB = new MeshStandardMaterial({
-  color: "#347d3f",
+  color: "#3c8548",
   roughness: 0.6,
   flatShading: true,
 });
@@ -92,7 +97,7 @@ const Tree = ({ position, normal, seed }: ScatteredTree) => {
     () => new Quaternion().setFromUnitVectors(WORLD_UP, normal),
     [normal],
   );
-  const scale = 0.7 + seed * 0.7;
+  const scale = 1.6 + seed * 1.8;
   const isPine = seed > 0.55;
 
   return (
@@ -100,19 +105,19 @@ const Tree = ({ position, normal, seed }: ScatteredTree) => {
       <mesh
         geometry={trunkGeometry}
         material={trunkMaterial}
-        position={[0, 0.5, 0]}
+        position={[0, 0.6, 0]}
       />
       {isPine ? (
         <>
           <mesh
             geometry={pineLowerGeometry}
             material={pineMaterialLower}
-            position={[0, 1.12, 0]}
+            position={[0, 1.35, 0]}
           />
           <mesh
             geometry={pineUpperGeometry}
             material={pineMaterialUpper}
-            position={[0, 1.5, 0]}
+            position={[0, 1.85, 0]}
           />
         </>
       ) : (
@@ -120,21 +125,75 @@ const Tree = ({ position, normal, seed }: ScatteredTree) => {
           <mesh
             geometry={canopyCoreGeometry}
             material={canopyMaterialCore}
-            position={[0, 1.05, 0]}
+            position={[0, 1.3, 0]}
           />
           <mesh
             geometry={canopyLobeGeometry}
             material={canopyMaterialLobeA}
-            position={[0.25, 1.25, 0.1]}
+            position={[0.34, 1.55, 0.14]}
           />
           <mesh
             geometry={canopyLobeGeometry}
             material={canopyMaterialLobeB}
-            position={[-0.22, 1.2, -0.15]}
+            position={[-0.3, 1.48, -0.2]}
           />
         </>
       )}
     </group>
+  );
+};
+
+const atmosphereVertexShader = `
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewDir = normalize(-mvPosition.xyz);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const atmosphereFragmentShader = `
+  uniform vec3 glowColor;
+  uniform float power;
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    float rim = 1.0 - max(dot(normalize(vNormal), normalize(vViewDir)), 0.0);
+    float intensity = pow(rim, power);
+    gl_FragColor = vec4(glowColor, intensity);
+  }
+`;
+
+/**
+ * A soft fresnel rim-glow shell just outside the planet's own radius - a
+ * cheap stand-in for a real atmospheric scattering pass, so the dark side
+ * of the globe still reads as a globe (not a black disc) against the
+ * starfield, and the lit side gets a gentle sky-blue halo at its silhouette.
+ */
+const Atmosphere = ({ radius }: { radius: number }) => {
+  const material = useMemo(
+    () =>
+      new ShaderMaterial({
+        vertexShader: atmosphereVertexShader,
+        fragmentShader: atmosphereFragmentShader,
+        uniforms: {
+          glowColor: { value: new Color("#7ec8ff") },
+          power: { value: 2.4 },
+        },
+        side: BackSide,
+        blending: AdditiveBlending,
+        transparent: true,
+        depthWrite: false,
+      }),
+    [],
+  );
+
+  return (
+    <mesh material={material}>
+      <sphereGeometry args={[radius * 1.14, 48, 48]} />
+    </mesh>
   );
 };
 
@@ -147,9 +206,9 @@ const Tree = ({ position, normal, seed }: ScatteredTree) => {
  * tube tracing that same path plus a small beacon at each stop - together
  * they make the travel pattern obvious at a glance: fly the trail, in
  * order, to see everything on the planet. The trail is deliberately the
- * *only* highlighted path anywhere in the scene (the surface texture and
- * minimap both trace this same wiggly line rather than drawing a separate,
- * competing straight reference).
+ * *only* highlighted path anywhere in the scene (the minimap traces this
+ * same wiggly line rather than drawing a separate, competing straight
+ * reference).
  */
 const Planet = () => {
   const planet = getActivePlanet();
@@ -185,8 +244,16 @@ const Planet = () => {
     );
   }, [items, planet]);
 
+  // Trees stand on top of the raised terrain stack (see landmass.tsx), not
+  // the bare ocean shell - otherwise they'd render embedded inside the
+  // extruded landmass rather than on top of it.
   const trees = useMemo(
-    () => scatterTrees(TREE_COUNT, planet.radius, planet.center),
+    () =>
+      scatterTrees(
+        TREE_COUNT,
+        planet.radius + LAND_STACK_HEIGHT,
+        planet.center,
+      ),
     [planet],
   );
 
@@ -200,11 +267,24 @@ const Planet = () => {
           map={texture}
           roughness={0.4}
           metalness={0.05}
-          clearcoat={0.55}
-          clearcoatRoughness={0.3}
+          clearcoat={0.5}
+          clearcoatRoughness={0.25}
           flatShading
         />
       </mesh>
+
+      <Atmosphere radius={planet.radius} />
+
+      {/* Real extruded 3D landmasses - a raised, three-tier clay stack per
+          blob - rather than a flat texture. */}
+      {allBlobs().map((blob, i) => (
+        <Landmass
+          key={i}
+          blob={blob}
+          planetRadius={planet.radius}
+          center={planet.center}
+        />
+      ))}
 
       {/* The cruise trail - the exact path boards sit along, so the loop
           around the planet reads as an obvious, literal path. */}
@@ -220,8 +300,8 @@ const Planet = () => {
         </mesh>
       ))}
 
-      {/* Claymation foliage, scattered across the landmasses baked into
-          the surface texture (see planetTerrain.ts). */}
+      {/* Claymation foliage, scattered across the landmasses (see
+          planetTerrain.ts / landmass.tsx). */}
       {trees.map((tree, i) => (
         <Tree key={i} {...tree} />
       ))}

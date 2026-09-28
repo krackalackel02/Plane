@@ -5,15 +5,15 @@
 const Lights = () => {
   return (
     <>
-      {/* Soft sky/ground fill - approximates the gentle ambient occlusion
-          a real studio setup would pick up, without a full AO pass. */}
-      <hemisphereLight args={["#dce8ff", "#2a2a35", 0.55]} />
-      {/* Key light, top-left, matching the claymation planet's own baked-in
-          highlight direction (see planetTexture.ts). */}
-      <directionalLight position={[-14, 18, 10]} intensity={1.1} />
+      {/* Soft ambient fill - keeps shadowed faces readable without
+          flattening the key light's contrast. */}
+      <ambientLight intensity={0.5} />
+      {/* Strong studio key light, top-left, matching the claymation
+          landmasses' own bevel highlight direction (see landmass.tsx). */}
+      <directionalLight position={[-14, 18, 10]} intensity={2} />
       {/* Soft fill from the opposite side, low intensity, so shadowed
           faces don't go fully flat/black. */}
-      <pointLight position={[10, -6, -10]} intensity={0.5} />
+      <pointLight position={[10, -6, -10]} intensity={0.35} />
     </>
   );
 };

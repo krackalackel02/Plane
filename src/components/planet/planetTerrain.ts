@@ -66,7 +66,11 @@ export const CONTINENTS: Continent[] = [
   },
 ];
 
-const allBlobs = (): LandBlob[] => CONTINENTS.flatMap((c) => c.blobs);
+/** Every sub-blob across every continent, flattened - the raised 3D
+ * landmasses (see landmass.tsx) and the tree scatter below both walk this
+ * same flat list, so foliage and terrain never disagree about "where is
+ * land". */
+export const allBlobs = (): LandBlob[] => CONTINENTS.flatMap((c) => c.blobs);
 
 const wrapDelta = (d: number): number => {
   const twoPi = Math.PI * 2;
@@ -96,20 +100,6 @@ const angularDistance = (
 /** Whether a lon/lat point (radians) falls inside any landmass blob. */
 export const isLand = (lon: number, lat: number): boolean =>
   allBlobs().some((b) => angularDistance(lon, lat, b.lon, b.lat) < b.radius);
-
-/**
- * Equirectangular UV matching three.js's SphereGeometry default UV unwrap
- * exactly (derived from its vertex formula: x=-r*cos(phi)*sin(theta),
- * y=r*cos(theta), z=r*sin(phi)*sin(theta), u=phi/2pi, v=theta/pi), so a
- * texture painted from lon/lat via this mapping lines up with the geometry
- * without needing lon=0 to mean anything in particular on-screen - only
- * self-consistency between the two matters.
- */
-export const lonLatToUV = (lon: number, lat: number): [number, number] => {
-  const u = (((lon / (Math.PI * 2) + 0.25) % 1) + 1) % 1;
-  const v = 0.5 - lat / Math.PI;
-  return [u, v];
-};
 
 export interface ScatteredTree {
   position: Vector3;
