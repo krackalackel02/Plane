@@ -1,31 +1,172 @@
 import { useMemo } from "react";
+import {
+  CatmullRomCurve3,
+  ConeGeometry,
+  CylinderGeometry,
+  IcosahedronGeometry,
+  MeshStandardMaterial,
+  Quaternion,
+  TubeGeometry,
+  Vector3,
+} from "three";
 import { useProjects } from "../../context/projectContext";
 import { getActivePlanet } from "../../utils/planets";
 import { projectToShell } from "../../utils/planetSurface";
 import { getBoardMatWorldPosition } from "../../utils/3d";
-import { calculatedBoardPositionsAndRotations } from "../timeline/calculatedBoardPositionsAndRotations";
+import {
+  calculatedBoardPositionsAndRotations,
+  pathFrameAt,
+} from "../timeline/calculatedBoardPositionsAndRotations";
 import { createPlanetTexture } from "./planetTexture";
+import { scatterTrees, type ScatteredTree } from "./planetTerrain";
 
 // How far above the planet's own surface the glowing cruise ring and board
 // beacons float, purely to avoid z-fighting with the sphere mesh.
 const SURFACE_OFFSET = 0.15;
 const RING_TUBE_RADIUS = 0.12;
 const BEACON_RADIUS = 0.5;
+// How finely the ring curve is sampled around the loop - the trail zigzags
+// (see pathFrameAt), so this needs to be dense enough to read as a smooth
+// curve rather than a faceted polygon.
+const RING_SEGMENTS = 256;
+// Deliberately chunky (not the old 96x96) - low, flat-shaded segment counts
+// are what give the sphere its "mild planar facets" claymation feel, per
+// the low-poly-clay art direction. Vertices still land exactly on the true
+// sphere of `planet.radius` regardless of segment count, so gameplay math
+// (collision, spawn, autopilot) - all of which reasons about a perfect
+// sphere - never sees the difference; only the shading does.
+const SPHERE_SEGMENTS = 22;
+const TREE_COUNT = 60;
+
+// Shared across every tree instance (see Tree below) rather than one
+// geometry/material per mesh - a few dozen trees would otherwise mean
+// hundreds of one-off GPU resources for what's visually a handful of
+// repeated shapes.
+const trunkGeometry = new CylinderGeometry(0.08, 0.13, 1, 6);
+const trunkMaterial = new MeshStandardMaterial({
+  color: "#6b4a2f",
+  roughness: 0.85,
+});
+const pineLowerGeometry = new ConeGeometry(0.55, 0.85, 7);
+const pineUpperGeometry = new ConeGeometry(0.4, 0.65, 7);
+const pineMaterialLower = new MeshStandardMaterial({
+  color: "#2f6e3a",
+  roughness: 0.55,
+  flatShading: true,
+});
+const pineMaterialUpper = new MeshStandardMaterial({
+  color: "#3c8548",
+  roughness: 0.55,
+  flatShading: true,
+});
+const canopyCoreGeometry = new IcosahedronGeometry(0.42, 0);
+const canopyLobeGeometry = new IcosahedronGeometry(0.27, 0);
+const canopyMaterialCore = new MeshStandardMaterial({
+  color: "#3c8548",
+  roughness: 0.6,
+  flatShading: true,
+});
+const canopyMaterialLobeA = new MeshStandardMaterial({
+  color: "#4d9c56",
+  roughness: 0.6,
+  flatShading: true,
+});
+const canopyMaterialLobeB = new MeshStandardMaterial({
+  color: "#347d3f",
+  roughness: 0.6,
+  flatShading: true,
+});
+
+const WORLD_UP = new Vector3(0, 1, 0);
+
+/**
+ * A single stylised tree, standing upright on the surface (local +Y
+ * aligned to the planet's outward normal at its own spot - "surface-
+ * normal alignment", per the claymation reference). Alternates between a
+ * stacked-cone "pine" and a stacked-icosahedron "broccoli" canopy purely
+ * off its own deterministic seed, so the mix is stable across re-renders
+ * without needing to store a type anywhere.
+ */
+const Tree = ({ position, normal, seed }: ScatteredTree) => {
+  const quaternion = useMemo(
+    () => new Quaternion().setFromUnitVectors(WORLD_UP, normal),
+    [normal],
+  );
+  const scale = 0.7 + seed * 0.7;
+  const isPine = seed > 0.55;
+
+  return (
+    <group position={position} quaternion={quaternion} scale={scale}>
+      <mesh
+        geometry={trunkGeometry}
+        material={trunkMaterial}
+        position={[0, 0.5, 0]}
+      />
+      {isPine ? (
+        <>
+          <mesh
+            geometry={pineLowerGeometry}
+            material={pineMaterialLower}
+            position={[0, 1.12, 0]}
+          />
+          <mesh
+            geometry={pineUpperGeometry}
+            material={pineMaterialUpper}
+            position={[0, 1.5, 0]}
+          />
+        </>
+      ) : (
+        <>
+          <mesh
+            geometry={canopyCoreGeometry}
+            material={canopyMaterialCore}
+            position={[0, 1.05, 0]}
+          />
+          <mesh
+            geometry={canopyLobeGeometry}
+            material={canopyMaterialLobeA}
+            position={[0.25, 1.25, 0.1]}
+          />
+          <mesh
+            geometry={canopyLobeGeometry}
+            material={canopyMaterialLobeB}
+            position={[-0.22, 1.2, -0.15]}
+          />
+        </>
+      )}
+    </group>
+  );
+};
 
 /**
  * The single planet the ship is snapped to (see utils/planets - "snapping"
  * to a different one is future work; for now there's only ever this one).
  *
- * Boards are laid out around its equator (see
+ * Boards are laid out along its trail (see
  * calculatedBoardPositionsAndRotations), so the planet renders a glowing
- * ring exactly on that same circle plus a small beacon at each stop -
- * together they make the travel pattern obvious at a glance: fly the ring,
- * in order, to see everything on the planet.
+ * tube tracing that same path plus a small beacon at each stop - together
+ * they make the travel pattern obvious at a glance: fly the trail, in
+ * order, to see everything on the planet. The trail is deliberately the
+ * *only* highlighted path anywhere in the scene (the surface texture and
+ * minimap both trace this same wiggly line rather than drawing a separate,
+ * competing straight reference).
  */
 const Planet = () => {
   const planet = getActivePlanet();
   const { items } = useProjects();
   const texture = useMemo(() => createPlanetTexture(), []);
+
+  const ringGeometry = useMemo(() => {
+    const radius = planet.radius + SURFACE_OFFSET;
+    const points = Array.from(
+      { length: RING_SEGMENTS },
+      (_, i) =>
+        pathFrameAt(radius, (i / RING_SEGMENTS) * Math.PI * 2, planet.center)
+          .position,
+    );
+    const curve = new CatmullRomCurve3(points, true);
+    return new TubeGeometry(curve, RING_SEGMENTS, RING_TUBE_RADIUS, 8, true);
+  }, [planet]);
 
   // Each beacon marks the center of that stop's activation zone - not the
   // (now sideways-offset) board itself - since the zone, not the board, is
@@ -44,28 +185,45 @@ const Planet = () => {
     );
   }, [items, planet]);
 
+  const trees = useMemo(
+    () => scatterTrees(TREE_COUNT, planet.radius, planet.center),
+    [planet],
+  );
+
   return (
     <group position={planet.center}>
       <mesh>
-        <sphereGeometry args={[planet.radius, 96, 96]} />
-        <meshStandardMaterial map={texture} roughness={0.9} metalness={0.05} />
+        <sphereGeometry
+          args={[planet.radius, SPHERE_SEGMENTS, SPHERE_SEGMENTS]}
+        />
+        <meshPhysicalMaterial
+          map={texture}
+          roughness={0.4}
+          metalness={0.05}
+          clearcoat={0.55}
+          clearcoatRoughness={0.3}
+          flatShading
+        />
       </mesh>
 
-      {/* The cruise ring - the exact circle boards sit on, so the loop
+      {/* The cruise trail - the exact path boards sit along, so the loop
           around the planet reads as an obvious, literal path. */}
-      <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry
-          args={[planet.radius + SURFACE_OFFSET, RING_TUBE_RADIUS, 8, 128]}
-        />
+      <mesh geometry={ringGeometry}>
         <meshBasicMaterial color="#7dd3fc" toneMapped={false} />
       </mesh>
 
-      {/* A small beacon at each board's position on the ring. */}
+      {/* A small beacon at each board's position on the trail. */}
       {beaconPositions.map((position, i) => (
         <mesh key={i} position={position}>
           <sphereGeometry args={[BEACON_RADIUS, 16, 16]} />
           <meshBasicMaterial color="#e8c468" toneMapped={false} />
         </mesh>
+      ))}
+
+      {/* Claymation foliage, scattered across the landmasses baked into
+          the surface texture (see planetTerrain.ts). */}
+      {trees.map((tree, i) => (
+        <Tree key={i} {...tree} />
       ))}
     </group>
   );

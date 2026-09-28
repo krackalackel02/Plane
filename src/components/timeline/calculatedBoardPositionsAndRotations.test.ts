@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { Vector3 } from "three";
+import { Quaternion, Vector3 } from "three";
 import {
   BOARD_SIDE_OFFSET,
   boardSideOffset,
@@ -77,33 +77,66 @@ describe("boardVisualTransform", () => {
   // (sideways-offset) board - bumped the ship anyway.
   test("is offset sideways from the centerline anchor, not equal to it", () => {
     const [board] = calculatedBoardPositionsAndRotations(items, testPlanet);
-    const visual = boardVisualTransform(board, 0);
+    const visual = boardVisualTransform(board, 0, testPlanet);
 
     expect(visual.position).not.toEqual(board.position);
 
     const anchorPos = new Vector3(...board.position);
     const visualPos = new Vector3(...visual.position);
-    expect(visualPos.distanceTo(anchorPos)).toBeCloseTo(BOARD_SIDE_OFFSET, 5);
+    // Not exactly BOARD_SIDE_OFFSET: re-projecting the tangent-plane offset
+    // back onto the sphere (see the "stays exactly on the shell" test
+    // below) pulls it in slightly, since the chord is shorter than the
+    // flat offset it was measured along.
+    expect(visualPos.distanceTo(anchorPos)).toBeGreaterThan(
+      BOARD_SIDE_OFFSET * 0.9,
+    );
+    expect(visualPos.distanceTo(anchorPos)).toBeLessThanOrEqual(
+      BOARD_SIDE_OFFSET,
+    );
   });
 
-  test("alternates sides by index", () => {
-    expect(boardSideOffset(0)).toBeGreaterThan(0);
-    expect(boardSideOffset(1)).toBeLessThan(0);
+  test("alternates sides by index, first board on the left", () => {
+    expect(boardSideOffset(0)).toBeLessThan(0);
+    expect(boardSideOffset(1)).toBeGreaterThan(0);
     expect(boardSideOffset(0)).toBe(-boardSideOffset(1));
   });
 
-  test("stays close to the shell (a straight tangent-plane offset bulges slightly outward, not follows the curve)", () => {
+  // Regression test: this is the actual bug being fixed - a naive tangent-
+  // plane offset bulges outward off the sphere (its distance from the
+  // planet's center grows with how far sideways it's shifted). Re-
+  // projecting onto the shell fixes that.
+  test("stays exactly on the shell, unlike a naive (un-reprojected) tangent-plane offset", () => {
     const [board] = calculatedBoardPositionsAndRotations(items, testPlanet);
-    const visual = boardVisualTransform(board, 0);
+    const visual = boardVisualTransform(board, 0, testPlanet);
     const visualPos = new Vector3(...visual.position);
     const shellRadius = testPlanet.radius + testPlanet.shipAltitude;
-    // Exactly sqrt(shellRadius^2 + BOARD_SIDE_OFFSET^2) for a flat lateral
-    // offset - well within a couple of board-lengths of the shell itself.
-    expect(visualPos.distanceTo(testPlanet.center)).toBeGreaterThan(
-      shellRadius,
-    );
-    expect(visualPos.distanceTo(testPlanet.center)).toBeLessThan(
-      shellRadius + 5,
-    );
+
+    expect(visualPos.distanceTo(testPlanet.center)).toBeCloseTo(shellRadius, 5);
+
+    // The un-reprojected version - what the anchor's flat tangent-plane
+    // offset alone would give - does bulge outward, confirming the
+    // reprojection is actually doing something here (not a no-op on a
+    // flat test setup).
+    const anchorQuaternion = new Quaternion(...board.quaternion);
+    const anchorPos = new Vector3(...board.position);
+    const naivePos = new Vector3(0, 0, boardSideOffset(0))
+      .applyQuaternion(anchorQuaternion)
+      .add(anchorPos);
+    expect(naivePos.distanceTo(testPlanet.center)).toBeGreaterThan(shellRadius);
+  });
+
+  // Regression test: the naive version also keeps the anchor's own normal
+  // as its "up", which stops matching the true radial direction once the
+  // board has moved sideways - rebuilding the orientation fresh at the
+  // landing point fixes that too.
+  test("its up (local Y) matches the true radial direction at its own position, not the anchor's", () => {
+    const [board] = calculatedBoardPositionsAndRotations(items, testPlanet);
+    const visual = boardVisualTransform(board, 0, testPlanet);
+    const visualPos = new Vector3(...visual.position);
+    const visualQuaternion = new Quaternion(...visual.quaternion);
+
+    const trueNormal = visualPos.clone().sub(testPlanet.center).normalize();
+    const localUp = new Vector3(0, 1, 0).applyQuaternion(visualQuaternion);
+    expect(localUp.distanceTo(trueNormal)).toBeLessThan(1e-5);
   });
 });

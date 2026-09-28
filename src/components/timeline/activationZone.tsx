@@ -194,7 +194,6 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
       <Sphere position={[0, 0, 0]} />
 
       {/* Outermost Mesh (index 0) */}
-      {/* eslint-disable-next-line react/no-unknown-property */}
       <mesh ref={zoneMeshRef} material={sharedMaterial}>
         <extrudeGeometry
           args={[frameGeometry.shape, frameGeometry.extrudeSettings]}
@@ -209,7 +208,6 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
           <mesh
             key={index}
             ref={(el) => (innerMeshRefs.current[index] = el)}
-            // eslint-disable-next-line react/no-unknown-property
             material={sharedMaterial}
             scale={[scale, scale, 1]}
           >

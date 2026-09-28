@@ -8,13 +8,15 @@ import {
   type RefObject,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import { Vector3 } from "three";
 import { useScene } from "../../context/sceneContext";
 import { useProjects } from "../../context/projectContext";
 import { useAutopilot } from "../../context/autopilotContext";
-import { calculatedBoardPositionsAndRotations } from "../timeline/calculatedBoardPositionsAndRotations";
+import {
+  calculatedBoardPositionsAndRotations,
+  pathFrameAt,
+} from "../timeline/calculatedBoardPositionsAndRotations";
 import { getBoardMatWorldPosition } from "../../utils/3d";
-import { getActivePlanet } from "../../utils/planets";
+import { getActivePlanet, getShellRadius } from "../../utils/planets";
 import {
   computePlanetToMapProjection,
   headingBearing,
@@ -50,6 +52,11 @@ const useMapSize = (ref: RefObject<HTMLDivElement>) => {
   return size;
 };
 
+// How finely the trail is sampled for the minimap's own path line - dense
+// enough that the wiggle (see pathFrameAt) reads as a smooth curve rather
+// than a faceted polygon at minimap scale.
+const PATH_SAMPLES = 180;
+
 /**
  * The whole planet, unwrapped: an equirectangular map fits the entire
  * surface by construction, so - unlike the old flat minimap - this never
@@ -66,7 +73,35 @@ const usePlanetToMap = (size: number) => {
       size,
       planet.center,
     );
-    return { ...projection, boardsData, planet };
+
+    // The actual trail, not a flat equator line - it wiggles (see
+    // pathFrameAt), and this is the one and only path the map highlights;
+    // segments split wherever the projection wraps around the map's left/
+    // right edge, so the line never draws a spurious streak clear across
+    // the canvas.
+    const shellRadius = getShellRadius(planet);
+    const rawPoints = Array.from({ length: PATH_SAMPLES + 1 }, (_, i) =>
+      projection.toMap(
+        pathFrameAt(
+          shellRadius,
+          (i / PATH_SAMPLES) * Math.PI * 2,
+          planet.center,
+        ).position,
+      ),
+    );
+    const pathSegments: [number, number][][] = [];
+    let current: [number, number][] = [];
+    for (const point of rawPoints) {
+      const previous = current[current.length - 1];
+      if (previous && Math.abs(point[0] - previous[0]) > size / 2) {
+        pathSegments.push(current);
+        current = [];
+      }
+      current.push(point);
+    }
+    if (current.length > 1) pathSegments.push(current);
+
+    return { ...projection, boardsData, planet, pathSegments };
   }, [items, planet, size]);
 };
 
@@ -145,7 +180,8 @@ const Minimap = () => {
   // consumed by the FLIP effect below.
   const preToggleRectRef = useRef<DOMRect | null>(null);
   const size = useMapSize(containerRef);
-  const { boardPoints, boardsData, toMap, planet } = usePlanetToMap(size);
+  const { boardPoints, boardsData, toMap, planet, pathSegments } =
+    usePlanetToMap(size);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -163,22 +199,21 @@ const Minimap = () => {
     const draw = () => {
       ctx.clearRect(0, 0, size, size);
 
-      // The equator - the ring every board sits on and the ship's usual
-      // cruise line - drawn as a fixed horizontal reference, since it maps
-      // to the exact same y (lat 0) regardless of the ship's own position.
-      const [, equatorY] = toMap(
-        new Vector3(
-          planet.center.x + planet.radius,
-          planet.center.y,
-          planet.center.z,
-        ),
-      );
-      ctx.strokeStyle = "rgba(125, 211, 252, 0.35)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, equatorY);
-      ctx.lineTo(size, equatorY);
-      ctx.stroke();
+      // The actual trail - the one path every board sits along and the
+      // ship's usual cruise line - drawn as the map's single highlighted
+      // line, matching the wiggly ring in the 3D scene rather than a flat
+      // equator reference.
+      ctx.strokeStyle = "rgba(125, 211, 252, 0.9)";
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
+      for (const segment of pathSegments) {
+        ctx.beginPath();
+        segment.forEach(([x, y], i) => {
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
 
       boardPoints.forEach(({ x, y }) => drawBook(ctx, x, y));
 
@@ -198,7 +233,7 @@ const Minimap = () => {
 
     frameId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frameId);
-  }, [boardPoints, toMap, shipRef, size, planet]);
+  }, [boardPoints, pathSegments, toMap, shipRef, size, planet]);
 
   // Both directions go through the same rect capture so the FLIP effect
   // below can animate the toggle as one continuous element resizing,
