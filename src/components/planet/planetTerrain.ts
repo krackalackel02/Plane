@@ -1,105 +1,172 @@
 import { Vector3 } from "three";
-import { pointOnSphere } from "../../utils/planetSurface";
+import {
+  eastNorthAt,
+  pointOnSphere,
+  surfaceNormal,
+} from "../../utils/planetSurface";
 
-export interface LandBlob {
-  lon: number; // radians, planetSurface's pointOnSphere convention
-  lat: number; // radians
-  radius: number; // radians, angular radius of this sub-blob
+export interface OutlineHarmonic {
+  amplitude: number;
+  freq: number;
+  phase: number;
 }
 
-export interface Continent {
-  blobs: LandBlob[];
+export interface ContinentDef {
+  lon: number; // radians, centroid - planetSurface's pointOnSphere convention
+  lat: number;
+  /** Average outline radius, in world units (arc length at the centroid). */
+  baseRadius: number;
+  /** Summed sine wobble on top of baseRadius - what turns a circle into an organic, wavy-coastline landmass silhouette. */
+  harmonics: OutlineHarmonic[];
+  /** A smaller inset "highland" cap (tan, stacked on the green layer) - only the biggest landmasses get one, matching the reference art's single desert-toned continent. */
+  highland?: { scale: number };
 }
 
 const deg = (d: number): number => (d * Math.PI) / 180;
 
 /**
- * Hand-authored landmasses, loosely spread around the globe and kept off
- * the poles (where an equirectangular texture badly distorts a round
- * blob). Each continent is a small cluster of overlapping circular
- * sub-blobs so the silhouette reads as an organic landmass rather than a
- * single disc - both the surface texture (planetTexture.ts) and the tree
- * scatter (treePositions below) read from this one list, so foliage never
- * ends up floating over open ocean.
+ * Hand-authored continents, loosely spread around the globe and kept off
+ * the poles (where these local tangent-plane approximations get less
+ * accurate). Each is a single organic landmass - a base radius wobbled by
+ * a few sine harmonics - rather than a cluster of separate circular blobs,
+ * so it reads as one continent with a wavy coastline (see outlineRadiusAt)
+ * instead of several overlapping discs.
  */
-export const CONTINENTS: Continent[] = [
+export const CONTINENTS: ContinentDef[] = [
   {
-    blobs: [
-      { lon: deg(15), lat: deg(28), radius: deg(16) },
-      { lon: deg(32), lat: deg(18), radius: deg(12) },
-      { lon: deg(8), lat: deg(8), radius: deg(10) },
+    lon: deg(20),
+    lat: deg(8),
+    baseRadius: 15,
+    harmonics: [
+      { amplitude: 0.22, freq: 2, phase: 0.4 },
+      { amplitude: 0.15, freq: 3, phase: 2.1 },
+      { amplitude: 0.1, freq: 5, phase: 1.0 },
+    ],
+    highland: { scale: 0.5 },
+  },
+  {
+    lon: deg(-100),
+    lat: deg(32),
+    baseRadius: 11,
+    harmonics: [
+      { amplitude: 0.25, freq: 2, phase: 1.2 },
+      { amplitude: 0.14, freq: 4, phase: 0.3 },
     ],
   },
   {
-    blobs: [
-      { lon: deg(95), lat: deg(-10), radius: deg(14) },
-      { lon: deg(112), lat: deg(4), radius: deg(11) },
+    lon: deg(160),
+    lat: deg(28),
+    baseRadius: 9,
+    harmonics: [
+      { amplitude: 0.2, freq: 3, phase: 2.6 },
+      { amplitude: 0.12, freq: 5, phase: 0.7 },
     ],
   },
   {
-    blobs: [
-      { lon: deg(162), lat: deg(35), radius: deg(10) },
-      { lon: deg(177), lat: deg(22), radius: deg(9) },
+    lon: deg(-140),
+    lat: deg(-20),
+    baseRadius: 10,
+    harmonics: [
+      { amplitude: 0.24, freq: 2, phase: 0.1 },
+      { amplitude: 0.13, freq: 4, phase: 1.8 },
     ],
   },
   {
-    blobs: [
-      { lon: deg(-140), lat: deg(-18), radius: deg(13) },
-      { lon: deg(-156), lat: deg(-4), radius: deg(10) },
-      { lon: deg(-128), lat: deg(-32), radius: deg(9) },
+    lon: deg(-55),
+    lat: deg(5),
+    baseRadius: 9.5,
+    harmonics: [
+      { amplitude: 0.22, freq: 2, phase: 2.0 },
+      { amplitude: 0.14, freq: 3, phase: 0.9 },
     ],
   },
   {
-    blobs: [
-      { lon: deg(-58), lat: deg(16), radius: deg(11) },
-      { lon: deg(-44), lat: deg(-6), radius: deg(9) },
+    lon: deg(-8),
+    lat: deg(-38),
+    baseRadius: 8,
+    harmonics: [
+      { amplitude: 0.2, freq: 3, phase: 1.4 },
+      { amplitude: 0.12, freq: 4, phase: 2.4 },
     ],
   },
   {
-    blobs: [{ lon: deg(-8), lat: deg(-36), radius: deg(9) }],
-  },
-  {
-    blobs: [
-      { lon: deg(55), lat: deg(48), radius: deg(9) },
-      { lon: deg(68), lat: deg(38), radius: deg(8) },
+    lon: deg(60),
+    lat: deg(45),
+    baseRadius: 7.5,
+    harmonics: [
+      { amplitude: 0.2, freq: 2, phase: 0.8 },
+      { amplitude: 0.15, freq: 4, phase: 2.9 },
     ],
   },
 ];
 
-/** Every sub-blob across every continent, flattened - the raised 3D
- * landmasses (see landmass.tsx) and the tree scatter below both walk this
- * same flat list, so foliage and terrain never disagree about "where is
- * land". */
-export const allBlobs = (): LandBlob[] => CONTINENTS.flatMap((c) => c.blobs);
+/** The wobbled outline radius (world units) at a given bearing (radians) around a continent's own centroid. */
+export const outlineRadiusAt = (c: ContinentDef, bearing: number): number =>
+  c.baseRadius *
+  (1 +
+    c.harmonics.reduce(
+      (sum, h) => sum + h.amplitude * Math.sin(h.freq * bearing + h.phase),
+      0,
+    ));
 
-const wrapDelta = (d: number): number => {
-  const twoPi = Math.PI * 2;
-  let x = d % twoPi;
-  if (x > Math.PI) x -= twoPi;
-  if (x < -Math.PI) x += twoPi;
-  return x;
+// Extruded terrain heights (world units, above the ocean shell) and how far
+// each layer's rim embeds into the one below it, hiding the seam - shared
+// between the actual mesh builder (landmass.tsx) and heightAt below so a
+// tree placed via heightAt always lands exactly on the surface the mesh
+// itself renders, never floating above or clipping into it.
+export const GREEN_HEIGHT = 1.5;
+export const TAN_HEIGHT = 0.9;
+export const TERRAIN_EMBED = 0.1;
+/** Where a highland layer's own local z=0 should land, in the green layer's height space - see landmass.tsx. */
+export const TAN_BASE_Z_OFFSET = GREEN_HEIGHT - TERRAIN_EMBED;
+const GREEN_TOP_HEIGHT = GREEN_HEIGHT - TERRAIN_EMBED;
+const TAN_TOP_HEIGHT = GREEN_TOP_HEIGHT - TERRAIN_EMBED + TAN_HEIGHT;
+
+/**
+ * This point's tangent-plane offset (world units, east/north) from a
+ * continent's own centroid - a small-angle flat approximation, accurate
+ * enough at these continent sizes (a few tens of degrees at most).
+ */
+const tangentOffsetOf = (
+  planetRadius: number,
+  center: Vector3,
+  c: ContinentDef,
+  lon: number,
+  lat: number,
+): { east: number; north: number } => {
+  const centroidPos = pointOnSphere(planetRadius, c.lat, c.lon, center);
+  const normal = surfaceNormal(centroidPos, center);
+  const { east, north } = eastNorthAt(normal);
+  const delta = pointOnSphere(planetRadius, lat, lon, center).sub(centroidPos);
+  return { east: delta.dot(east), north: delta.dot(north) };
 };
 
 /**
- * Cheap angular distance between two lon/lat points, flattened by a
- * cos(lat) longitude correction - accurate enough at these blob radii (a
- * few tens of degrees at most) without the cost of full haversine, and
- * this gets sampled a lot during tree placement's rejection sampling.
+ * Terrain height (world units above the ocean shell) at a given lon/lat -
+ * 0 over open ocean, GREEN_TOP_HEIGHT over a continent's green layer, or
+ * TAN_TOP_HEIGHT over its smaller tan highland inset (if it has one). The
+ * one place that actually reasons about "how tall is the ground here" -
+ * everything that needs to stand on the terrain (trees; see scatterTrees)
+ * goes through this, so it can never disagree with what the mesh itself
+ * renders.
  */
-const angularDistance = (
-  lonA: number,
-  latA: number,
-  lonB: number,
-  latB: number,
+export const heightAt = (
+  planetRadius: number,
+  center: Vector3,
+  lon: number,
+  lat: number,
 ): number => {
-  const dLon = wrapDelta(lonA - lonB) * Math.cos((latA + latB) / 2);
-  const dLat = latA - latB;
-  return Math.sqrt(dLon * dLon + dLat * dLat);
+  for (const c of CONTINENTS) {
+    const { east, north } = tangentOffsetOf(planetRadius, center, c, lon, lat);
+    const dist = Math.hypot(east, north);
+    const bearing = Math.atan2(east, north);
+    const radius = outlineRadiusAt(c, bearing);
+    if (dist >= radius) continue;
+    if (c.highland && dist < radius * c.highland.scale) return TAN_TOP_HEIGHT;
+    return GREEN_TOP_HEIGHT;
+  }
+  return 0;
 };
-
-/** Whether a lon/lat point (radians) falls inside any landmass blob. */
-export const isLand = (lon: number, lat: number): boolean =>
-  allBlobs().some((b) => angularDistance(lon, lat, b.lon, b.lat) < b.radius);
 
 export interface ScatteredTree {
   position: Vector3;
@@ -115,13 +182,15 @@ const seededRandom = (n: number): number => {
 
 /**
  * Deterministic tree scatter: rejection-samples lon/lat points against
- * isLand so every tree lands on a continent, never floating over open
- * ocean. Pure function of `count`/`radius`/`center` (no live randomness),
- * so it's stable across re-renders and safe to memoize on those alone.
+ * heightAt so every tree lands on a continent, exactly at that point's own
+ * terrain height - never floating over open ocean or hovering above/
+ * clipping into the actual extruded ground. Pure function of its inputs
+ * (no live randomness), so it's stable across re-renders and safe to
+ * memoize on them.
  */
 export const scatterTrees = (
   count: number,
-  radius: number,
+  planetRadius: number,
   center: Vector3,
 ): ScatteredTree[] => {
   const trees: ScatteredTree[] = [];
@@ -134,9 +203,10 @@ export const scatterTrees = (
     const a = attempt++;
     const lon = (seededRandom(a * 2 + 1) - 0.5) * Math.PI * 2;
     const lat = (seededRandom(a * 2 + 2) - 0.5) * Math.PI * 0.9;
-    if (!isLand(lon, lat)) continue;
+    const height = heightAt(planetRadius, center, lon, lat);
+    if (height <= 0) continue;
 
-    const position = pointOnSphere(radius, lat, lon, center);
+    const position = pointOnSphere(planetRadius + height, lat, lon, center);
     const normal = position.clone().sub(center).normalize();
     trees.push({ position, normal, seed: seededRandom(a * 7.13) });
   }

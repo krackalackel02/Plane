@@ -1,15 +1,11 @@
 import { useMemo } from "react";
 import {
-  AdditiveBlending,
-  BackSide,
   CatmullRomCurve3,
-  Color,
   ConeGeometry,
   CylinderGeometry,
   IcosahedronGeometry,
   MeshStandardMaterial,
   Quaternion,
-  ShaderMaterial,
   TubeGeometry,
   Vector3,
 } from "three";
@@ -22,8 +18,8 @@ import {
   pathFrameAt,
 } from "../timeline/calculatedBoardPositionsAndRotations";
 import { createPlanetTexture } from "./planetTexture";
-import { allBlobs, scatterTrees, type ScatteredTree } from "./planetTerrain";
-import Landmass, { LAND_STACK_HEIGHT } from "./landmass";
+import { CONTINENTS, scatterTrees, type ScatteredTree } from "./planetTerrain";
+import Continent from "./landmass";
 
 // How far above the planet's own surface the glowing cruise ring and board
 // beacons float, purely to avoid z-fighting with the sphere mesh.
@@ -143,60 +139,6 @@ const Tree = ({ position, normal, seed }: ScatteredTree) => {
   );
 };
 
-const atmosphereVertexShader = `
-  varying vec3 vNormal;
-  varying vec3 vViewDir;
-  void main() {
-    vNormal = normalize(normalMatrix * normal);
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    vViewDir = normalize(-mvPosition.xyz);
-    gl_Position = projectionMatrix * mvPosition;
-  }
-`;
-
-const atmosphereFragmentShader = `
-  uniform vec3 glowColor;
-  uniform float power;
-  varying vec3 vNormal;
-  varying vec3 vViewDir;
-  void main() {
-    float rim = 1.0 - max(dot(normalize(vNormal), normalize(vViewDir)), 0.0);
-    float intensity = pow(rim, power);
-    gl_FragColor = vec4(glowColor, intensity);
-  }
-`;
-
-/**
- * A soft fresnel rim-glow shell just outside the planet's own radius - a
- * cheap stand-in for a real atmospheric scattering pass, so the dark side
- * of the globe still reads as a globe (not a black disc) against the
- * starfield, and the lit side gets a gentle sky-blue halo at its silhouette.
- */
-const Atmosphere = ({ radius }: { radius: number }) => {
-  const material = useMemo(
-    () =>
-      new ShaderMaterial({
-        vertexShader: atmosphereVertexShader,
-        fragmentShader: atmosphereFragmentShader,
-        uniforms: {
-          glowColor: { value: new Color("#7ec8ff") },
-          power: { value: 2.4 },
-        },
-        side: BackSide,
-        blending: AdditiveBlending,
-        transparent: true,
-        depthWrite: false,
-      }),
-    [],
-  );
-
-  return (
-    <mesh material={material}>
-      <sphereGeometry args={[radius * 1.14, 48, 48]} />
-    </mesh>
-  );
-};
-
 /**
  * The single planet the ship is snapped to (see utils/planets - "snapping"
  * to a different one is future work; for now there's only ever this one).
@@ -244,16 +186,12 @@ const Planet = () => {
     );
   }, [items, planet]);
 
-  // Trees stand on top of the raised terrain stack (see landmass.tsx), not
-  // the bare ocean shell - otherwise they'd render embedded inside the
-  // extruded landmass rather than on top of it.
+  // Each tree lands at that exact point's own terrain height (see
+  // heightAt in planetTerrain.ts) - not a fixed offset - so it sits flush
+  // on the ground it's actually scattered onto, whether that's a green
+  // slope or a raised tan highland.
   const trees = useMemo(
-    () =>
-      scatterTrees(
-        TREE_COUNT,
-        planet.radius + LAND_STACK_HEIGHT,
-        planet.center,
-      ),
+    () => scatterTrees(TREE_COUNT, planet.radius, planet.center),
     [planet],
   );
 
@@ -273,14 +211,12 @@ const Planet = () => {
         />
       </mesh>
 
-      <Atmosphere radius={planet.radius} />
-
-      {/* Real extruded 3D landmasses - a raised, three-tier clay stack per
-          blob - rather than a flat texture. */}
-      {allBlobs().map((blob, i) => (
-        <Landmass
+      {/* Real extruded 3D continents - organic wavy-coastline landmasses
+          bent around the sphere - rather than a flat texture. */}
+      {CONTINENTS.map((def, i) => (
+        <Continent
           key={i}
-          blob={blob}
+          def={def}
           planetRadius={planet.radius}
           center={planet.center}
         />

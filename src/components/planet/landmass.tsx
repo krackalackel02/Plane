@@ -1,175 +1,167 @@
 import { useMemo } from "react";
 import {
-  CanvasTexture,
-  CircleGeometry,
-  LatheGeometry,
-  MeshBasicMaterial,
+  BufferGeometry,
+  ExtrudeGeometry,
   MeshPhysicalMaterial,
-  MultiplyBlending,
-  Quaternion,
+  Shape,
   Vector2,
   Vector3,
 } from "three";
-import { pointOnSphere } from "../../utils/planetSurface";
-import { LandBlob } from "./planetTerrain";
+import {
+  eastNorthAt,
+  pointOnSphere,
+  surfaceNormal,
+} from "../../utils/planetSurface";
+import {
+  ContinentDef,
+  GREEN_HEIGHT,
+  TAN_BASE_Z_OFFSET,
+  TAN_HEIGHT,
+  TERRAIN_EMBED,
+  outlineRadiusAt,
+} from "./planetTerrain";
 
-// World-unit heights of each stacked layer, tallest (outermost) last - real
-// extruded geometry rather than a flat painted silhouette, per the
-// claymation reference's "volumetric extrusion" / "multi-tiered continent
-// layering" direction. Each layer's rim is embedded slightly into the one
-// below (see EMBED) so the seam between them - and between the sand layer
-// and the ocean sphere - stays hidden rather than reading as a floating
-// disc.
-const SAND_HEIGHT = 1.6;
-const VEG_HEIGHT = 1.15;
-const FOREST_HEIGHT = 0.55;
-const EMBED = 0.15;
+const OUTLINE_SAMPLES = 40;
 
-/** Total height a blob's stack rises above the ocean shell - trees (see index.tsx) spawn on top of this, not on the bare ocean radius. */
-export const LAND_STACK_HEIGHT =
-  SAND_HEIGHT + VEG_HEIGHT + FOREST_HEIGHT - EMBED * 2;
-
-const LATHE_SEGMENTS = 22;
+/** A closed, wavy-coastline outline (see outlineRadiusAt) as a flat 2D THREE.Shape, ready to extrude. */
+const buildOutlineShape = (def: ContinentDef, scale: number): Shape => {
+  const points: Vector2[] = [];
+  for (let i = 0; i < OUTLINE_SAMPLES; i++) {
+    const bearing = (i / OUTLINE_SAMPLES) * Math.PI * 2;
+    const radius = outlineRadiusAt(def, bearing) * scale;
+    points.push(
+      new Vector2(radius * Math.sin(bearing), radius * Math.cos(bearing)),
+    );
+  }
+  const shape = new Shape();
+  shape.moveTo(points[0].x, points[0].y);
+  shape.splineThru(points.slice(1));
+  shape.closePath();
+  return shape;
+};
 
 /**
- * A radially-symmetric "plateau" profile for THREE.LatheGeometry: a flat
- * top with a rounded bevel down to the rim, swept 360deg around the local
- * Y axis - the low-poly-clay equivalent of a stamped/molded clay disc.
+ * Bends a flat, XY-plane extruded shape around the sphere: local x/y is
+ * read as an east/north tangent-plane offset from the continent's own
+ * centroid, and z as height above the ocean shell. Each vertex is pushed
+ * out along the direction from the planet's center through its
+ * tangent-plane position, landing at exactly `planetRadius + z + zOffset -
+ * embed` - so a shape built with z running 0..depth lands with its base
+ * embedded `embed` units into whatever it's sitting on (hiding the seam)
+ * and its top at a known, exact height above the surface: this is what
+ * guarantees the mesh and heightAt's tree placement (planetTerrain.ts)
+ * never disagree about where the ground actually is.
  */
-const plateauProfile = (
-  radius: number,
-  baseY: number,
-  height: number,
-  capRatio: number,
-): Vector2[] => [
-  new Vector2(radius, baseY),
-  new Vector2(radius * 0.92, baseY + height * 0.32),
-  new Vector2(radius * capRatio, baseY + height * 0.82),
-  new Vector2(0, baseY + height),
-];
+const wrapGeometryOntoSphere = (
+  geometry: BufferGeometry,
+  planetRadius: number,
+  center: Vector3,
+  centroidPos: Vector3,
+  east: Vector3,
+  north: Vector3,
+  zOffset: number,
+  embed: number,
+) => {
+  const position = geometry.getAttribute("position");
+  const v = new Vector3();
+  for (let i = 0; i < position.count; i++) {
+    v.copy(centroidPos)
+      .addScaledVector(east, position.getX(i))
+      .addScaledVector(north, position.getY(i))
+      .sub(center);
+    const targetRadius = planetRadius + position.getZ(i) + zOffset - embed;
+    v.normalize().multiplyScalar(targetRadius).add(center);
+    position.setXYZ(i, v.x, v.y, v.z);
+  }
+  position.needsUpdate = true;
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+};
 
-const sandMaterial = new MeshPhysicalMaterial({
-  color: "#e3c896",
-  roughness: 0.65,
-  clearcoat: 0.3,
-  clearcoatRoughness: 0.3,
-});
-const vegMaterial = new MeshPhysicalMaterial({
+const greenMaterial = new MeshPhysicalMaterial({
   color: "#7cc542",
   roughness: 0.65,
   clearcoat: 0.3,
   clearcoatRoughness: 0.3,
 });
-const forestMaterial = new MeshPhysicalMaterial({
-  color: "#2f8e43",
+const tanMaterial = new MeshPhysicalMaterial({
+  color: "#e3c896",
   roughness: 0.65,
   clearcoat: 0.3,
   clearcoatRoughness: 0.3,
 });
 
-// Lazily built (needs `document`, unavailable at module-import time in
-// non-browser test environments) and cached, since every landmass shares
-// the exact same ring gradient - only its geometry's radius differs.
-let shadowMaterial: MeshBasicMaterial | null = null;
-const getShadowMaterial = (): MeshBasicMaterial => {
-  if (shadowMaterial) return shadowMaterial;
+const extrudeSettings = (depth: number) => ({
+  depth,
+  bevelEnabled: true,
+  bevelThickness: Math.min(0.35, depth * 0.4),
+  bevelSize: Math.min(0.45, depth * 0.4),
+  bevelSegments: 3,
+  curveSegments: 20,
+});
 
-  const size = 128;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  const gradient = ctx.createRadialGradient(
-    size / 2,
-    size / 2,
-    0,
-    size / 2,
-    size / 2,
-    size / 2,
-  );
-  // Transparent under the landmass itself (hidden anyway), darkest right at
-  // its base rim, fading back out over open ocean - a baked contact shadow
-  // standing in for real SSAO.
-  gradient.addColorStop(0, "rgba(8, 16, 14, 0)");
-  gradient.addColorStop(0.62, "rgba(8, 16, 14, 0)");
-  gradient.addColorStop(0.82, "rgba(8, 16, 14, 0.5)");
-  gradient.addColorStop(1, "rgba(8, 16, 14, 0)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-
-  const texture = new CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  shadowMaterial = new MeshBasicMaterial({
-    map: texture,
-    transparent: true,
-    blending: MultiplyBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
-  return shadowMaterial;
-};
-
-const UP = new Vector3(0, 1, 0);
-
-interface LandmassProps {
-  blob: LandBlob;
+interface ContinentProps {
+  def: ContinentDef;
   planetRadius: number;
   center: Vector3;
 }
 
 /**
- * One raised, three-tier landmass (sand coastline shelf -> lime vegetation
- * -> small forest-green highlight cap), standing on the ocean sphere at a
- * single blob's lon/lat, local +Y aligned to the outward surface normal so
- * the whole stack sits flush and upright regardless of where on the planet
- * it lands. A soft ring-shaped shadow decal at its base fakes the contact
- * shadow real ambient occlusion would cast where the extruded layers meet
- * the sphere underneath.
+ * One organic landmass: a green base layer following its own wavy
+ * coastline (see outlineRadiusAt), with a smaller tan "highland" cap
+ * stacked directly on top for continents that have one - both genuinely
+ * extruded and bent around the sphere's curvature (see
+ * wrapGeometryOntoSphere), sitting flush with zero gap against the ocean
+ * shell beneath.
  */
-const Landmass = ({ blob, planetRadius, center }: LandmassProps) => {
-  const { position, quaternion, sandGeo, vegGeo, forestGeo, shadowGeo } =
-    useMemo(() => {
-      const position = pointOnSphere(planetRadius, blob.lat, blob.lon, center);
-      const normal = position.clone().sub(center).normalize();
-      const quaternion = new Quaternion().setFromUnitVectors(UP, normal);
-      // Arc length at this angular radius - a fine linear approximation at
-      // the modest blob sizes in play here (a few tens of degrees at most).
-      const worldRadius = blob.radius * planetRadius;
+const Continent = ({ def, planetRadius, center }: ContinentProps) => {
+  const { greenGeo, tanGeo } = useMemo(() => {
+    const centroidPos = pointOnSphere(planetRadius, def.lat, def.lon, center);
+    const normal = surfaceNormal(centroidPos, center);
+    const { east, north } = eastNorthAt(normal);
 
-      const sandTop = SAND_HEIGHT - EMBED;
-      const vegBase = sandTop - EMBED;
-      const vegTop = vegBase + VEG_HEIGHT;
-      const forestBase = vegTop - EMBED;
+    const greenGeo = new ExtrudeGeometry(
+      buildOutlineShape(def, 1),
+      extrudeSettings(GREEN_HEIGHT),
+    );
+    wrapGeometryOntoSphere(
+      greenGeo,
+      planetRadius,
+      center,
+      centroidPos,
+      east,
+      north,
+      0,
+      TERRAIN_EMBED,
+    );
 
-      const sandGeo = new LatheGeometry(
-        plateauProfile(worldRadius, -EMBED, SAND_HEIGHT, 0.6),
-        LATHE_SEGMENTS,
+    let tanGeo: ExtrudeGeometry | null = null;
+    if (def.highland) {
+      tanGeo = new ExtrudeGeometry(
+        buildOutlineShape(def, def.highland.scale),
+        extrudeSettings(TAN_HEIGHT),
       );
-      const vegGeo = new LatheGeometry(
-        plateauProfile(worldRadius * 0.72, vegBase, VEG_HEIGHT, 0.55),
-        LATHE_SEGMENTS,
+      wrapGeometryOntoSphere(
+        tanGeo,
+        planetRadius,
+        center,
+        centroidPos,
+        east,
+        north,
+        TAN_BASE_Z_OFFSET,
+        TERRAIN_EMBED,
       );
-      const forestGeo = new LatheGeometry(
-        plateauProfile(worldRadius * 0.4, forestBase, FOREST_HEIGHT, 0.5),
-        LATHE_SEGMENTS,
-      );
-      const shadowGeo = new CircleGeometry(worldRadius * 1.3, 28);
+    }
 
-      return { position, quaternion, sandGeo, vegGeo, forestGeo, shadowGeo };
-    }, [blob, planetRadius, center]);
+    return { greenGeo, tanGeo };
+  }, [def, planetRadius, center]);
 
   return (
-    <group position={position} quaternion={quaternion}>
-      <mesh
-        geometry={shadowGeo}
-        material={getShadowMaterial()}
-        position={[0, 0.02, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      />
-      <mesh geometry={sandGeo} material={sandMaterial} />
-      <mesh geometry={vegGeo} material={vegMaterial} />
-      <mesh geometry={forestGeo} material={forestMaterial} />
-    </group>
+    <>
+      <mesh geometry={greenGeo} material={greenMaterial} />
+      {tanGeo && <mesh geometry={tanGeo} material={tanMaterial} />}
+    </>
   );
 };
 
-export default Landmass;
+export default Continent;
