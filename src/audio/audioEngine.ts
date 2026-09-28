@@ -17,6 +17,7 @@ const MUSIC_ENABLED_STORAGE_KEY = "plane:music-enabled";
 const SFX_ENABLED_STORAGE_KEY = "plane:sfx-enabled";
 const MUSIC_GAIN = 0.06; // matches the always-on background level below
 const SFX_GAIN = 0.5;
+const ENGINE_GAIN = 0.1; // engine/exhaust "wirr" target level while active
 
 interface EngineNodes {
   noiseSource: AudioBufferSourceNode;
@@ -43,8 +44,11 @@ class AudioEngine {
   private listeners = new Set<(muted: boolean) => void>();
 
   // Independent on/off toggles for the two channels a listener can tell
-  // apart - the ambient pad (musicGain, "background music") and the
-  // activation-zone bleep (sfxGain, "sound effects"). Both default on,
+  // apart - the ambient pad (musicGain, "background music") and
+  // everything else short/reactive (sfxGain, "sound effects": the
+  // activation-zone bleep and, via engineGain's own gating in
+  // setEngineActive/applySfxEnabled below, the ship's engine/exhaust
+  // "wirr"). Both default on,
   // matching the levels those gain nodes have always carried.
   private musicEnabled = true;
   private sfxEnabled = true;
@@ -244,7 +248,13 @@ class AudioEngine {
     };
   }
 
-  /** See applyMusicEnabled - same reasoning, sfx's counterpart. */
+  /** See applyMusicEnabled - same reasoning, sfx's counterpart. Also
+   *  re-gates the engine/exhaust "wirr" (engineGain lives on its own bus,
+   *  not sfxGain, since its target level while active - see
+   *  setEngineActive - is independent of SFX_GAIN's bleep-specific
+   *  scaling), so switching sound effects off silences it immediately
+   *  rather than only on the next throttle change, and switching back on
+   *  resumes it if the ship is still actively thrusting. */
   private applySfxEnabled(enabled: boolean) {
     this.sfxEnabled = enabled;
     window.localStorage.setItem(SFX_ENABLED_STORAGE_KEY, enabled ? "1" : "0");
@@ -254,6 +264,14 @@ class AudioEngine {
       this.sfxGain.gain.cancelScheduledValues(now);
       this.sfxGain.gain.linearRampToValueAtTime(
         enabled ? SFX_GAIN : 0,
+        now + 0.15,
+      );
+    }
+    if (this.ctx && this.engineGain) {
+      const now = this.ctx.currentTime;
+      this.engineGain.gain.cancelScheduledValues(now);
+      this.engineGain.gain.linearRampToValueAtTime(
+        enabled && this.engineActive ? ENGINE_GAIN : 0,
         now + 0.15,
       );
     }
@@ -289,7 +307,10 @@ class AudioEngine {
     return buffer;
   }
 
-  /** Turns the ship engine "wirr" on/off with a smooth spool up/down. */
+  /** Turns the ship engine "wirr" on/off with a smooth spool up/down.
+   *  Gated by sfxEnabled the same as the activation-zone bleep - this is
+   *  the "exhaust" half of the sound-effects toggle (see applySfxEnabled),
+   *  the bleep being the "beeps" half. */
   setEngineActive(active: boolean) {
     if (active === this.engineActive) return;
     this.engineActive = active;
@@ -301,7 +322,7 @@ class AudioEngine {
     const now = ctx.currentTime;
     this.engineGain.gain.cancelScheduledValues(now);
     this.engineGain.gain.setTargetAtTime(
-      active ? 0.1 : 0,
+      active && this.sfxEnabled ? ENGINE_GAIN : 0,
       now,
       active ? 0.4 : 0.6,
     );
