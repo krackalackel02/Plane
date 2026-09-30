@@ -252,6 +252,36 @@ export const outlineRadiusAt = (c: ContinentDef, bearing: number): number =>
       0,
     ));
 
+/**
+ * A point on a continent's actual rendered coastline (scale=1) or, with a
+ * smaller `scale`, its inset highland/desert cap - the exact same gnomonic
+ * placement landmass.tsx's wrapGeometryOntoSphere uses for the real 3D
+ * mesh (minus height, which doesn't matter for a flat outline), factored
+ * out here so anything that wants to draw a landmass's *true* footprint -
+ * the minimap, chiefly - reads the same shape the mesh itself renders
+ * instead of a separate approximation of it.
+ */
+export const continentOutlinePoint = (
+  c: ContinentDef,
+  planetRadius: number,
+  center: Vector3,
+  bearing: number,
+  scale = 1,
+): Vector3 => {
+  const centroidPos = pointOnSphere(planetRadius, c.lat, c.lon, center);
+  const normal = surfaceNormal(centroidPos, center);
+  const { east, north } = eastNorthAt(normal);
+  const radius = outlineRadiusAt(c, bearing) * scale;
+  return centroidPos
+    .clone()
+    .addScaledVector(east, radius * Math.sin(bearing))
+    .addScaledVector(north, radius * Math.cos(bearing))
+    .sub(center)
+    .normalize()
+    .multiplyScalar(planetRadius)
+    .add(center);
+};
+
 // Extruded terrain heights (world units, above the ocean shell) and how far
 // each layer's rim embeds into the one below it, hiding the seam - shared
 // between the actual mesh builder (landmass.tsx) and heightAt below so a

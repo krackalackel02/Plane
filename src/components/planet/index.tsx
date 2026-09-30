@@ -255,25 +255,19 @@ const Planet = () => {
         <Tree key={i} {...tree} />
       ))}
 
-      {/* Two small orbiting, spinning moons - kept fairly close to the
-          surface (not a distant speck) so they're still noticeable from
-          the default chase camera, and phased off the ship's own spawn
-          longitude so one starts out nearby rather than on the far side. */}
+      {/* A single tidally-locked moon (see moon.tsx) - just the one, to
+          match this being an Earth-like planet - kept fairly close to the
+          surface so it's still noticeable from the default chase camera.
+          Orbits fast (8s per lap) and tidal lock ties spin rate to orbit
+          rate, so at this speed the "same face inward" rotation itself
+          reads as a fast, visible spin, not just a slow drift. */}
       <Moon
         size={planet.radius / 10}
         orbitRadius={planet.radius + 18}
-        orbitSpeed={0.05}
-        spinSpeed={0.25}
-        inclinationDeg={18}
+        orbitSpeed={(2 * Math.PI) / 8}
+        inclinationDeg={28}
         phase={spawnLon}
-      />
-      <Moon
-        size={planet.radius / 12}
-        orbitRadius={planet.radius + 32}
-        orbitSpeed={-0.035}
-        spinSpeed={-0.18}
-        inclinationDeg={34}
-        phase={spawnLon + 1.3}
+        tint="#c9ccd6"
       />
     </group>
   );

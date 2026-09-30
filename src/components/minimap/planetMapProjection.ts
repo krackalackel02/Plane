@@ -5,82 +5,61 @@ import {
   surfaceNormal,
 } from "../../utils/planetSurface";
 
-export interface WorldPoint {
-  id: string;
-  position: [number, number, number];
-}
-
-export interface MapPoint {
-  id: string;
-  x: number;
-  y: number;
-}
-
-export interface PlanetToMapProjection {
+export interface AzimuthalProjection {
   toMap: (position: Vector3) => [number, number];
-  boardPoints: MapPoint[];
 }
 
 /**
- * Latitude/longitude of a world point relative to a planet's center -
- * standard spherical coordinates matching planetSurface's pointOnSphere
- * convention (Y is the polar axis, longitude 0 on +Z, increasing toward +X).
- */
-export const latLonOf = (
-  position: Vector3,
-  center: Vector3 = new Vector3(),
-): { lat: number; lon: number } => {
-  const normal = surfaceNormal(position, center);
-  return {
-    lat: Math.asin(Math.max(-1, Math.min(1, normal.y))),
-    lon: Math.atan2(normal.x, normal.z),
-  };
-};
-
-/**
- * Build a fixed equirectangular projection of the *entire* planet onto a
- * `size` x `size` square: longitude maps to x (wrapping around, since a
- * planet has no edge to pad a view against) and latitude to y, centered in
- * a horizontal band half the canvas's height (a standard 2:1 equirectangular
- * image inscribed in a square canvas). Unlike the old flat minimap, this
- * never needs to re-fit itself to board positions - the whole planet always
- * fits, by construction, and boards (all on the equator) form one clean
- * horizontal line straight across the middle: the "travel around it" path,
- * literally laid flat.
+ * Azimuthal equidistant projection of the *entire* planet's surface onto a
+ * `size` x `size` circle, centered on `centerPosition` (the ship): the
+ * point directly at the center maps to the middle of the circle, distance
+ * from the center on the map is exactly proportional to true angular
+ * distance on the sphere, and the point on the exact opposite side of the
+ * planet maps to the circle's outer rim - so unlike a simple "look straight
+ * down" orthographic view, the whole sphere is always represented
+ * somewhere on the map, not just the near hemisphere.
  *
- * North is screen-up and east is screen-right, same as any ordinary map -
- * no mirroring, unlike the old ship-relative flat minimap - since this
- * reads as a fixed world map rather than a chase-cam view.
+ * North is map-up and east is map-right (standard compass layout, no
+ * mirroring) - the ship stays pinned at the center and everything else
+ * (terrain, boards, the trail) slides/rotates around it as it moves,
+ * exactly like a radar.
  */
-export const computePlanetToMapProjection = (
-  boards: WorldPoint[],
+export const computeAzimuthalProjection = (
+  centerPosition: Vector3,
   size: number,
-  center: Vector3 = new Vector3(),
-): PlanetToMapProjection => {
+  planetCenter: Vector3 = new Vector3(),
+): AzimuthalProjection => {
+  const centerNormal = surfaceNormal(centerPosition, planetCenter);
+  const { east, north } = eastNorthAt(centerNormal);
+  const mapRadius = size / 2;
+
   const toMap = (position: Vector3): [number, number] => {
-    const { lat, lon } = latLonOf(position, center);
-    const lonNormalized = (lon + Math.PI * 2) % (Math.PI * 2);
-    const x = (lonNormalized / (Math.PI * 2)) * size;
-    const y = size / 2 - (lat / (Math.PI / 2)) * (size / 4);
-    return [x, y];
+    const direction = surfaceNormal(position, planetCenter);
+    const cosTheta = Math.max(-1, Math.min(1, centerNormal.dot(direction)));
+    const theta = Math.acos(cosTheta);
+    // east/north are orthogonal to centerNormal by construction, so their
+    // dot with `direction` picks out exactly its tangential (bearing)
+    // component regardless of how far `direction` also points along
+    // centerNormal - the same technique headingBearing below uses.
+    const bearing = Math.atan2(direction.dot(east), direction.dot(north));
+    const r = (theta / Math.PI) * mapRadius;
+    return [
+      mapRadius + r * Math.sin(bearing),
+      mapRadius - r * Math.cos(bearing),
+    ];
   };
 
-  const boardPoints: MapPoint[] = boards.map((b) => {
-    const [x, y] = toMap(new Vector3(...b.position));
-    return { id: b.id, x, y };
-  });
-
-  return { toMap, boardPoints };
+  return { toMap };
 };
 
 /**
  * Compass bearing (radians, 0 = north, increasing clockwise like a real
  * compass) of a ship's forward direction at a given surface position -
  * the rotation to apply to an up-pointing arrow glyph so it matches the
- * ship's heading on the equirectangular map.
+ * ship's heading on the map.
  *
- * Flattening a 3D heading onto a lat/lon map isn't just "read off the yaw"
- * once the ship can be anywhere on a sphere (not just standing at a fixed
+ * Flattening a 3D heading onto a 2D map isn't just "read off the yaw" once
+ * the ship can be anywhere on a sphere (not just standing at a fixed
  * orientation relative to one fixed world axis) - it has to go through the
  * local east/north tangent basis at the ship's actual position.
  */
