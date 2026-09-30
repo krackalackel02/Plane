@@ -7,6 +7,7 @@ import { spawnTransform } from "./calculatedBoardPositionsAndRotations";
 /* eslint-disable react/prop-types */
 interface AutopilotHotkeysProps {
   boards: {
+    id: string;
     position: [number, number, number];
     quaternion: [number, number, number, number];
   }[];
@@ -34,6 +35,7 @@ const AutopilotHotkeys: React.FC<AutopilotHotkeysProps> = ({ boards }) => {
       if (!board) return;
       requestAutopilot(
         getBoardMatWorldPosition(board.position, board.quaternion),
+        board.id,
       );
     };
 

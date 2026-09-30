@@ -215,7 +215,7 @@ const Board = ({
   // center. Mirrors ActivationZone's own fixed local offset/rotation.
   const handleAutopilotClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
-    requestAutopilot(getBoardMatWorldPosition(position, quaternion));
+    requestAutopilot(getBoardMatWorldPosition(position, quaternion), id);
   };
 
   // Function to update a specific parameter

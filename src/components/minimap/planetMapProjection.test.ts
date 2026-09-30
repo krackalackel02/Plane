@@ -64,6 +64,30 @@ describe("computeAzimuthalProjection", () => {
     ).toMap(target);
     expect(fromLonZero).not.toEqual(fromLonQuarter);
   });
+
+  test("toWorld is the exact inverse of toMap - round-tripping any point lands back where it started", () => {
+    const shipPosition = new Vector3(0, 0, R);
+    const { toMap, toWorld } = computeAzimuthalProjection(shipPosition, SIZE);
+    const original = new Vector3(R * 0.4, R * 0.6, R * 0.5)
+      .normalize()
+      .multiplyScalar(R);
+
+    const [x, y] = toMap(original);
+    const roundTripped = toWorld(x, y, R);
+
+    expect(roundTripped.x).toBeCloseTo(original.x, 4);
+    expect(roundTripped.y).toBeCloseTo(original.y, 4);
+    expect(roundTripped.z).toBeCloseTo(original.z, 4);
+  });
+
+  test("toWorld at the exact map center recovers the ship's own position", () => {
+    const shipPosition = new Vector3(0, 0, R);
+    const { toWorld } = computeAzimuthalProjection(shipPosition, SIZE);
+    const world = toWorld(SIZE / 2, SIZE / 2, R);
+    expect(world.x).toBeCloseTo(shipPosition.x, 4);
+    expect(world.y).toBeCloseTo(shipPosition.y, 4);
+    expect(world.z).toBeCloseTo(shipPosition.z, 4);
+  });
 });
 
 describe("headingBearing", () => {

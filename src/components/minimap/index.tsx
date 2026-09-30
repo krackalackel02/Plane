@@ -7,6 +7,7 @@ import {
   useState,
   type RefObject,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { Vector3 } from "three";
 import { useScene } from "../../context/sceneContext";
@@ -152,7 +153,12 @@ const useMinimapWorldData = () => {
   }, [items, planet]);
 };
 
-const drawBook = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
+const drawBook = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  projectNumber: number,
+) => {
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = "#e8c468";
@@ -174,6 +180,22 @@ const drawBook = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
   ctx.lineTo(0, 6.5);
   ctx.strokeStyle = "rgba(74, 58, 23, 0.7)";
   ctx.stroke();
+
+  // Small numbered badge in the corner, so each project's position in the
+  // list is readable at a glance.
+  ctx.beginPath();
+  ctx.arc(5.5, -5.5, 4, 0, Math.PI * 2);
+  ctx.fillStyle = "#1c1c1c";
+  ctx.fill();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 0.75;
+  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 6px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(projectNumber), 5.5, -5.2);
+
   ctx.restore();
 };
 
@@ -313,6 +335,10 @@ const Minimap = () => {
   const [frozenBoardPoints, setFrozenBoardPoints] = useState<
     { id: string; x: number; y: number }[]
   >([]);
+  // The frozen projection itself, kept around (not just its board points)
+  // so a click anywhere on the expanded map can be resolved back to a
+  // world position via its toWorld - see handleMapClick below.
+  const frozenProjectionRef = useRef<AzimuthalProjection | null>(null);
 
   const draw = useCallback(
     (
@@ -346,12 +372,12 @@ const Minimap = () => {
 
       if (options.showTrees) drawTrees(ctx, treePoints, toMap);
 
-      for (const board of boardsData) {
+      boardsData.forEach((board, i) => {
         const [x, y] = toMap(
           getBoardMatWorldPosition(board.position, board.quaternion),
         );
-        drawBook(ctx, x, y);
-      }
+        drawBook(ctx, x, y, i + 1);
+      });
 
       void shipPosition;
       // The projection is centered on the ship by construction, so its
@@ -414,11 +440,13 @@ const Minimap = () => {
     ctx.scale(dpr, dpr);
 
     const shipPosition = ship.position.clone();
-    const toMap = computeAzimuthalProjection(
+    const projection = computeAzimuthalProjection(
       shipPosition,
       size,
       planet.center,
-    ).toMap;
+    );
+    frozenProjectionRef.current = projection;
+    const { toMap } = projection;
     const bearing = headingBearing(
       ship.quaternion,
       shipPosition,
@@ -496,7 +524,26 @@ const Minimap = () => {
   const flyToBoard = (board: (typeof boardsData)[number]) => {
     requestAutopilot(
       getBoardMatWorldPosition(board.position, board.quaternion),
+      board.id,
     );
+    collapse();
+  };
+
+  // Clicking anywhere else on the expanded map (not a project marker)
+  // engages autopilot toward that specific point on the planet, resolved
+  // back from map pixels to a world position via the frozen projection's
+  // own exact inverse (see planetMapProjection.ts's toWorld) - no board id,
+  // since it isn't heading to a specific project (see
+  // activationZone.tsx's autopilot-target guard).
+  const handleMapClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const projection = frozenProjectionRef.current;
+    const canvas = canvasRef.current;
+    if (!projection || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const shellRadius = getShellRadius(planet);
+    requestAutopilot(projection.toWorld(x, y, shellRadius));
     collapse();
   };
 
@@ -532,7 +579,10 @@ const Minimap = () => {
         className={`minimap${expanded ? " minimap-expanded" : ""}`}
         {...containerProps}
       >
-        <div className="minimap-canvas-clip">
+        <div
+          className="minimap-canvas-clip"
+          onClick={expanded ? handleMapClick : undefined}
+        >
           <canvas ref={canvasRef} />
         </div>
         <div className="minimap-compass minimap-compass--n">N</div>

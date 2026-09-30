@@ -7,6 +7,10 @@ import {
 
 export interface AzimuthalProjection {
   toMap: (position: Vector3) => [number, number];
+  // Exact inverse of toMap, at a given target radius from planetCenter -
+  // lets a click anywhere on the map (not just a board marker) resolve to
+  // a real world position to fly to.
+  toWorld: (x: number, y: number, targetRadius: number) => Vector3;
 }
 
 /**
@@ -49,7 +53,22 @@ export const computeAzimuthalProjection = (
     ];
   };
 
-  return { toMap };
+  const toWorld = (x: number, y: number, targetRadius: number): Vector3 => {
+    const dx = x - mapRadius;
+    const dy = mapRadius - y;
+    const r = Math.min(mapRadius, Math.hypot(dx, dy));
+    const bearing = Math.atan2(dx, dy);
+    const theta = (r / mapRadius) * Math.PI;
+    const direction = centerNormal
+      .clone()
+      .multiplyScalar(Math.cos(theta))
+      .addScaledVector(east, Math.sin(theta) * Math.sin(bearing))
+      .addScaledVector(north, Math.sin(theta) * Math.cos(bearing))
+      .normalize();
+    return planetCenter.clone().addScaledVector(direction, targetRadius);
+  };
+
+  return { toMap, toWorld };
 };
 
 /**

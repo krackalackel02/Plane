@@ -17,6 +17,7 @@ import {
 } from "three";
 import { useScene } from "../../context/sceneContext";
 import { useProjects } from "../../context/projectContext";
+import { useAutopilot } from "../../context/autopilotContext";
 import { print, useFrameDelay } from "../../utils/common";
 import { audioEngine } from "../../audio/audioEngine";
 import Sphere from "../helper/sphere";
@@ -52,6 +53,7 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
   const { shipRef } = useScene();
   // State and Context
   const { activeProjectId, setActiveProjectId } = useProjects();
+  const { target: autopilotTarget, isFlying: autopilotFlying } = useAutopilot();
   const [isHovered, setIsHovered] = useState(false);
   const [isActivated, setIsActivated] = useState(false);
   // Colors, vectors, and scaling
@@ -157,7 +159,19 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
 
     if (currentlyHovered !== isHovered) {
       setIsHovered(currentlyHovered);
+      // Autopilot flying toward a *specific* board (see
+      // autopilotContext.tsx's boardId) shouldn't let some other zone the
+      // great-circle arc merely happens to pass near cut the flight short
+      // and pop up the wrong project - only the actual destination (or a
+      // flight with no specific board target, e.g. spawn/minimap-click)
+      // gets to activate here.
+      const blockedByAutopilot =
+        autopilotFlying &&
+        !!autopilotTarget?.boardId &&
+        autopilotTarget.boardId !== id;
+
       if (currentlyHovered) {
+        if (blockedByAutopilot) return;
         setActiveProjectId(id);
         audioEngine.playBleep();
         print("Entered activation zone for ID:", id);
