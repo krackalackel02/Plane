@@ -29,43 +29,47 @@ export interface ContinentDef {
 const deg = (d: number): number => (d * Math.PI) / 180;
 
 /**
- * Hand-authored continents and islands. The ship's own physical footprint
- * (not the much larger board/activation-zone one - see
- * calculatedBoardPositionsAndRotations.ts's CORRIDOR_HALF_WIDTH, which
- * deliberately excludes that) is what the single continuous trail has to
- * keep clear of every landmass, and that's the real ceiling on how much
- * land this planet can hold at once: three continents this size, spread
- * 120 degrees apart, is close to it - a fourth this big, or these three
- * much bigger, would start leaving no safe latitude at all somewhere
- * around the loop. Positions and sizes were found by placing the three at
- * deliberate 120-degree longitude separation first, then rejection-
- * sampling the smaller islands into what room was left - not hand-picked
- * by eye - and the whole layout is verified end to end by
- * calculatedBoardPositionsAndRotations.test.ts's "never runs through a
- * continent/island" test, which checks the trail's *actual* generated
- * shape, not just these positions in isolation.
+ * Three hand-authored continents (forest, desert, snow-mountain), spread at
+ * roughly 120-degree longitude separation. No small islands: at this size
+ * there's no room left for them without either overlapping a continent's
+ * own outline or starving the trail of a safe latitude somewhere around
+ * the loop. The ship's own physical footprint (not the much larger
+ * board/activation-zone one - see calculatedBoardPositionsAndRotations.ts's
+ * CORRIDOR_HALF_WIDTH, which deliberately excludes that) is what the single
+ * continuous trail has to keep clear of every landmass, and that's the real
+ * ceiling on how much land this planet can hold at once. These baseRadius
+ * values (27.5/26.5/25.5) are close to that ceiling - found empirically by
+ * growing them against calculatedBoardPositionsAndRotations.test.ts's
+ * "never runs through a continent/island" test (the trail's *actual*
+ * generated shape, not just these positions in isolation) and this file's
+ * own "no two continents/islands overlap" test: sizes a couple units
+ * larger start overlapping each other outright, and sizes just below that
+ * leave less than a unit of clearance, too tight a margin to keep. Total
+ * surface coverage lands around 33% of the sphere (spherical-cap estimate)
+ * - roughly the most three continents this shape can cover while a single
+ * trail still safely threads around all of them.
  */
 export const CONTINENTS: ContinentDef[] = [
   // Forest continent, with its own (optional) tan highland.
   {
     lon: deg(10),
-    lat: deg(16),
-    baseRadius: 20,
+    lat: deg(8),
+    baseRadius: 27.5,
     harmonics: [
-      { amplitude: 0.14, freq: 2, phase: 0.4 },
-      { amplitude: 0.09, freq: 3, phase: 2.1 },
-      { amplitude: 0.05, freq: 5, phase: 1.0 },
+      { amplitude: 0.12, freq: 2, phase: 0.4 },
+      { amplitude: 0.07, freq: 3, phase: 2.1 },
+      { amplitude: 0.04, freq: 5, phase: 1.0 },
     ],
-    highland: { scale: 0.4 },
+    highland: { scale: 0.35 },
   },
   // Desert continent - solid tan/sand, no trees.
   {
     lon: deg(130),
-    lat: deg(-14),
-    baseRadius: 19,
+    lat: deg(-7),
+    baseRadius: 26.5,
     harmonics: [
-      { amplitude: 0.15, freq: 2, phase: 1.2 },
-      { amplitude: 0.09, freq: 4, phase: 0.3 },
+      { amplitude: 0.13, freq: 2, phase: 1.2 },
+      { amplitude: 0.07, freq: 4, phase: 0.3 },
     ],
     variant: "desert",
   },
@@ -73,43 +77,14 @@ export const CONTINENTS: ContinentDef[] = [
   // white peak cap.
   {
     lon: deg(250),
-    lat: deg(11),
-    baseRadius: 18,
+    lat: deg(6),
+    baseRadius: 25.5,
     harmonics: [
-      { amplitude: 0.14, freq: 2, phase: 0.1 },
-      { amplitude: 0.08, freq: 4, phase: 1.8 },
+      { amplitude: 0.12, freq: 2, phase: 0.1 },
+      { amplitude: 0.07, freq: 4, phase: 1.8 },
     ],
     variant: "snow",
-    highland: { scale: 0.3 },
-  },
-  // Smaller islands, tucked into the longitude gaps the three continents
-  // above leave open.
-  {
-    lon: deg(70),
-    lat: deg(-5),
-    baseRadius: 2.5,
-    harmonics: [
-      { amplitude: 0.16, freq: 3, phase: 2.6 },
-      { amplitude: 0.1, freq: 5, phase: 0.7 },
-    ],
-  },
-  {
-    lon: deg(190),
-    lat: deg(4),
-    baseRadius: 2.2,
-    harmonics: [
-      { amplitude: 0.18, freq: 2, phase: 1.2 },
-      { amplitude: 0.1, freq: 4, phase: 0.3 },
-    ],
-  },
-  {
-    lon: deg(310),
-    lat: deg(-3),
-    baseRadius: 2,
-    harmonics: [
-      { amplitude: 0.17, freq: 3, phase: 0.9 },
-      { amplitude: 0.1, freq: 5, phase: 2.2 },
-    ],
+    highland: { scale: 0.28 },
   },
 ];
 
