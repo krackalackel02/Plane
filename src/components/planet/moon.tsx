@@ -78,7 +78,7 @@ const Moon = ({
 
   return (
     <group ref={orbitGroupRef}>
-      <mesh ref={spinRef}>
+      <mesh ref={spinRef} castShadow>
         <sphereGeometry args={[size, MOON_SEGMENTS, MOON_SEGMENTS]} />
         <meshStandardMaterial
           map={texture}

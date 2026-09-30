@@ -86,7 +86,7 @@ const Scene = () => {
                             wraps both. */}
                         <WelcomeProvider>
                           {/* Provide intro-popup + reopenable-help-modal state */}
-                          <Canvas id="threejs-canvas">
+                          <Canvas id="threejs-canvas" shadows>
                             {/** 3D rendering canvas */}
                             {/*
                             Camera Setup

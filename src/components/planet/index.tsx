@@ -11,7 +11,7 @@ import {
 } from "three";
 import { useProjects } from "../../context/projectContext";
 import { getActivePlanet } from "../../utils/planets";
-import { projectToShell } from "../../utils/planetSurface";
+import { pointOnSphere, projectToShell } from "../../utils/planetSurface";
 import { getBoardMatWorldPosition } from "../../utils/3d";
 import {
   calculatedBoardPositionsAndRotations,
@@ -19,9 +19,16 @@ import {
   spawnTransform,
 } from "../timeline/calculatedBoardPositionsAndRotations";
 import { createPlanetTexture } from "./planetTexture";
-import { CONTINENTS, scatterTrees, type ScatteredTree } from "./planetTerrain";
+import {
+  CONTINENTS,
+  scatterAnimals,
+  scatterTrees,
+  type ScatteredTree,
+} from "./planetTerrain";
 import Continent from "./landmass";
 import Moon from "./moon";
+import Cloud, { type CloudVariant } from "./cloud";
+import Animal from "./animal";
 
 // How far above the planet's own surface the glowing cruise ring and board
 // beacons float, purely to avoid z-fighting with the sphere mesh.
@@ -40,6 +47,71 @@ const RING_SEGMENTS = 256;
 // sphere - never sees the difference; only the shading does.
 const SPHERE_SEGMENTS = 22;
 const TREE_COUNT = 90;
+const ANIMAL_COUNT = 14;
+
+const deg = (d: number): number => (d * Math.PI) / 180;
+
+interface CloudDef {
+  lon: number;
+  lat: number;
+  altitude: number;
+  scale: number;
+  variant: CloudVariant;
+  precipitationCount?: number;
+}
+
+// Hand-placed rather than scattered: a couple of rain clouds sit over the
+// forested continent, a small frequent cluster snows right at the
+// snow-mountain's peak, a few plain ones drift over open ocean, and the
+// desert continent and small islands are deliberately left cloud-free.
+const CLOUD_DEFS: CloudDef[] = [
+  // Rain over the forest continent (CONTINENTS[0]).
+  {
+    lon: deg(5),
+    lat: deg(21),
+    altitude: 7,
+    scale: 1.4,
+    variant: "rain",
+    precipitationCount: 5,
+  },
+  {
+    lon: deg(17),
+    lat: deg(11),
+    altitude: 8,
+    scale: 1.1,
+    variant: "rain",
+    precipitationCount: 4,
+  },
+  // Small, frequent snow clouds right at the snow-mountain's peak (CONTINENTS[2]).
+  {
+    lon: deg(248),
+    lat: deg(15),
+    altitude: 9,
+    scale: 0.6,
+    variant: "snow",
+    precipitationCount: 4,
+  },
+  {
+    lon: deg(252),
+    lat: deg(10),
+    altitude: 10,
+    scale: 0.55,
+    variant: "snow",
+    precipitationCount: 4,
+  },
+  {
+    lon: deg(250),
+    lat: deg(18),
+    altitude: 8.5,
+    scale: 0.5,
+    variant: "snow",
+    precipitationCount: 3,
+  },
+  // Plain clouds drifting over open ocean - no rain/snow, no specific landmass.
+  { lon: deg(340), lat: deg(42), altitude: 6, scale: 1.2, variant: "plain" },
+  { lon: deg(100), lat: deg(-42), altitude: 6, scale: 1, variant: "plain" },
+  { lon: deg(200), lat: deg(-38), altitude: 6.5, scale: 1.3, variant: "plain" },
+];
 
 // Shared across every tree instance (see Tree below) rather than one
 // geometry/material per mesh - a few dozen trees would otherwise mean
@@ -104,6 +176,7 @@ const Tree = ({ position, normal, seed }: ScatteredTree) => {
         geometry={trunkGeometry}
         material={trunkMaterial}
         position={[0, 0.6, 0]}
+        castShadow
       />
       {isPine ? (
         <>
@@ -111,11 +184,13 @@ const Tree = ({ position, normal, seed }: ScatteredTree) => {
             geometry={pineLowerGeometry}
             material={pineMaterialLower}
             position={[0, 1.35, 0]}
+            castShadow
           />
           <mesh
             geometry={pineUpperGeometry}
             material={pineMaterialUpper}
             position={[0, 1.85, 0]}
+            castShadow
           />
         </>
       ) : (
@@ -124,16 +199,19 @@ const Tree = ({ position, normal, seed }: ScatteredTree) => {
             geometry={canopyCoreGeometry}
             material={canopyMaterialCore}
             position={[0, 1.3, 0]}
+            castShadow
           />
           <mesh
             geometry={canopyLobeGeometry}
             material={canopyMaterialLobeA}
             position={[0.34, 1.55, 0.14]}
+            castShadow
           />
           <mesh
             geometry={canopyLobeGeometry}
             material={canopyMaterialLobeB}
             position={[-0.3, 1.48, -0.2]}
+            castShadow
           />
         </>
       )}
@@ -197,6 +275,31 @@ const Planet = () => {
     [planet],
   );
 
+  // Restricted to the plain forest continent only (not the snow one's
+  // slopes, never desert) - a grazing herd, not ground cover.
+  const animals = useMemo(
+    () => scatterAnimals(ANIMAL_COUNT, planet.radius, planet.center),
+    [planet],
+  );
+
+  // Hand-placed (see CLOUD_DEFS) rather than scattered - each one floats
+  // at a fixed altitude above its own target spot, oriented so its local
+  // "down" points at the ground beneath it.
+  const clouds = useMemo(
+    () =>
+      CLOUD_DEFS.map((cloud) => {
+        const position = pointOnSphere(
+          planet.radius + cloud.altitude,
+          cloud.lat,
+          cloud.lon,
+          planet.center,
+        );
+        const normal = position.clone().sub(planet.center).normalize();
+        return { ...cloud, position, normal };
+      }),
+    [planet],
+  );
+
   // Where the ship (and so the default medium camera, once the intro
   // finishes) actually starts - used as the moons' starting orbital angle
   // (see Moon's `phase` doc) purely so at least one is already nearby and
@@ -210,7 +313,7 @@ const Planet = () => {
 
   return (
     <group position={planet.center}>
-      <mesh>
+      <mesh receiveShadow>
         <sphereGeometry
           args={[planet.radius, SPHERE_SEGMENTS, SPHERE_SEGMENTS]}
         />
@@ -253,6 +356,32 @@ const Planet = () => {
           planetTerrain.ts / landmass.tsx). */}
       {trees.map((tree, i) => (
         <Tree key={i} {...tree} />
+      ))}
+
+      {/* A small grazing herd, forest continent only. */}
+      {animals.map((animal, i) => (
+        <Animal
+          key={i}
+          position={animal.position}
+          normal={animal.normal}
+          heading={animal.heading}
+          variant={animal.seed > 0.5 ? "cow" : "sheep"}
+          scale={0.8 + animal.seed * 0.5}
+        />
+      ))}
+
+      {/* Low-poly clouds (see CLOUD_DEFS) - rain over the forest, snow
+          right at the mountain's peak, plain ones drifting over open
+          ocean, desert and the small islands left clear. */}
+      {clouds.map((cloud, i) => (
+        <Cloud
+          key={i}
+          position={cloud.position}
+          normal={cloud.normal}
+          scale={cloud.scale}
+          variant={cloud.variant}
+          precipitationCount={cloud.precipitationCount}
+        />
       ))}
 
       {/* A single tidally-locked moon (see moon.tsx) - just the one, to

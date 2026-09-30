@@ -299,3 +299,54 @@ export const scatterTrees = (
 
   return trees;
 };
+
+export interface ScatteredAnimal {
+  position: Vector3;
+  normal: Vector3;
+  heading: number;
+  seed: number;
+}
+
+// Same idea as TREE_EDGE_MARGIN - keeps animals off the sloped coastline
+// bevel too.
+const ANIMAL_EDGE_MARGIN = 0.6;
+
+/**
+ * Deterministic animal scatter - same rejection-sampling approach as
+ * scatterTrees, but restricted to plain "forest" continents (not the snow
+ * one's forested slopes, and never desert), matching a grazing herd rather
+ * than trees, which grow anywhere green. A different seed offset
+ * (multiplied attempt index) keeps it from landing on the exact same spots
+ * scatterTrees already placed trees on.
+ */
+export const scatterAnimals = (
+  count: number,
+  planetRadius: number,
+  center: Vector3,
+): ScatteredAnimal[] => {
+  const animals: ScatteredAnimal[] = [];
+  let attempt = 0;
+  const maxAttempts = count * 60;
+
+  while (animals.length < count && attempt < maxAttempts) {
+    const a = attempt++;
+    const lon = (seededRandom(a * 2.3 + 101) - 0.5) * Math.PI * 2;
+    const lat = (seededRandom(a * 2.3 + 202) - 0.5) * Math.PI * 0.9;
+    const height = heightAt(
+      planetRadius,
+      center,
+      lon,
+      lat,
+      ANIMAL_EDGE_MARGIN,
+      ["forest"],
+    );
+    if (height <= 0) continue;
+
+    const position = pointOnSphere(planetRadius + height, lat, lon, center);
+    const normal = position.clone().sub(center).normalize();
+    const heading = seededRandom(a * 5.77 + 303) * Math.PI * 2;
+    animals.push({ position, normal, heading, seed: seededRandom(a * 9.41) });
+  }
+
+  return animals;
+};

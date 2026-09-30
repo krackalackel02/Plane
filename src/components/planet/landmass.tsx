@@ -195,10 +195,28 @@ const Continent = ({ def, planetRadius, center }: ContinentProps) => {
 
   return (
     <>
-      {greenGeo && <mesh geometry={greenGeo} material={greenMaterial} />}
-      {tanGeo && <mesh geometry={tanGeo} material={tanMaterial} />}
-      {snowGeo && <mesh geometry={snowGeo} material={snowMaterial} />}
-      {desertGeo && <mesh geometry={desertGeo} material={tanMaterial} />}
+      {greenGeo && (
+        <mesh geometry={greenGeo} material={greenMaterial} receiveShadow />
+      )}
+      {tanGeo && (
+        <mesh
+          geometry={tanGeo}
+          material={tanMaterial}
+          receiveShadow
+          castShadow
+        />
+      )}
+      {snowGeo && (
+        <mesh
+          geometry={snowGeo}
+          material={snowMaterial}
+          receiveShadow
+          castShadow
+        />
+      )}
+      {desertGeo && (
+        <mesh geometry={desertGeo} material={tanMaterial} receiveShadow />
+      )}
     </>
   );
 };
