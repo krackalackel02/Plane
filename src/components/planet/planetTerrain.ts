@@ -64,7 +64,7 @@ export const CONTINENTS: ContinentDef[] = [
   {
     lon: deg(0),
     lat: deg(22),
-    baseRadius: 41.4,
+    baseRadius: 33.1,
     harmonics: [
       { amplitude: 0.2, freq: 1, phase: 0.6 },
       { amplitude: 0.15, freq: 2, phase: 0.4 },
@@ -78,7 +78,7 @@ export const CONTINENTS: ContinentDef[] = [
   {
     lon: deg(120),
     lat: deg(-28),
-    baseRadius: 43.1,
+    baseRadius: 34.5,
     harmonics: [
       { amplitude: 0.18, freq: 1, phase: 2.4 },
       { amplitude: 0.16, freq: 2, phase: 1.2 },
@@ -92,7 +92,7 @@ export const CONTINENTS: ContinentDef[] = [
   {
     lon: deg(240),
     lat: deg(26),
-    baseRadius: 41.0,
+    baseRadius: 32.8,
     harmonics: [
       { amplitude: 0.19, freq: 1, phase: 4.1 },
       { amplitude: 0.14, freq: 2, phase: 0.1 },
@@ -102,11 +102,19 @@ export const CONTINENTS: ContinentDef[] = [
     ],
     variant: "snow",
   },
-  // Small islands scattered along the trail - see the note above.
+  // Small islands in the open ocean between the continents.
+  //
+  // Placed by proposing a candidate, re-running the whole layout with it
+  // included, and keeping it only if every project's stop still had its
+  // MIN_BOARD_WATER of open water and the composed trail still cleared the
+  // corridor. Only three of over a hundred trial positions survived that:
+  // with land at a third of the sphere and eight open-water pockets reserved
+  // for the stops, there is genuinely not much ocean left to drop an island
+  // into without taking a stop's water or pinching the trail.
   {
-    lon: deg(123.7),
-    lat: deg(59),
-    baseRadius: 5.5,
+    lon: deg(325.6),
+    lat: deg(-38.4),
+    baseRadius: 5.2,
     harmonics: [
       { amplitude: 0.16, freq: 2, phase: 0.3 },
       { amplitude: 0.1, freq: 3, phase: 1.1 },
@@ -114,9 +122,9 @@ export const CONTINENTS: ContinentDef[] = [
     ],
   },
   {
-    lon: deg(0.4),
-    lat: deg(-59),
-    baseRadius: 4.5,
+    lon: deg(149),
+    lat: deg(35.8),
+    baseRadius: 4.4,
     harmonics: [
       { amplitude: 0.16, freq: 2, phase: 1.3 },
       { amplitude: 0.1, freq: 3, phase: 1.8 },
@@ -124,23 +132,13 @@ export const CONTINENTS: ContinentDef[] = [
     ],
   },
   {
-    lon: deg(293.7),
-    lat: deg(-43.1),
-    baseRadius: 5,
+    lon: deg(171.3),
+    lat: deg(-17.7),
+    baseRadius: 4.8,
     harmonics: [
       { amplitude: 0.16, freq: 2, phase: 2.3 },
       { amplitude: 0.1, freq: 3, phase: 2.5 },
       { amplitude: 0.05, freq: 5, phase: 4.0 },
-    ],
-  },
-  {
-    lon: deg(243.6),
-    lat: deg(-65.2),
-    baseRadius: 4.2,
-    harmonics: [
-      { amplitude: 0.16, freq: 2, phase: 3.3 },
-      { amplitude: 0.1, freq: 3, phase: 3.2 },
-      { amplitude: 0.05, freq: 5, phase: 5.0 },
     ],
   },
 ];
@@ -391,12 +389,20 @@ export const heightAt = (
     if (!offset) continue;
     const dist = Math.hypot(offset.east, offset.north);
     const bearing = Math.atan2(offset.east, offset.north);
-    const radius = outlineRadiusAt(c, bearing) - margin;
-    if (dist >= radius) continue;
+    const outline = outlineRadiusAt(c, bearing);
+    if (dist >= outline - margin) continue;
     if (c.variant === "desert") return DESERT_TOP_HEIGHT;
+
     const isSnow = c.variant === "snow";
-    if (c.highland && dist < radius * c.highland.scale - margin) {
-      return isSnow ? SNOW_TOP_HEIGHT : TAN_TOP_HEIGHT;
+    if (c.highland) {
+      const cap = outline * c.highland.scale;
+      if (dist < cap - margin) return isSnow ? SNOW_TOP_HEIGHT : TAN_TOP_HEIGHT;
+      // Inside the cap's own bevelled rim: which layer a prop would stand on
+      // is genuinely ambiguous here, so a margin-respecting caller is told
+      // there is nowhere to stand. Without this the margin shrank only the
+      // cap's *inner* test, so a tree just inside the real cap edge was placed
+      // at the green layer's height and stood sunk into the plateau.
+      if (dist < cap + margin) return 0;
     }
     return isSnow ? SNOW_BASE_TOP_HEIGHT : GREEN_TOP_HEIGHT;
   }

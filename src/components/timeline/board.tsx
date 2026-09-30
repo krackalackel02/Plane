@@ -168,15 +168,6 @@ export interface BoardProps {
   position?: [number, number, number];
   quaternion?: [number, number, number, number];
   debug?: boolean;
-  // Where the PictureFrame itself actually renders - already reprojected
-  // onto the planet's shell and reoriented there (see
-  // calculatedBoardPositionsAndRotations.ts's boardVisualTransform), so its
-  // own local up sits flush with the true surface normal at that spot
-  // instead of the flat tangent plane at the (different) centerline
-  // anchor. ActivationZone stays on the centerline (position/quaternion
-  // above) - only the visible frame moves out here.
-  visualPosition?: [number, number, number];
-  visualQuaternion?: [number, number, number, number];
 }
 
 /**
@@ -197,8 +188,6 @@ const Board = ({
   position = [4.0, 2.5, 0.5],
   quaternion = [0, 0, 0, 1],
   debug = false,
-  visualPosition = position,
-  visualQuaternion = quaternion,
 }: BoardProps) => {
   // Combine default and custom parameters
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
@@ -235,26 +224,19 @@ const Board = ({
           </Suspense>
         )}
         <ActivationZone
-          id={id} // Centered on the trail, in front of the anchor - not the (offset, reprojected) board
+          id={id} // Sits at the board's local [-5, -2.5, 0]: on the ground, directly in front of its face
         />
-      </group>
-      {/* Its own top-level group, at the reprojected-onto-shell transform
-          (see visualPosition/visualQuaternion above) rather than nested
-          under the centerline anchor's frame - so it sits flush with the
-          sphere at its own spot instead of the flat tangent plane back at
-          the anchor. frameRef traces this group so the "B"-hotkey debug
-          box matches what's actually rendered. */}
-      <group
-        ref={frameRef}
-        position={visualPosition}
-        quaternion={visualQuaternion}
-        onClick={handleAutopilotClick}
-      >
-        <PictureFrame
-          params={params}
-          texture={texture}
-          debugValue={debug ? id : undefined}
-        />
+        {/* The frame renders at the same anchor as its zone, so the mat is
+            dead centre in front of the picture and the board stands behind
+            it. frameRef traces this group so the "B"-hotkey debug box
+            matches what's actually rendered. */}
+        <group ref={frameRef}>
+          <PictureFrame
+            params={params}
+            texture={texture}
+            debugValue={debug ? id : undefined}
+          />
+        </group>
       </group>
       <DebugBoundingBox target={frameRef} color="#ffae00" />
     </>

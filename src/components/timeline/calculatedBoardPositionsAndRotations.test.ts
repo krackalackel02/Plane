@@ -1,12 +1,12 @@
 import { describe, test, expect } from "vitest";
 import { Quaternion, Vector3 } from "three";
 import {
-  BOARD_SIDE_OFFSET,
-  boardSideOffset,
-  boardVisualTransform,
+  CORRIDOR_HALF_WIDTH,
+  MIN_BOARD_WATER,
   calculatedBoardPositionsAndRotations,
   pathFrameAt,
   spawnTransform,
+  trailNodes,
 } from "./calculatedBoardPositionsAndRotations";
 import { getBoardMatWorldPosition } from "../../utils/3d";
 import { surfaceNormal } from "../../utils/planetSurface";
@@ -71,82 +71,119 @@ describe("spawnTransform", () => {
   });
 });
 
-describe("boardVisualTransform", () => {
-  // Regression test: this is the actual bug being fixed - collision was
-  // built from the board's centerline anchor (where the activation zone
-  // and the ship's own flight path sit) instead of where the board is
-  // actually rendered, so flying straight over a zone - nowhere near the
-  // (sideways-offset) board - bumped the ship anyway.
-  test("is offset sideways from the centerline anchor, not equal to it", () => {
-    const [board] = calculatedBoardPositionsAndRotations(items, testPlanet);
-    const visual = boardVisualTransform(board, 0, testPlanet);
+describe("board placement", () => {
+  // The bug this exists to prevent: stops used to be spaced by longitude
+  // along the routed trail, so each landed wherever that trail happened to
+  // pass - routinely a few units off a coastline, with the billboard
+  // rendering straight through the trees behind it. Stops are searched for
+  // open water now, and this is what keeps them there.
+  test("every board's activation mat sits in genuinely open water", () => {
+    const boards = calculatedBoardPositionsAndRotations(items, testPlanet);
+    expect(boards.length).toBe(items.length);
 
-    expect(visual.position).not.toEqual(board.position);
-
-    const anchorPos = new Vector3(...board.position);
-    const visualPos = new Vector3(...visual.position);
-    // Not exactly BOARD_SIDE_OFFSET: re-projecting the tangent-plane offset
-    // back onto the sphere (see the "stays exactly on the shell" test
-    // below) pulls it in slightly, since the chord is shorter than the
-    // flat offset it was measured along.
-    expect(visualPos.distanceTo(anchorPos)).toBeGreaterThan(
-      BOARD_SIDE_OFFSET * 0.9,
-    );
-    expect(visualPos.distanceTo(anchorPos)).toBeLessThanOrEqual(
-      BOARD_SIDE_OFFSET,
-    );
+    for (const board of boards) {
+      const mat = getBoardMatWorldPosition(board.position, board.quaternion);
+      const water = surfaceClearanceOf(
+        testPlanet.radius,
+        surfaceNormal(mat, testPlanet.center),
+      );
+      // A little under MIN_BOARD_WATER: the mat sits MAT_OFFSET in front of
+      // the board's own searched point, so it can be marginally nearer land
+      // than the point itself was.
+      expect(water).toBeGreaterThan(MIN_BOARD_WATER - 6);
+    }
   });
 
-  test("alternates sides by index, first board on the left", () => {
-    expect(boardSideOffset(0)).toBeLessThan(0);
-    expect(boardSideOffset(1)).toBeGreaterThan(0);
-    expect(boardSideOffset(0)).toBe(-boardSideOffset(1));
+  test("no board is over land", () => {
+    for (const board of calculatedBoardPositionsAndRotations(
+      items,
+      testPlanet,
+    )) {
+      const position = new Vector3(...board.position);
+      expect(
+        surfaceClearanceOf(
+          testPlanet.radius,
+          surfaceNormal(position, testPlanet.center),
+        ),
+      ).toBeGreaterThan(0);
+    }
   });
 
-  // Regression test: this is the actual bug being fixed - a naive tangent-
-  // plane offset bulges outward off the sphere (its distance from the
-  // planet's center grows with how far sideways it's shifted). Re-
-  // projecting onto the shell fixes that.
-  test("stays exactly on the shell, unlike a naive (un-reprojected) tangent-plane offset", () => {
-    const [board] = calculatedBoardPositionsAndRotations(items, testPlanet);
-    const visual = boardVisualTransform(board, 0, testPlanet);
-    const visualPos = new Vector3(...visual.position);
+  test("stands on the cruise shell, facing the ship's line of approach", () => {
+    const boards = calculatedBoardPositionsAndRotations(items, testPlanet);
     const shellRadius = testPlanet.radius + testPlanet.shipAltitude;
+    const nodes = trailNodes(testPlanet);
 
-    expect(visualPos.distanceTo(testPlanet.center)).toBeCloseTo(shellRadius, 5);
+    boards.forEach((board, i) => {
+      const position = new Vector3(...board.position);
+      expect(position.distanceTo(testPlanet.center)).toBeCloseTo(
+        shellRadius,
+        5,
+      );
 
-    // The un-reprojected version - what the anchor's flat tangent-plane
-    // offset alone would give - does bulge outward, confirming the
-    // reprojection is actually doing something here (not a no-op on a
-    // flat test setup).
-    const anchorQuaternion = new Quaternion(...board.quaternion);
-    const anchorPos = new Vector3(...board.position);
-    const naivePos = new Vector3(0, 0, boardSideOffset(0))
-      .applyQuaternion(anchorQuaternion)
-      .add(anchorPos);
-    expect(naivePos.distanceTo(testPlanet.center)).toBeGreaterThan(shellRadius);
+      // Up is the true radial direction at its own spot.
+      const quaternion = new Quaternion(...board.quaternion);
+      const up = new Vector3(0, 1, 0).applyQuaternion(quaternion);
+      expect(
+        up.distanceTo(surfaceNormal(position, testPlanet.center)),
+      ).toBeLessThan(1e-5);
+
+      // Local +X runs along the approach, which (given PictureFrame's baked
+      // -90deg Y rotation puts the picture normal on local -X) is what makes
+      // the board face the oncoming ship.
+      const localX = new Vector3(1, 0, 0).applyQuaternion(quaternion);
+      expect(localX.dot(nodes[i].approach)).toBeGreaterThan(0.95);
+    });
   });
 
-  // Regression test: the naive version also keeps the anchor's own normal
-  // as its "up", which stops matching the true radial direction once the
-  // board has moved sideways - rebuilding the orientation fresh at the
-  // landing point fixes that too.
-  test("its up (local Y) matches the true radial direction at its own position, not the anchor's", () => {
-    const [board] = calculatedBoardPositionsAndRotations(items, testPlanet);
-    const visual = boardVisualTransform(board, 0, testPlanet);
-    const visualPos = new Vector3(...visual.position);
-    const visualQuaternion = new Quaternion(...visual.quaternion);
+  // The whole point of the L: the mat is between the ship and the board, so
+  // arriving triggers the project before the ship can reach the billboard.
+  test("the activation mat sits in front of its board, on the approach side", () => {
+    const boards = calculatedBoardPositionsAndRotations(items, testPlanet);
+    const nodes = trailNodes(testPlanet);
 
-    const trueNormal = visualPos.clone().sub(testPlanet.center).normalize();
-    const localUp = new Vector3(0, 1, 0).applyQuaternion(visualQuaternion);
-    expect(localUp.distanceTo(trueNormal)).toBeLessThan(1e-5);
+    boards.forEach((board, i) => {
+      const anchor = new Vector3(...board.position);
+      const mat = getBoardMatWorldPosition(board.position, board.quaternion);
+      const toMat = mat.clone().sub(anchor).normalize();
+      // The mat lies back along the approach direction from the board.
+      expect(toMat.dot(nodes[i].approach)).toBeLessThan(-0.9);
+    });
   });
 });
 
-// Mirrors the module's own CORRIDOR_HALF_WIDTH (ship half-width + safety
-// margin). Kept as a literal on purpose: if the module's value changes, this
-// test should have to be looked at rather than silently following along.
-const CORRIDOR_HALF_WIDTH = 2.5 + 4.5;
+describe("trail nodes", () => {
+  test("every stop turns a true right angle out of its zone", () => {
+    for (const node of trailNodes(testPlanet)) {
+      // Approach and exit are both unit tangents at the node.
+      expect(node.approach.length()).toBeCloseTo(1, 6);
+      expect(node.exit.length()).toBeCloseTo(1, 6);
+      expect(Math.abs(node.approach.dot(node.exit))).toBeLessThan(1e-6);
+      // Both lie in the tangent plane.
+      expect(Math.abs(node.approach.dot(node.direction))).toBeLessThan(1e-6);
+      expect(Math.abs(node.exit.dot(node.direction))).toBeLessThan(1e-6);
+    }
+  });
+
+  test("stops are spread around the planet, not bunched together", () => {
+    const nodes = trailNodes(testPlanet);
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const separation =
+          (nodes[i].direction.angleTo(nodes[j].direction) * 180) / Math.PI;
+        expect(separation).toBeGreaterThan(30);
+      }
+    }
+  });
+
+  test("each stop itself sits in open water", () => {
+    for (const node of trailNodes(testPlanet)) {
+      expect(
+        surfaceClearanceOf(testPlanet.radius, node.direction),
+      ).toBeGreaterThanOrEqual(MIN_BOARD_WATER - 0.01);
+    }
+  });
+});
 
 describe("pathFrameAt", () => {
   // Regression test, and the one that matters most: landmasses are scattered
@@ -166,79 +203,59 @@ describe("pathFrameAt", () => {
     const pathSamples = 2880;
 
     let worstClearance = Infinity;
-    let worstLonDeg = 0;
+    let worstAt = 0;
     for (let i = 0; i < pathSamples; i++) {
-      const lon = (i / pathSamples) * Math.PI * 2;
-      const { position } = pathFrameAt(shellRadius, lon, testPlanet.center);
+      const t = i / pathSamples;
+      const { position } = pathFrameAt(shellRadius, t, testPlanet.center);
       const clearance = surfaceClearanceOf(
         testPlanet.radius,
         surfaceNormal(position, testPlanet.center),
       );
       if (clearance < worstClearance) {
         worstClearance = clearance;
-        worstLonDeg = (lon * 180) / Math.PI;
+        worstAt = t;
       }
     }
 
     expect(
       worstClearance,
-      `worst clearance ${worstClearance.toFixed(2)}u at lon ${worstLonDeg.toFixed(0)}`,
+      `worst clearance ${worstClearance.toFixed(2)}u at t=${worstAt.toFixed(3)}`,
     ).toBeGreaterThan(CORRIDOR_HALF_WIDTH);
   });
 
-  // Regression test for the jagged, apparently self-crossing trail: the old
-  // router chose each longitude's latitude independently, so where a landmass
-  // split the safe latitudes into a northern and a southern branch,
-  // neighbouring longitudes picked opposite branches and the trail jumped
-  // tens of degrees between them. A bounded second difference is what rules
-  // that out - and it also keeps pathFrameAt's finite-differenced tangent
-  // meaningful, which is what boards take their facing from.
-  test("is smooth - no sudden latitude jumps anywhere around the loop", () => {
+  // Regression test for the jagged trail: an earlier router picked each
+  // longitude's latitude independently, so it jumped branches between
+  // neighbouring samples. The trail deliberately turns right angles now, so
+  // the invariant is continuity of *position* rather than of heading - no
+  // sample may be far from the one before it.
+  test("is continuous - no teleporting between neighbouring samples", () => {
     const shellRadius = testPlanet.radius + testPlanet.shipAltitude;
-    const samples = 720;
-    const latitudeAt = (i: number): number => {
-      const lon = (i / samples) * Math.PI * 2;
-      const { position } = pathFrameAt(shellRadius, lon, testPlanet.center);
-      return Math.asin(
-        Math.max(-1, Math.min(1, surfaceNormal(position, testPlanet.center).y)),
-      );
-    };
+    const samples = 1440;
+    let previous = pathFrameAt(shellRadius, 0, testPlanet.center).position;
+    let longestStep = 0;
 
-    const latitudes = Array.from({ length: samples }, (_, i) => latitudeAt(i));
-    let worstJumpDeg = 0;
-    let worstCurvatureDeg = 0;
-    for (let i = 0; i < samples; i++) {
-      const behind = latitudes[(i - 1 + samples) % samples];
-      const here = latitudes[i];
-      const ahead = latitudes[(i + 1) % samples];
-      worstJumpDeg = Math.max(
-        worstJumpDeg,
-        (Math.abs(ahead - here) * 180) / Math.PI,
-      );
-      worstCurvatureDeg = Math.max(
-        worstCurvatureDeg,
-        (Math.abs(ahead - 2 * here + behind) * 180) / Math.PI,
-      );
+    for (let i = 1; i <= samples; i++) {
+      const here = pathFrameAt(
+        shellRadius,
+        i / samples,
+        testPlanet.center,
+      ).position;
+      longestStep = Math.max(longestStep, here.distanceTo(previous));
+      previous = here;
     }
 
-    // At half-degree longitude steps a smooth weave moves well under a degree
-    // of latitude per step; the old router jumped by 40+ here.
-    expect(worstJumpDeg).toBeLessThan(2);
-    expect(worstCurvatureDeg).toBeLessThan(1);
+    // The whole loop is a few hundred units long; a jump would be tens.
+    expect(longestStep).toBeLessThan(3);
   });
 
   // The trail has to close on itself: it's one loop around the planet, and a
   // seam at lon 0 would show up as a kink in the ring and a wrong board facing
   // right where the ship spawns.
-  test("closes seamlessly at the longitude seam", () => {
+  test("closes seamlessly where the loop wraps", () => {
     const shellRadius = testPlanet.radius + testPlanet.shipAltitude;
-    const before = pathFrameAt(
-      shellRadius,
-      Math.PI * 2 - 1e-4,
-      testPlanet.center,
-    );
+    const before = pathFrameAt(shellRadius, 1 - 1e-4, testPlanet.center);
     const after = pathFrameAt(shellRadius, 1e-4, testPlanet.center);
-    expect(before.position.distanceTo(after.position)).toBeLessThan(0.05);
-    expect(before.tangent.dot(after.tangent)).toBeGreaterThan(0.999);
+    expect(before.position.distanceTo(after.position)).toBeLessThan(0.2);
+    expect(before.tangent.dot(after.tangent)).toBeGreaterThan(0.99);
   });
 });

@@ -43,9 +43,10 @@ import AutopilotRoute from "./autopilotRoute";
 const SURFACE_OFFSET = 0.15;
 const RING_TUBE_RADIUS = 0.12;
 const BEACON_RADIUS = 0.5;
-// How finely the ring curve is sampled around the loop - the trail zigzags
-// (see pathFrameAt), so this needs to be dense enough to read as a smooth
-// curve rather than a faceted polygon.
+// How finely the ring curve is sampled around the loop. The trail now has
+// hard right-angle corners at every stop (see pathFrameAt), so this needs to
+// be dense enough that a corner reads as a corner rather than being rounded
+// away by the tube's own Catmull-Rom.
 const RING_SEGMENTS = 256;
 // Deliberately chunky (not the old 96x96) - low, flat-shaded segment counts
 // are what give the sphere its "mild planar facets" claymation feel, per
@@ -258,8 +259,9 @@ const Planet = () => {
     const points = Array.from(
       { length: RING_SEGMENTS },
       (_, i) =>
-        pathFrameAt(radius, (i / RING_SEGMENTS) * Math.PI * 2, planet.center)
-          .position,
+        // Fraction of the way around the loop, not longitude - the trail
+        // turns a right angle at every stop (see pathFrameAt).
+        pathFrameAt(radius, i / RING_SEGMENTS, planet.center).position,
     );
     const curve = new CatmullRomCurve3(points, true);
     return new TubeGeometry(curve, RING_SEGMENTS, RING_TUBE_RADIUS, 8, true);

@@ -166,11 +166,9 @@ const useMinimapWorldData = () => {
     const pathPoints = Array.from(
       { length: PATH_SAMPLES + 1 },
       (_, i) =>
-        pathFrameAt(
-          shellRadius,
-          (i / PATH_SAMPLES) * Math.PI * 2,
-          planet.center,
-        ).position,
+        // pathFrameAt is parameterised by fraction-of-the-loop now, not
+        // longitude - the trail turns a right angle at every stop.
+        pathFrameAt(shellRadius, i / PATH_SAMPLES, planet.center).position,
     );
     const continentShapes = buildContinentShapes(planet.radius, planet.center);
     // Exactly the same deterministic scatters the 3D scene renders, so the

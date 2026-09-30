@@ -1,16 +1,17 @@
 import Board from "./board";
 import AutopilotHotkeys from "./autopilotHotkeys";
 import { useProjects } from "../../context/projectContext";
-import {
-  boardVisualTransform,
-  calculatedBoardPositionsAndRotations,
-} from "./calculatedBoardPositionsAndRotations";
+import { calculatedBoardPositionsAndRotations } from "./calculatedBoardPositionsAndRotations";
 
 /**
- * Timeline component for managing multiple boards
- * Renders a series of boards spaced evenly around the planet's equator,
- * alternating left/right of the trail so the centerline itself - where the
- * ship flies and each board's activation zone sits - stays clear.
+ * Timeline component for managing multiple boards.
+ *
+ * Each board stands at its own stop - a patch of open water searched out by
+ * calculatedBoardPositionsAndRotations - with its activation zone in front of
+ * it, facing the ship's line of approach. The board renders at the same
+ * anchor as its zone (as on main) rather than offset off to one side: the
+ * trail turns a right angle at the zone, so the ship never carries on into
+ * the board behind it.
  * @returns JSX.Element
  */
 const Timeline = () => {
@@ -21,21 +22,16 @@ const Timeline = () => {
   return (
     <>
       <group>
-        {boardsData.map((board, i) => {
-          const visual = boardVisualTransform(board, i);
-          return (
-            <Board
-              key={board.id}
-              id={board.id}
-              position={board.position}
-              quaternion={board.quaternion}
-              visualPosition={visual.position}
-              visualQuaternion={visual.quaternion}
-              helper={false}
-              imagePath={board.imagePath}
-            />
-          );
-        })}
+        {boardsData.map((board) => (
+          <Board
+            key={board.id}
+            id={board.id}
+            position={board.position}
+            quaternion={board.quaternion}
+            helper={false}
+            imagePath={board.imagePath}
+          />
+        ))}
       </group>
       <AutopilotHotkeys boards={boardsData} />
     </>

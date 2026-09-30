@@ -3,247 +3,370 @@ import { boardJsonProps, PositionedBoard } from "../types/boardTypes";
 import { Planet, getActivePlanet, getShellRadius } from "../../utils/planets";
 import {
   buildSurfaceOrientation,
-  pointOnSphere,
-  projectToShell,
-  surfaceNormal,
+  eastNorthAt,
+  slerpOnSphere,
 } from "../../utils/planetSurface";
-import { getBoardMatWorldPosition } from "../../utils/3d";
-import { surfaceClearanceAt } from "../planet/planetTerrain";
+import { surfaceClearanceOf } from "../planet/planetTerrain";
+import boardData from "./boardItems.json";
 
-// How much room the trail centerline itself actually needs to clear a
-// landmass by, in world units: the ship's own half-width (shipParams.json)
-// plus a turning/visual-breathing-room buffer. This is deliberately just
-// the ship's own requirement, not the board/activation-zone footprint
-// beside it (their much larger sideways offset would roughly double this
-// and, combined with the corridor every *other* landmass also needs,
-// leaves no room for continents with real visual size - see
-// planetTerrain.ts's CONTINENTS comment). A board occasionally rendering
-// near a big continent's coastline is an acceptable trade for that, since
-// the centerline the ship actually flies still never crosses land.
+// How much room the trail centerline itself needs to clear a landmass by, in
+// world units: the ship's own half-width (shipParams.json) plus a
+// turning/visual-breathing-room buffer.
 const SHIP_HALF_WIDTH = 2.5;
 const CORRIDOR_SAFETY_MARGIN = 4.5;
-const CORRIDOR_HALF_WIDTH = SHIP_HALF_WIDTH + CORRIDOR_SAFETY_MARGIN;
-
-// The trail is one closed curve all the way around the planet - a latitude
-// for every longitude - stored as this many evenly spaced latitude samples
-// (2 degrees apart) and interpolated between them (see sampleProfile).
-//
-// Denser sampling is deliberately *not* better here: the relaxation below
-// balances a smoothing pull against a per-sample push, and the smoothing's
-// reach is measured in samples, so halving the spacing halves the angular
-// span it damps over. At 1 degree the push wins locally, a bulge forms beside
-// an island and runs away to the latitude clamp instead of settling -
-// measured, not assumed.
-const PROFILE_SAMPLES = 180;
-const MAX_PATH_LATITUDE = (82 * Math.PI) / 180;
-// Headroom over the bare requirement. The router only enforces clearance at
-// its own samples, while the ship flies the Catmull-Rom curve *through* them,
-// which sags slightly between knots; this is what keeps that sag above
-// CORRIDOR_HALF_WIDTH rather than merely near it.
-const REQUIRED_CLEARANCE = CORRIDOR_HALF_WIDTH + 3;
-// The shape relaxation starts from: a single slow N/S swing per loop,
-// which is already roughly the weave the staggered continent layout wants
-// (see planetTerrain.ts), so the relaxation only has to refine it.
-const SEED_AMPLITUDE = (30 * Math.PI) / 180;
-const SEED_CYCLES = 1.5;
-const RELAX_ITERATIONS = 900;
-const RELAX_SMOOTHING = 0.35;
-const RELAX_PUSH_STEP = (0.5 * Math.PI) / 180;
-
-const profileLongitude = (i: number): number =>
-  (i / PROFILE_SAMPLES) * Math.PI * 2;
+export const CORRIDOR_HALF_WIDTH = SHIP_HALF_WIDTH + CORRIDOR_SAFETY_MARGIN;
 
 /**
- * Routes the trail around every continent as a smooth closed loop, by
- * relaxation: each pass first pulls every sample toward the average of its
- * two neighbours (which is what makes the result smooth, and is periodic
- * because the neighbours wrap), then pushes any sample that's too close to
- * land toward whichever latitude improves its clearance. Repeated, the two
- * forces settle into a curve that flows around the coastlines instead of
- * cutting across them.
+ * Open water a project's stop needs around it, in world units.
  *
- * The previous router searched each longitude *independently* for "the safe
- * latitude nearest a fixed base wiggle". That looked reasonable per point
- * and was badly wrong as a curve: wherever a continent splits the safe
- * latitudes into a northern and a southern branch, consecutive longitudes
- * would pick opposite branches, and the trail teleported tens of degrees
- * between neighbouring samples. On screen that read as a jagged mess that
- * appeared to cross itself, and it also broke pathFrameAt's tangent, which
- * is finite-differenced between two nearby longitudes and so is meaningless
- * across a jump - boards near one faced essentially arbitrary directions.
- * Relaxation can't produce that: the smoothing term is what defines the
- * curve, so continuity isn't something the router has to rediscover at
- * every longitude, and a closed continuous latitude-per-longitude curve
- * can't self-intersect at all.
+ * The board is 6.7 wide (boardParams.json) and its activation mat 8 by 6, so
+ * about 8 units covers the furniture itself; the rest is what stops the
+ * billboard rendering *through* a coastline's trees. Stops used to be placed
+ * at fixed longitude intervals along the routed trail, which put each one
+ * wherever that trail happened to pass - routinely a few units off a coast,
+ * with the board buried in the scenery behind it.
  */
-const relaxPathProfile = (planetRadius: number): number[] => {
-  let profile = Array.from(
-    { length: PROFILE_SAMPLES },
-    (_, i) => Math.sin(SEED_CYCLES * profileLongitude(i)) * SEED_AMPLITUDE,
-  );
-  const clampLatitude = (lat: number): number =>
-    Math.max(-MAX_PATH_LATITUDE, Math.min(MAX_PATH_LATITUDE, lat));
+export const MIN_BOARD_WATER = 20;
+// Consecutive stops have to be a real journey apart, or two boards end up
+// almost on top of each other wherever one patch of good water abuts another.
+const MIN_SITE_SEPARATION = (32 * Math.PI) / 180;
+// Straight run into and out of each stop, world units - long enough that the
+// approach reads as deliberately lined up before the turn.
+const APPROACH_LEG = 13;
+/**
+ * How far the board stands behind its own activation mat, world units.
+ * ActivationZone places the mat at the board's local [-5, -2.5, 0] (see
+ * activationZone.tsx) - 5 units along the board's own facing axis, zero
+ * lateral - so offsetting the board this far *forward* along the approach
+ * lands the mat exactly on the searched open-water stop, with the board
+ * behind it and the ship meeting the mat first.
+ */
+const MAT_OFFSET = 5;
 
-  for (let pass = 0; pass < RELAX_ITERATIONS; pass++) {
-    const next = profile.map((lat, i) => {
-      const behind = profile[(i - 1 + PROFILE_SAMPLES) % PROFILE_SAMPLES];
-      const ahead = profile[(i + 1) % PROFILE_SAMPLES];
-      return lat + RELAX_SMOOTHING * ((behind + ahead) / 2 - lat);
-    });
+// One stop per project. Read from the same static list the project context
+// parses, so the trail and the board list can't disagree about how many
+// stops there are.
+const NODE_COUNT = boardData.boardItems.length;
 
-    for (let i = 0; i < PROFILE_SAMPLES; i++) {
-      const lon = profileLongitude(i);
-      if (
-        surfaceClearanceAt(planetRadius, lon, next[i]) >= REQUIRED_CLEARANCE
-      ) {
-        continue;
-      }
-      const north = clampLatitude(next[i] + RELAX_PUSH_STEP);
-      const south = clampLatitude(next[i] - RELAX_PUSH_STEP);
-      next[i] =
-        surfaceClearanceAt(planetRadius, lon, north) >=
-        surfaceClearanceAt(planetRadius, lon, south)
-          ? north
-          : south;
-    }
-    profile = next;
-  }
+/** Move `from` along the surface by `angle` radians, heading in tangent direction `tangent`. */
+const stepAlong = (from: Vector3, tangent: Vector3, angle: number): Vector3 =>
+  from
+    .clone()
+    .multiplyScalar(Math.cos(angle))
+    .addScaledVector(tangent, Math.sin(angle))
+    .normalize();
 
-  return profile;
-};
-
-// Relaxation is far too expensive to redo per call (pathFrameAt runs for
-// every board, every trail sample and twice per tangent), but CONTINENTS is
-// static, so for a given planet radius the answer never changes - compute
-// it once, on first use.
-const profileCache = new Map<number, number[]>();
-const pathProfile = (planetRadius: number): number[] => {
-  let profile = profileCache.get(planetRadius);
-  if (!profile) {
-    profile = relaxPathProfile(planetRadius);
-    profileCache.set(planetRadius, profile);
-  }
-  return profile;
+/** Unit tangent at `from` pointing along the great circle toward `to`. */
+const tangentToward = (from: Vector3, to: Vector3): Vector3 => {
+  const tangent = to.clone().addScaledVector(from, -from.dot(to));
+  if (tangent.lengthSq() < 1e-12) return eastNorthAt(from).east;
+  return tangent.normalize();
 };
 
 /**
- * Latitude of the trail at an arbitrary longitude, Catmull-Rom interpolated
- * through the routed profile's samples. Catmull-Rom (rather than linear)
- * because pathFrameAt finite-differences this to get the direction of
- * travel: linear interpolation would make that tangent piecewise-constant
- * and jump at every sample boundary, which boards inherit as their facing.
+ * Where the project stops go: the deepest open water on the planet, rather
+ * than evenly spaced longitudes. Searching for water is what makes "nothing
+ * clips into the scenery" a property of the layout instead of something to
+ * keep fixing after the fact.
+ *
+ * Greedy over the whole globe rather than one stop per longitude sector:
+ * sector boundaries are arbitrary, and forcing a stop into each either puts
+ * two almost on top of each other where one sector's good water abuts the
+ * next's, or fails outright in a sector that happens to be mostly land.
  */
-const sampleProfile = (profile: number[], lon: number): number => {
-  const n = profile.length;
-  const turns = lon / (Math.PI * 2);
-  const x = (((turns % 1) + 1) % 1) * n;
-  const i = Math.floor(x);
-  const t = x - i;
-  const p0 = profile[(i - 1 + n) % n];
-  const p1 = profile[i % n];
-  const p2 = profile[(i + 1) % n];
-  const p3 = profile[(i + 2) % n];
-  return (
-    p1 +
-    0.5 *
-      t *
-      (p2 -
-        p0 +
-        t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)))
-  );
+const pickBoardSites = (count: number, planetRadius: number): Vector3[] => {
+  const candidates: { direction: Vector3; water: number; lon: number }[] = [];
+  const LON_STEPS = 360;
+  const LAT_STEPS = 180;
+
+  for (let i = 0; i < LON_STEPS; i++) {
+    const lon = (i / LON_STEPS) * Math.PI * 2;
+    for (let j = 0; j <= LAT_STEPS; j++) {
+      const lat = (j / LAT_STEPS - 0.5) * Math.PI * 0.94;
+      const direction = new Vector3(
+        Math.cos(lat) * Math.sin(lon),
+        Math.sin(lat),
+        Math.cos(lat) * Math.cos(lon),
+      );
+      const water = surfaceClearanceOf(planetRadius, direction);
+      if (water >= MIN_BOARD_WATER) candidates.push({ direction, water, lon });
+    }
+  }
+
+  candidates.sort((a, b) => b.water - a.water);
+  const chosen: typeof candidates = [];
+  for (const candidate of candidates) {
+    if (chosen.length >= count) break;
+    const tooClose = chosen.some(
+      (other) =>
+        other.direction.angleTo(candidate.direction) < MIN_SITE_SEPARATION,
+    );
+    if (!tooClose) chosen.push(candidate);
+  }
+
+  // Ordered by longitude, so flying the trail reads as one circumnavigation
+  // rather than criss-crossing the planet.
+  chosen.sort((a, b) => a.lon - b.lon);
+  return chosen.map((c) => c.direction);
 };
 
-/** Latitude (radians) of the trail at a given longitude - routed clear of every landmass (see relaxPathProfile). */
-const pathLatitude = (lon: number, planetRadius: number): number =>
-  sampleProfile(pathProfile(planetRadius), lon);
+export interface PathNode {
+  /** Unit direction of the stop itself - where the activation mat sits. */
+  direction: Vector3;
+  /** Unit tangent: the direction of travel arriving at the stop. */
+  approach: Vector3;
+  /** Unit tangent perpendicular to `approach`: the direction of travel leaving it. */
+  exit: Vector3;
+  entryAnchor: Vector3;
+  exitAnchor: Vector3;
+}
+
+/**
+ * Turns the stops into L-shaped waypoints: a straight run in, a right-angle
+ * corner at the stop, a straight run out.
+ *
+ * The approach is the great-circle direction continuing on from the previous
+ * stop, so the ship arrives lined up and facing the billboard head-on. The
+ * exit is exactly perpendicular to it - whichever of the two perpendiculars
+ * points more toward the next stop - so leaving means turning out of the zone
+ * rather than carrying straight on through it into whatever lies behind.
+ */
+const buildNodes = (sites: Vector3[], planetRadius: number): PathNode[] => {
+  const legAngle = APPROACH_LEG / planetRadius;
+
+  return sites.map((direction, i) => {
+    const previous = sites[(i - 1 + sites.length) % sites.length];
+    const next = sites[(i + 1) % sites.length];
+
+    // Travel arrives heading away from the previous stop.
+    const approach = tangentToward(direction, previous).negate();
+    const left = new Vector3().crossVectors(direction, approach).normalize();
+    const right = left.clone().negate();
+    const toNext = tangentToward(direction, next);
+    const exit = left.dot(toNext) >= right.dot(toNext) ? left : right;
+
+    return {
+      direction,
+      approach,
+      exit,
+      entryAnchor: stepAlong(direction, approach.clone().negate(), legAngle),
+      exitAnchor: stepAlong(direction, exit, legAngle),
+    };
+  });
+};
+
+// Samples per straight leg and per curved inter-node run.
+const LEG_SAMPLES = 8;
+const BLEND_SAMPLES = 40;
+// Clearance the curved runs are relaxed toward - above CORRIDOR_HALF_WIDTH so
+// the result keeps real margin rather than grazing the limit.
+const BLEND_TARGET = CORRIDOR_HALF_WIDTH + 3;
+const BLEND_PASSES = 400;
+const BLEND_SMOOTHING = 0.35;
+const BLEND_PUSH_STEP = 1.2;
+
+/**
+ * The curved run between two stops: start from the great-circle arc, then
+ * relax it clear of land with both endpoints pinned - smoothing toward the
+ * neighbours, pushing any sample that's too close to land toward better
+ * water. Restricted to this segment precisely so the L-corners either side of
+ * it stay exactly square.
+ */
+const blendRun = (
+  from: Vector3,
+  to: Vector3,
+  planetRadius: number,
+): Vector3[] => {
+  const points: Vector3[] = [];
+  for (let k = 1; k < BLEND_SAMPLES; k++) {
+    points.push(slerpOnSphere(from, to, k / BLEND_SAMPLES));
+  }
+
+  const pushAngle = BLEND_PUSH_STEP / planetRadius;
+  for (let pass = 0; pass < BLEND_PASSES; pass++) {
+    for (let i = 0; i < points.length; i++) {
+      const behind = i === 0 ? from : points[i - 1];
+      const ahead = i === points.length - 1 ? to : points[i + 1];
+
+      const midpoint = behind.clone().add(ahead).normalize();
+      let point = points[i]
+        .clone()
+        .addScaledVector(midpoint, BLEND_SMOOTHING)
+        .normalize();
+
+      let bestWater = surfaceClearanceOf(planetRadius, point);
+      if (bestWater < BLEND_TARGET) {
+        const { east, north } = eastNorthAt(point);
+        let best = point;
+        for (const tangent of [
+          east,
+          east.clone().negate(),
+          north,
+          north.clone().negate(),
+        ]) {
+          const candidate = stepAlong(point, tangent, pushAngle);
+          const water = surfaceClearanceOf(planetRadius, candidate);
+          if (water > bestWater) {
+            bestWater = water;
+            best = candidate;
+          }
+        }
+        point = best;
+      }
+      points[i] = point;
+    }
+  }
+
+  return points;
+};
+
+interface Trail {
+  nodes: PathNode[];
+  /** Closed loop of unit directions: straight legs, corners and relaxed curved runs. */
+  points: Vector3[];
+  /** Index into `points` of each node's own corner. */
+  nodeIndices: number[];
+}
+
+/**
+ * The whole trail, assembled once: for every stop, the straight run in, the
+ * corner, the straight run out, then the curved run to the next stop.
+ */
+const buildTrail = (planetRadius: number): Trail => {
+  const sites = pickBoardSites(NODE_COUNT, planetRadius);
+  const nodes = buildNodes(sites, planetRadius);
+  const points: Vector3[] = [];
+  const nodeIndices: number[] = [];
+
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    const nextNode = nodes[(i + 1) % nodes.length];
+
+    for (let k = 0; k < LEG_SAMPLES; k++) {
+      points.push(
+        slerpOnSphere(node.entryAnchor, node.direction, k / LEG_SAMPLES),
+      );
+    }
+    nodeIndices.push(points.length);
+    points.push(node.direction.clone());
+    for (let k = 1; k <= LEG_SAMPLES; k++) {
+      points.push(
+        slerpOnSphere(node.direction, node.exitAnchor, k / LEG_SAMPLES),
+      );
+    }
+    for (const point of blendRun(
+      node.exitAnchor,
+      nextNode.entryAnchor,
+      planetRadius,
+    )) {
+      points.push(point);
+    }
+  }
+
+  return { nodes, points, nodeIndices };
+};
+
+// Assembling the trail samples the globe for open water and relaxes one curved
+// run per stop - far too expensive to redo per call (pathFrameAt runs for every
+// ring sample and every minimap frame), and CONTINENTS is static, so for a
+// given planet radius the answer never changes.
+const trailCache = new Map<number, Trail>();
+const trailFor = (planetRadius: number): Trail => {
+  let trail = trailCache.get(planetRadius);
+  if (!trail) {
+    trail = buildTrail(planetRadius);
+    trailCache.set(planetRadius, trail);
+  }
+  return trail;
+};
+
+/** Unit direction of the trail at `t`, a fraction of the way around the loop. */
+const trailDirectionAt = (t: number, planetRadius: number): Vector3 => {
+  const { points } = trailFor(planetRadius);
+  const count = points.length;
+  const x = (((t % 1) + 1) % 1) * count;
+  const i = Math.floor(x);
+  return slerpOnSphere(points[i % count], points[(i + 1) % count], x - i);
+};
 
 export interface PathFrame {
   position: Vector3;
   normal: Vector3;
-  // Unit vector, tangent to the surface, pointing in the direction of
-  // increasing longitude along the (possibly wiggling) path.
+  /** Unit vector tangent to the surface, pointing in the direction of travel. */
   tangent: Vector3;
 }
 
-// Small longitude step used to finite-difference the tangent - simple and
-// accurate enough at this wiggle's scale, and avoids hand-deriving a
-// closed-form derivative for the sphere-plus-latitude-wiggle parametrization.
-const TANGENT_EPSILON = 0.001;
-
 /**
- * Position, surface normal, and direction-of-travel tangent of the trail at
- * a given longitude, on the shell at the given radius. The one place that
- * actually knows about the zigzag - everything that needs to sit "on the
- * trail" (boards, the ship's spawn point, the visual trail itself) goes
- * through this, so they can never drift out of sync with each other.
+ * Position, surface normal and direction-of-travel tangent at a point along
+ * the trail, on the shell at the given radius.
+ *
+ * `t` is a fraction of the way around the closed loop, **not a longitude**:
+ * the trail now turns a right angle at every stop and doubles back on itself,
+ * so it is no longer a function of longitude and cannot be sampled by one.
+ * Everything that needs to sit "on the trail" - boards, the spawn point, the
+ * visual ring, the minimap - goes through this, so they can never drift out of
+ * sync with each other.
  */
 export const pathFrameAt = (
   radius: number,
-  lon: number,
+  t: number,
   center: Vector3 = new Vector3(),
 ): PathFrame => {
-  // Routing is done against the planet's own surface radius, not `radius`:
-  // `radius` is whichever shell is being sampled (the ship's cruise shell,
-  // the trail ring just above the surface), but a continent's outline is
-  // defined in the tangent plane at the *surface* (see planetTerrain.ts), so
-  // that's the radius its geometry has to be measured against. The routed
-  // latitudes are the same for every shell above it.
+  // Routing is measured against the planet's own surface radius, not `radius`:
+  // `radius` is whichever shell is being sampled (the cruise shell, the ring
+  // just above the surface), but a continent's outline is defined in the
+  // tangent plane at the surface (see planetTerrain.ts).
   const planetRadius = getActivePlanet().radius;
-  const position = pointOnSphere(
-    radius,
-    pathLatitude(lon, planetRadius),
-    lon,
-    center,
-  );
-  const normal = surfaceNormal(position, center);
-  const ahead = pointOnSphere(
-    radius,
-    pathLatitude(lon + TANGENT_EPSILON, planetRadius),
-    lon + TANGENT_EPSILON,
-    center,
-  );
-  const tangent = ahead.sub(position).normalize();
-  return { position, normal, tangent };
+  const { points } = trailFor(planetRadius);
+  const lookahead = 0.5 / points.length;
+
+  const direction = trailDirectionAt(t, planetRadius);
+  const ahead = trailDirectionAt(t + lookahead, planetRadius);
+
+  return {
+    position: direction.clone().multiplyScalar(radius).add(center),
+    normal: direction.clone(),
+    tangent: ahead.sub(direction).normalize(),
+  };
 };
 
 /**
- * Orientation standing upright at `normal`, facing back along `tangent` -
- * PictureFrame bakes in its own -90deg Y rotation (see boardCollision.ts's
- * doc comment), which puts the image's face normal on this group's local
- * -X axis. Building local +X from tangent (rather than +Z) puts the face
- * normal opposite the direction of travel, i.e. facing a ship approaching
- * from behind - head-on, the way a roadside sign faces oncoming traffic.
+ * Orientation standing upright at `normal` with its local +X along `facing`.
+ *
+ * PictureFrame bakes in its own -90deg Y rotation (see boardCollision.ts), so
+ * the image's face normal is this group's local -X. Pointing +X along the
+ * direction the ship arrives from therefore puts the picture face-on to the
+ * oncoming ship, and puts the activation mat's own [-5, -2.5, 0] offset
+ * directly in front of the board rather than off to one side.
  */
-const orientationAlongPath = (
-  normal: Vector3,
-  tangent: Vector3,
-): Quaternion => {
-  const forwardHint = new Vector3().crossVectors(tangent, normal);
-  return buildSurfaceOrientation(normal, forwardHint);
-};
+const orientationFacing = (normal: Vector3, facing: Vector3): Quaternion =>
+  buildSurfaceOrientation(normal, new Vector3().crossVectors(facing, normal));
 
 /**
- * Lay boards out evenly spaced by longitude along the planet's trail (see
- * pathFrameAt), standing upright on the cruise shell and facing back along
- * it - so flying one full loop visits every board in order, like signposts
- * along a ring road. This is the one clear, readable pattern for "how do I
- * see everything on this planet".
+ * One board per project, standing in open water at its own stop with its
+ * activation mat in front of it, facing the ship's line of approach.
+ *
+ * The board sits MAT_OFFSET *along* the approach from the stop, so the mat
+ * lands exactly on the searched open-water point and the board stands behind
+ * it: the ship meets the mat, triggers the project, and turns out of the zone
+ * before ever reaching the board itself.
  */
 export const calculatedBoardPositionsAndRotations = (
   items: boardJsonProps[],
   planet: Planet = getActivePlanet(),
 ): PositionedBoard[] => {
   const shellRadius = getShellRadius(planet);
-  const angleStep = (Math.PI * 2) / Math.max(items.length, 1);
+  const { nodes } = trailFor(planet.radius);
+  const matAngle = MAT_OFFSET / planet.radius;
 
   return items.map((item, i) => {
-    const lon = i * angleStep;
-    const { position, normal, tangent } = pathFrameAt(
-      shellRadius,
-      lon,
-      planet.center,
-    );
-    const orientation = orientationAlongPath(normal, tangent);
+    const node = nodes[i % nodes.length];
+    const anchorDirection = stepAlong(node.direction, node.approach, matAngle);
+    const position = anchorDirection
+      .clone()
+      .multiplyScalar(shellRadius)
+      .add(planet.center);
+    const orientation = orientationFacing(anchorDirection, node.approach);
 
     return {
       ...item,
@@ -253,116 +376,43 @@ export const calculatedBoardPositionsAndRotations = (
   });
 };
 
-// Radians of open trail kept between the ship's spawn point and the first
-// project's activation zone - just enough that the player starts facing
-// toward something to fly to, rather than spawning on top of it (or just
-// past it, with the first stop behind them).
-const SPAWN_LEAD_ANGLE = 0.25;
+// How far back along the trail from the first stop the ship starts, as a
+// fraction of the whole loop - just enough that the player begins on the
+// straight approach, already lined up on the first billboard.
+const SPAWN_LEAD = 0.035;
 
 /**
- * Where the ship spawns: a short stretch of open trail before the first
- * project's activation zone (see activationZone.tsx for why the zone isn't
- * at the same longitude as the board's own anchor). Falls back to the
- * planet's lon-0 point if there are no boards at all.
+ * Where the ship spawns: on the open approach a short way before the first
+ * project's stop, so the player starts facing something to fly toward rather
+ * than sitting on top of it.
  */
 export const spawnTransform = (
   items: boardJsonProps[],
   planet: Planet = getActivePlanet(),
 ): { position: Vector3; orientation: Quaternion } => {
   const shellRadius = getShellRadius(planet);
-  const [firstBoard] = calculatedBoardPositionsAndRotations(items, planet);
-
-  let spawnLon = 0;
-  if (firstBoard) {
-    const zoneWorldPosition = getBoardMatWorldPosition(
-      firstBoard.position,
-      firstBoard.quaternion,
-    );
-    const zoneNormal = surfaceNormal(zoneWorldPosition, planet.center);
-    const zoneLon = Math.atan2(zoneNormal.x, zoneNormal.z);
-    spawnLon = zoneLon - SPAWN_LEAD_ANGLE;
-  }
+  const { points, nodeIndices } = trailFor(planet.radius);
+  const firstStop = items.length > 0 ? nodeIndices[0] / points.length : 0;
 
   const { position, normal, tangent } = pathFrameAt(
     shellRadius,
-    spawnLon,
+    firstStop - SPAWN_LEAD,
     planet.center,
   );
-  // Ship's own forward convention is local +Z (see PlanetMotion), unlike a
-  // board's local +X (see orientationAlongPath) - so this builds directly
-  // from the path's tangent as the forward hint, facing along the
-  // direction of travel rather than back along it like a board does.
-  const orientation = buildSurfaceOrientation(normal, tangent);
-  return { position, orientation };
+  // The ship's own forward convention is local +Z (see PlanetMotion), unlike a
+  // board's local +X, so this builds straight from the tangent as the forward
+  // hint - facing along the direction of travel.
+  return { position, orientation: buildSurfaceOrientation(normal, tangent) };
 };
 
-// How far to either side of the trail centerline each board sits, in world
-// units. Must clear the activation zone's own half-width (4, see
-// activationZone.tsx's size=[8,6]) plus the board's own half-width (3.35,
-// boardParams.json's outerX/2) - anything under ~7.4 lets the board's near
-// edge poke into the zone's mat. 12 leaves a comfortable gap instead of
-// sitting right at that threshold.
-export const BOARD_SIDE_OFFSET = 12;
-
-/** Alternates left/right by index (first board on the left), so consecutive stops flank the trail on opposite sides. */
-export const boardSideOffset = (index: number): number =>
-  index % 2 === 0 ? -BOARD_SIDE_OFFSET : BOARD_SIDE_OFFSET;
-
-/**
- * A board's actual rendered position - its trail-centerline anchor (see
- * calculatedBoardPositionsAndRotations) shifted boardSideOffset() units
- * along its own local Z (lateral) axis, then re-projected back onto the
- * planet's shell and given a fresh orientation built at that landing point.
- *
- * The naive version - just offsetting the anchor's position without
- * reprojecting - moves along the anchor's flat TANGENT PLANE, not the
- * sphere's actual curved surface: the further the offset, the further the
- * board bulges outward from the shell, and its "up" (still the anchor's own
- * normal) increasingly stops matching the true radial direction at the
- * board's own landing spot. Both show up as the same visual bug - the board
- * visibly tilting and sticking out rather than sitting flush on the
- * curve - which is exactly what re-projecting + rebuilding the orientation
- * here fixes.
- *
- * The board's own `position`/`quaternion` fields deliberately stay at the
- * centerline anchor everywhere else (autopilot targets, the minimap, the
- * trail beacons) - this is specifically for anything that needs to know
- * where the board actually, visibly sits, chiefly its collision box (see
- * ship/physics/collision/boardCollision.ts): building that from the raw
- * anchor instead would put the hitbox back on the centerline, where the
- * ship is actually meant to fly, bumping it against a board that visually
- * isn't there any more.
- */
-export const boardVisualTransform = (
-  board: Pick<PositionedBoard, "position" | "quaternion">,
-  index: number,
+/** Each project's own stop as a fraction of the way around the loop. */
+export const boardTrailParameters = (
   planet: Planet = getActivePlanet(),
-): Pick<PositionedBoard, "position" | "quaternion"> => {
-  const anchorQuaternion = new Quaternion(...board.quaternion);
-  const anchorPosition = new Vector3(...board.position);
-  const shellRadius = anchorPosition.distanceTo(planet.center);
-
-  const tangentPlaneOffset = new Vector3(0, 0, boardSideOffset(index))
-    .applyQuaternion(anchorQuaternion)
-    .add(anchorPosition);
-  const position = projectToShell(
-    tangentPlaneOffset,
-    shellRadius,
-    planet.center,
-  );
-  const normal = surfaceNormal(position, planet.center);
-  // Keep facing the same general direction the anchor faced (its own local
-  // X, per orientationAlongPath - the tangent-along-the-path direction),
-  // re-derived fresh against this new, slightly different normal. Mirrors
-  // orientationAlongPath's own cross(tangent, normal) construction (local
-  // X = cross(normal, forwardHint), so recovering a forwardHint that lands
-  // back on the same local X takes the cyclic cross(X, normal) instead).
-  const anchorFacing = new Vector3(1, 0, 0).applyQuaternion(anchorQuaternion);
-  const forwardHint = new Vector3().crossVectors(anchorFacing, normal);
-  const orientation = buildSurfaceOrientation(normal, forwardHint);
-
-  return {
-    position: position.toArray() as [number, number, number],
-    quaternion: orientation.toArray() as [number, number, number, number],
-  };
+): number[] => {
+  const { points, nodeIndices } = trailFor(planet.radius);
+  return nodeIndices.map((index) => index / points.length);
 };
+
+/** The trail's L-shaped waypoints, for anything that needs the approach/exit geometry. */
+export const trailNodes = (planet: Planet = getActivePlanet()): PathNode[] =>
+  trailFor(planet.radius).nodes;

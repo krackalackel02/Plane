@@ -189,7 +189,8 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
       // the arc keeps "flying" underneath the popup (isFlying stays
       // true), leaving the exhaust lit and autopilot nominally still
       // engaged for however long the popup stays open.
-      if (result.status !== "flying" || activeProjectId) {
+      const flightEnded = result.status !== "flying" || activeProjectId;
+      if (flightEnded) {
         cancelAutopilot();
         activeTargetRef.current = null;
         setIsFlying(false);
@@ -208,7 +209,17 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
         ),
       );
       ship.position.copy(result.position);
-      ship.quaternion.copy(result.orientation).multiply(tilt);
+      ship.quaternion.copy(result.orientation);
+      if (flightEnded) {
+        // Hand the heading back. PlanetMotion keeps orientation as internal
+        // state and only re-syncs position from the caller each frame, so
+        // without this it resumes manual flight on whatever heading it held
+        // when autopilot engaged - snapping the ship away from the board it
+        // just arrived facing. Seeded before the cosmetic tilt is applied, so
+        // it adopts the true surface heading rather than the roll/pitch lean.
+        planetMotion.current.attachTo(ship);
+      }
+      ship.quaternion.multiply(tilt);
       return; // skip manual motions entirely this frame
     }
 

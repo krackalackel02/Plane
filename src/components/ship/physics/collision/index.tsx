@@ -4,10 +4,7 @@ import { Group, Vector3 } from "three";
 import { useScene } from "../../../../context/sceneContext";
 import { useProjects } from "../../../../context/projectContext";
 import { useAutopilot } from "../../../../context/autopilotContext";
-import {
-  boardVisualTransform,
-  calculatedBoardPositionsAndRotations,
-} from "../../../timeline/calculatedBoardPositionsAndRotations";
+import { calculatedBoardPositionsAndRotations } from "../../../timeline/calculatedBoardPositionsAndRotations";
 import boardGeometry from "../../../../utils/boardParams.json";
 import { buildBoardObbs, resolveShipBoardCollision } from "./boardCollision";
 import { getActivePlanet, getShellRadius } from "../../../../utils/planets";
@@ -48,16 +45,13 @@ const ShipCollision = () => {
   const shellRadius = getShellRadius(planet);
 
   const boardObbs = useMemo(() => {
+    // Boards render at their own anchor now, so the hitbox belongs there
+    // too. The ship can still reach one - it flies straight at the board's
+    // face on the approach leg - but the trail turns 90 degrees at the
+    // activation zone in front of it, so a ship following the trail turns
+    // out before contact and only bumps a board by flying manually into it.
     const boardsData = calculatedBoardPositionsAndRotations(items, planet);
-    // Collide against where each board is actually rendered (offset off
-    // the trail centerline - see board.tsx/timeline/index.tsx), not its
-    // centerline anchor: the anchor is where the activation zone and the
-    // ship's own flight path sit, so building the hitbox there instead
-    // would bump the ship against a board that visually isn't even there.
-    const visualBoards = boardsData.map((board, i) =>
-      boardVisualTransform(board, i),
-    );
-    return buildBoardObbs(visualBoards, boardGeometry);
+    return buildBoardObbs(boardsData, boardGeometry);
   }, [items, planet]);
 
   const prevPosition = useRef(new Vector3());
