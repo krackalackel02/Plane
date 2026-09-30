@@ -168,14 +168,15 @@ export interface BoardProps {
   position?: [number, number, number];
   quaternion?: [number, number, number, number];
   debug?: boolean;
-  // How far to the side of the trail centerline the visual frame sits (its
-  // own local Z, the lateral/width axis - see boardCollision.ts's doc
-  // comment), positive or negative to alternate sides. The board's own
-  // position/quaternion stay pinned to the trail centerline throughout -
-  // this only shifts the rendered PictureFrame, not ActivationZone, so the
-  // interactive mat stays centered on the flight path while the boards
-  // flank it left and right as you fly past.
-  sideOffset?: number;
+  // Where the PictureFrame itself actually renders - already reprojected
+  // onto the planet's shell and reoriented there (see
+  // calculatedBoardPositionsAndRotations.ts's boardVisualTransform), so its
+  // own local up sits flush with the true surface normal at that spot
+  // instead of the flat tangent plane at the (different) centerline
+  // anchor. ActivationZone stays on the centerline (position/quaternion
+  // above) - only the visible frame moves out here.
+  visualPosition?: [number, number, number];
+  visualQuaternion?: [number, number, number, number];
 }
 
 /**
@@ -196,7 +197,8 @@ const Board = ({
   position = [4.0, 2.5, 0.5],
   quaternion = [0, 0, 0, 1],
   debug = false,
-  sideOffset = 0,
+  visualPosition = position,
+  visualQuaternion = quaternion,
 }: BoardProps) => {
   // Combine default and custom parameters
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
@@ -221,31 +223,41 @@ const Board = ({
     setParams((prev) => ({ ...prev, [key]: value }));
 
   return (
-    <group
-      position={position}
-      quaternion={quaternion}
-      onClick={handleAutopilotClick}
-    >
-      {helper && (
-        <Suspense fallback={null}>
-          <BoardDebugControls params={params} updateParam={updateParam} />
-        </Suspense>
-      )}
-      {/* frameRef sits on this offset group itself (not a level deeper) so
-          the "B"-hotkey debug box traces the picture frame's actual
-          rendered position, sideOffset included. */}
-      <group ref={frameRef} position={[0, 0, sideOffset]}>
+    <>
+      <group
+        position={position}
+        quaternion={quaternion}
+        onClick={handleAutopilotClick}
+      >
+        {helper && (
+          <Suspense fallback={null}>
+            <BoardDebugControls params={params} updateParam={updateParam} />
+          </Suspense>
+        )}
+        <ActivationZone
+          id={id} // Centered on the trail, in front of the anchor - not the (offset, reprojected) board
+        />
+      </group>
+      {/* Its own top-level group, at the reprojected-onto-shell transform
+          (see visualPosition/visualQuaternion above) rather than nested
+          under the centerline anchor's frame - so it sits flush with the
+          sphere at its own spot instead of the flat tangent plane back at
+          the anchor. frameRef traces this group so the "B"-hotkey debug
+          box matches what's actually rendered. */}
+      <group
+        ref={frameRef}
+        position={visualPosition}
+        quaternion={visualQuaternion}
+        onClick={handleAutopilotClick}
+      >
         <PictureFrame
           params={params}
           texture={texture}
           debugValue={debug ? id : undefined}
         />
       </group>
-      <ActivationZone
-        id={id} // Centered on the trail, in front of the anchor - not the (offset) board
-      />
       <DebugBoundingBox target={frameRef} color="#ffae00" />
-    </group>
+    </>
   );
 };
 

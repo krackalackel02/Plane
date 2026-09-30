@@ -14,6 +14,7 @@ import {
 } from "../../utils/planetSurface";
 import {
   ContinentDef,
+  DESERT_HEIGHT,
   GREEN_HEIGHT,
   TAN_BASE_Z_OFFSET,
   TAN_HEIGHT,
@@ -107,18 +108,40 @@ interface ContinentProps {
 }
 
 /**
- * One organic landmass: a green base layer following its own wavy
- * coastline (see outlineRadiusAt), with a smaller tan "highland" cap
- * stacked directly on top for continents that have one - both genuinely
- * extruded and bent around the sphere's curvature (see
+ * One organic landmass, either:
+ * - "forest" (the default): a green base layer following its own wavy
+ *   coastline (see outlineRadiusAt), with a smaller tan "highland" cap
+ *   stacked directly on top for continents that have one; or
+ * - "desert": a single solid tan/sand layer covering the whole outline,
+ *   no green - a distinct barren landmass type (see scatterTrees, which
+ *   skips these entirely).
+ * Both are genuinely extruded and bent around the sphere's curvature (see
  * wrapGeometryOntoSphere), sitting flush with zero gap against the ocean
  * shell beneath.
  */
 const Continent = ({ def, planetRadius, center }: ContinentProps) => {
-  const { greenGeo, tanGeo } = useMemo(() => {
+  const { greenGeo, tanGeo, desertGeo } = useMemo(() => {
     const centroidPos = pointOnSphere(planetRadius, def.lat, def.lon, center);
     const normal = surfaceNormal(centroidPos, center);
     const { east, north } = eastNorthAt(normal);
+
+    if (def.variant === "desert") {
+      const desertGeo = new ExtrudeGeometry(
+        buildOutlineShape(def, 1),
+        extrudeSettings(DESERT_HEIGHT),
+      );
+      wrapGeometryOntoSphere(
+        desertGeo,
+        planetRadius,
+        center,
+        centroidPos,
+        east,
+        north,
+        0,
+        TERRAIN_EMBED,
+      );
+      return { greenGeo: null, tanGeo: null, desertGeo };
+    }
 
     const greenGeo = new ExtrudeGeometry(
       buildOutlineShape(def, 1),
@@ -153,13 +176,14 @@ const Continent = ({ def, planetRadius, center }: ContinentProps) => {
       );
     }
 
-    return { greenGeo, tanGeo };
+    return { greenGeo, tanGeo, desertGeo: null };
   }, [def, planetRadius, center]);
 
   return (
     <>
-      <mesh geometry={greenGeo} material={greenMaterial} />
+      {greenGeo && <mesh geometry={greenGeo} material={greenMaterial} />}
       {tanGeo && <mesh geometry={tanGeo} material={tanMaterial} />}
+      {desertGeo && <mesh geometry={desertGeo} material={tanMaterial} />}
     </>
   );
 };

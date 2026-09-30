@@ -2,8 +2,9 @@ import { describe, test, expect } from "vitest";
 import { Vector3 } from "three";
 import {
   CONTINENTS,
-  SAFE_LAT_DEG,
+  CORRIDOR_HALF_WIDTH,
   heightAt,
+  minDistanceToPath,
   outlineRadiusAt,
   scatterTrees,
 } from "./planetTerrain";
@@ -32,16 +33,18 @@ const centroidDistance = (
 
 describe("CONTINENTS layout", () => {
   // Regression test: continents used to sit near the equator and overlap
-  // the ship's trail, boards, and activation zones. Every continent must
-  // stay clear of the trail's whole possible reach (see SAFE_LAT_DEG),
-  // with margin, even at its widest (wobbled) point.
+  // the ship's trail, boards, and activation zones. Every continent's
+  // closest possible edge (its centroid's own closest approach to the
+  // actual wiggly trail, minus its own widest outline radius) must clear
+  // the corridor the trail/boards/zones actually need - a real per-point
+  // check against the trail's own path, not a blanket latitude line, so
+  // landmasses can sit anywhere the trail's wiggle happens to leave clear.
   test("every continent's closest edge clears the trail/board/zone corridor", () => {
     for (const c of CONTINENTS) {
-      const centroidLatDeg = (Math.abs(c.lat) * 180) / Math.PI;
-      const maxRadiusDeg =
-        (maxOutlineRadius(c) / planet.radius) * (180 / Math.PI);
-      const innermostReachDeg = centroidLatDeg - maxRadiusDeg;
-      expect(innermostReachDeg).toBeGreaterThan(SAFE_LAT_DEG);
+      const clearance =
+        minDistanceToPath(planet.radius, center, c.lon, c.lat) -
+        maxOutlineRadius(c);
+      expect(clearance).toBeGreaterThan(CORRIDOR_HALF_WIDTH);
     }
   });
 
@@ -84,6 +87,21 @@ describe("scatterTrees", () => {
     for (const tree of trees) {
       const distance = tree.position.distanceTo(center);
       expect(distance).toBeGreaterThan(planet.radius);
+    }
+  });
+
+  test("never lands on a desert continent", () => {
+    const desert = CONTINENTS.find((c) => c.variant === "desert");
+    expect(desert).toBeDefined();
+    if (!desert) return;
+
+    const trees = scatterTrees(200, planet.radius, center);
+    for (const tree of trees) {
+      const normal = tree.normal;
+      const lat = Math.asin(Math.max(-1, Math.min(1, normal.y)));
+      const lon = Math.atan2(normal.x, normal.z);
+      const onDesert = heightAt(planet.radius, center, lon, lat, 0, ["desert"]);
+      expect(onDesert).toBe(0);
     }
   });
 });

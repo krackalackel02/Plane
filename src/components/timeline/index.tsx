@@ -2,7 +2,7 @@ import Board from "./board";
 import AutopilotHotkeys from "./autopilotHotkeys";
 import { useProjects } from "../../context/projectContext";
 import {
-  boardSideOffset,
+  boardVisualTransform,
   calculatedBoardPositionsAndRotations,
 } from "./calculatedBoardPositionsAndRotations";
 
@@ -21,17 +21,21 @@ const Timeline = () => {
   return (
     <>
       <group>
-        {boardsData.map((board, i) => (
-          <Board
-            key={board.id}
-            id={board.id}
-            position={board.position}
-            quaternion={board.quaternion}
-            helper={false}
-            imagePath={board.imagePath}
-            sideOffset={boardSideOffset(i)}
-          />
-        ))}
+        {boardsData.map((board, i) => {
+          const visual = boardVisualTransform(board, i);
+          return (
+            <Board
+              key={board.id}
+              id={board.id}
+              position={board.position}
+              quaternion={board.quaternion}
+              visualPosition={visual.position}
+              visualQuaternion={visual.quaternion}
+              helper={false}
+              imagePath={board.imagePath}
+            />
+          );
+        })}
       </group>
       <AutopilotHotkeys boards={boardsData} />
     </>

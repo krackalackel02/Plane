@@ -16,10 +16,12 @@ import { getBoardMatWorldPosition } from "../../utils/3d";
 import {
   calculatedBoardPositionsAndRotations,
   pathFrameAt,
+  spawnTransform,
 } from "../timeline/calculatedBoardPositionsAndRotations";
 import { createPlanetTexture } from "./planetTexture";
 import { CONTINENTS, scatterTrees, type ScatteredTree } from "./planetTerrain";
 import Continent from "./landmass";
+import Moon from "./moon";
 
 // How far above the planet's own surface the glowing cruise ring and board
 // beacons float, purely to avoid z-fighting with the sphere mesh.
@@ -195,6 +197,17 @@ const Planet = () => {
     [planet],
   );
 
+  // Where the ship (and so the default medium camera, once the intro
+  // finishes) actually starts - used as the moons' starting orbital angle
+  // (see Moon's `phase` doc) purely so at least one is already nearby and
+  // noticeable on load, rather than possibly starting on the planet's far
+  // side.
+  const spawnLon = useMemo(() => {
+    const spawn = spawnTransform(items, planet);
+    const normal = spawn.position.clone().sub(planet.center).normalize();
+    return Math.atan2(normal.x, normal.z);
+  }, [items, planet]);
+
   return (
     <group position={planet.center}>
       <mesh>
@@ -241,6 +254,27 @@ const Planet = () => {
       {trees.map((tree, i) => (
         <Tree key={i} {...tree} />
       ))}
+
+      {/* Two small orbiting, spinning moons - kept fairly close to the
+          surface (not a distant speck) so they're still noticeable from
+          the default chase camera, and phased off the ship's own spawn
+          longitude so one starts out nearby rather than on the far side. */}
+      <Moon
+        size={planet.radius / 10}
+        orbitRadius={planet.radius + 18}
+        orbitSpeed={0.05}
+        spinSpeed={0.25}
+        inclinationDeg={18}
+        phase={spawnLon}
+      />
+      <Moon
+        size={planet.radius / 12}
+        orbitRadius={planet.radius + 32}
+        orbitSpeed={-0.035}
+        spinSpeed={-0.18}
+        inclinationDeg={34}
+        phase={spawnLon + 1.3}
+      />
     </group>
   );
 };
