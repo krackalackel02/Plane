@@ -12,8 +12,11 @@ import { getBoardMatWorldPosition } from "../../utils/3d";
 // How far the trail swings in latitude as it goes, and how many full swings
 // it makes over one complete loop - turns the trail from a perfect
 // equatorial circle into a deterministic zigzag, so following it takes real
-// steering rather than holding a straight throttle line.
-const PATH_WIGGLE_AMPLITUDE = (16 * Math.PI) / 180; // ~16 degrees of latitude swing
+// steering rather than holding a straight throttle line. Exported so
+// anything placed on the planet (see planetTerrain.ts's continent layout)
+// can compute how much latitude the trail - and everything anchored to it
+// (boards, activation zones) - ever actually reaches.
+export const PATH_WIGGLE_AMPLITUDE = (16 * Math.PI) / 180; // ~16 degrees of latitude swing
 const PATH_WIGGLE_CYCLES = 5; // full swings per full loop of the planet
 
 /** Latitude (radians) of the trail at a given longitude - the zigzag itself. */
