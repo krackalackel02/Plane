@@ -8,19 +8,7 @@ import {
   surfaceNormal,
 } from "../../utils/planetSurface";
 import { getBoardMatWorldPosition } from "../../utils/3d";
-import { CONTINENTS, outlineRadiusAt } from "../planet/planetTerrain";
-
-// A gentle base swing, on top of which each nearby landmass adds its own
-// detour (see islandBumpDeg below) - most of the trail's actual shape now
-// comes from routing around wherever the (deliberately scattered, not
-// latitude-banded - see planetTerrain.ts) continents and islands happen to
-// be, rather than from this wiggle alone.
-export const PATH_WIGGLE_AMPLITUDE = (10 * Math.PI) / 180; // ~10 degrees of latitude swing
-const PATH_WIGGLE_CYCLES = 5; // full swings per full loop of the planet
-
-const baseLatitudeDeg = (lonDeg: number): number =>
-  ((PATH_WIGGLE_AMPLITUDE * 180) / Math.PI) *
-  Math.sin(((lonDeg * Math.PI) / 180) * PATH_WIGGLE_CYCLES);
+import { surfaceClearanceAt } from "../planet/planetTerrain";
 
 // How much room the trail centerline itself actually needs to clear a
 // landmass by, in world units: the ship's own half-width (shipParams.json)
@@ -29,100 +17,145 @@ const baseLatitudeDeg = (lonDeg: number): number =>
 // beside it (their much larger sideways offset would roughly double this
 // and, combined with the corridor every *other* landmass also needs,
 // leaves no room for continents with real visual size - see
-// planetTerrain.ts's CONTINENTS comment) - a board occasionally rendering
+// planetTerrain.ts's CONTINENTS comment). A board occasionally rendering
 // near a big continent's coastline is an acceptable trade for that, since
-// nothing about it is actually broken (the centerline the ship flies
-// still never crosses land).
+// the centerline the ship actually flies still never crosses land.
 const SHIP_HALF_WIDTH = 2.5;
 const CORRIDOR_SAFETY_MARGIN = 4.5;
 const CORRIDOR_HALF_WIDTH = SHIP_HALF_WIDTH + CORRIDOR_SAFETY_MARGIN;
 
-// Precomputed once (CONTINENTS is static): each landmass's own centroid
-// and widest outline radius, in world units.
-const islandProfiles = CONTINENTS.map((c) => {
-  let maxRadius = 0;
-  for (let i = 0; i < 36; i++) {
-    maxRadius = Math.max(maxRadius, outlineRadiusAt(c, (i / 36) * Math.PI * 2));
-  }
-  return { lat: c.lat, lon: c.lon, radiusWorldUnits: maxRadius };
-});
+// The trail is one closed curve all the way around the planet - a latitude
+// for every longitude - stored as this many evenly spaced latitude samples
+// (2 degrees apart) and interpolated between them (see sampleProfile).
+//
+// Denser sampling is deliberately *not* better here: the relaxation below
+// balances a smoothing pull against a per-sample push, and the smoothing's
+// reach is measured in samples, so halving the spacing halves the angular
+// span it damps over. At 1 degree the push wins locally, a bulge forms beside
+// an island and runs away to the latitude clamp instead of settling -
+// measured, not assumed.
+const PROFILE_SAMPLES = 180;
+const MAX_PATH_LATITUDE = (82 * Math.PI) / 180;
+// Headroom over the bare requirement. The router only enforces clearance at
+// its own samples, while the ship flies the Catmull-Rom curve *through* them,
+// which sags slightly between knots; this is what keeps that sag above
+// CORRIDOR_HALF_WIDTH rather than merely near it.
+const REQUIRED_CLEARANCE = CORRIDOR_HALF_WIDTH + 3;
+// The shape relaxation starts from: a single slow N/S swing per loop,
+// which is already roughly the weave the staggered continent layout wants
+// (see planetTerrain.ts), so the relaxation only has to refine it.
+const SEED_AMPLITUDE = (30 * Math.PI) / 180;
+const SEED_CYCLES = 1.5;
+const RELAX_ITERATIONS = 900;
+const RELAX_SMOOTHING = 0.35;
+const RELAX_PUSH_STEP = (0.5 * Math.PI) / 180;
 
-// A first (coarse) search pass finds roughly where it's safe, a second
-// (fine) pass refines tightly around that; SEARCH_MARGIN is extra
-// world-unit headroom beyond the bare CORRIDOR_HALF_WIDTH requirement, to
-// absorb both passes' step size and keep genuine margin rather than
-// landing exactly on the boundary.
-const COARSE_LAT_STEP_DEG = 2;
-const FINE_LAT_STEP_DEG = 0.1;
-const SEARCH_MARGIN = 5;
+const profileLongitude = (i: number): number =>
+  (i / PROFILE_SAMPLES) * Math.PI * 2;
 
 /**
- * Finds a safe trail latitude (radians) at a given longitude: the one
- * closest to the gentle base wiggle that still keeps true 3D distance to
- * every landmass's centroid, minus that landmass's own radius, at least
- * CORRIDOR_HALF_WIDTH (plus a safety margin) - a direct numeric search
- * over real 3D distances, not a closed-form approximation. An earlier
- * attempt summed a per-island "nudge" instead, which broke down whenever
- * two landmasses' influence zones overlapped - the sum could silently
- * produce a latitude that cleared *neither* of them. This can't have that
- * failure mode: every candidate is checked directly against every
- * landmass, so "safe" always means safe from all of them at once.
+ * Routes the trail around every continent as a smooth closed loop, by
+ * relaxation: each pass first pulls every sample toward the average of its
+ * two neighbours (which is what makes the result smooth, and is periodic
+ * because the neighbours wrap), then pushes any sample that's too close to
+ * land toward whichever latitude improves its clearance. Repeated, the two
+ * forces settle into a curve that flows around the coastlines instead of
+ * cutting across them.
+ *
+ * The previous router searched each longitude *independently* for "the safe
+ * latitude nearest a fixed base wiggle". That looked reasonable per point
+ * and was badly wrong as a curve: wherever a continent splits the safe
+ * latitudes into a northern and a southern branch, consecutive longitudes
+ * would pick opposite branches, and the trail teleported tens of degrees
+ * between neighbouring samples. On screen that read as a jagged mess that
+ * appeared to cross itself, and it also broke pathFrameAt's tangent, which
+ * is finite-differenced between two nearby longitudes and so is meaningless
+ * across a jump - boards near one faced essentially arbitrary directions.
+ * Relaxation can't produce that: the smoothing term is what defines the
+ * curve, so continuity isn't something the router has to rediscover at
+ * every longitude, and a closed continuous latitude-per-longitude curve
+ * can't self-intersect at all.
  */
-const searchSafeLatitude = (
-  lon: number,
-  radius: number,
-  center: Vector3,
-): number => {
-  const baseDeg = baseLatitudeDeg((lon * 180) / Math.PI);
-  const requiredClearance = CORRIDOR_HALF_WIDTH + SEARCH_MARGIN;
-  const islandCenters = islandProfiles.map((island) =>
-    pointOnSphere(radius, island.lat, island.lon, center),
+const relaxPathProfile = (planetRadius: number): number[] => {
+  let profile = Array.from(
+    { length: PROFILE_SAMPLES },
+    (_, i) => Math.sin(SEED_CYCLES * profileLongitude(i)) * SEED_AMPLITUDE,
   );
+  const clampLatitude = (lat: number): number =>
+    Math.max(-MAX_PATH_LATITUDE, Math.min(MAX_PATH_LATITUDE, lat));
 
-  const clearanceAt = (latDeg: number): number => {
-    const point = pointOnSphere(radius, (latDeg * Math.PI) / 180, lon, center);
-    let min = Infinity;
-    for (let i = 0; i < islandProfiles.length; i++) {
-      const clearance =
-        point.distanceTo(islandCenters[i]) - islandProfiles[i].radiusWorldUnits;
-      if (clearance < min) min = clearance;
-    }
-    return min;
-  };
+  for (let pass = 0; pass < RELAX_ITERATIONS; pass++) {
+    const next = profile.map((lat, i) => {
+      const behind = profile[(i - 1 + PROFILE_SAMPLES) % PROFILE_SAMPLES];
+      const ahead = profile[(i + 1) % PROFILE_SAMPLES];
+      return lat + RELAX_SMOOTHING * ((behind + ahead) / 2 - lat);
+    });
 
-  const pickBest = (
-    step: number,
-    from: number,
-    to: number,
-    fallback: number,
-  ): number => {
-    let best: number | null = null;
-    let bestDeviation = Infinity;
-    for (let lat = from; lat <= to; lat += step) {
-      if (clearanceAt(lat) >= requiredClearance) {
-        const deviation = Math.abs(lat - baseDeg);
-        if (deviation < bestDeviation) {
-          bestDeviation = deviation;
-          best = lat;
-        }
+    for (let i = 0; i < PROFILE_SAMPLES; i++) {
+      const lon = profileLongitude(i);
+      if (
+        surfaceClearanceAt(planetRadius, lon, next[i]) >= REQUIRED_CLEARANCE
+      ) {
+        continue;
       }
+      const north = clampLatitude(next[i] + RELAX_PUSH_STEP);
+      const south = clampLatitude(next[i] - RELAX_PUSH_STEP);
+      next[i] =
+        surfaceClearanceAt(planetRadius, lon, north) >=
+        surfaceClearanceAt(planetRadius, lon, south)
+          ? north
+          : south;
     }
-    return best ?? fallback;
-  };
+    profile = next;
+  }
 
-  const coarse = pickBest(COARSE_LAT_STEP_DEG, -84, 84, baseDeg);
-  const fine = pickBest(
-    FINE_LAT_STEP_DEG,
-    coarse - COARSE_LAT_STEP_DEG,
-    coarse + COARSE_LAT_STEP_DEG,
-    coarse,
-  );
-  return (fine * Math.PI) / 180;
+  return profile;
 };
 
-/** Latitude (radians) of the trail at a given longitude/shell radius - the gentle base wiggle, nudged to clear every landmass (see searchSafeLatitude). */
-const pathLatitude = (lon: number, radius: number, center: Vector3): number =>
-  searchSafeLatitude(lon, radius, center);
+// Relaxation is far too expensive to redo per call (pathFrameAt runs for
+// every board, every trail sample and twice per tangent), but CONTINENTS is
+// static, so for a given planet radius the answer never changes - compute
+// it once, on first use.
+const profileCache = new Map<number, number[]>();
+const pathProfile = (planetRadius: number): number[] => {
+  let profile = profileCache.get(planetRadius);
+  if (!profile) {
+    profile = relaxPathProfile(planetRadius);
+    profileCache.set(planetRadius, profile);
+  }
+  return profile;
+};
+
+/**
+ * Latitude of the trail at an arbitrary longitude, Catmull-Rom interpolated
+ * through the routed profile's samples. Catmull-Rom (rather than linear)
+ * because pathFrameAt finite-differences this to get the direction of
+ * travel: linear interpolation would make that tangent piecewise-constant
+ * and jump at every sample boundary, which boards inherit as their facing.
+ */
+const sampleProfile = (profile: number[], lon: number): number => {
+  const n = profile.length;
+  const turns = lon / (Math.PI * 2);
+  const x = (((turns % 1) + 1) % 1) * n;
+  const i = Math.floor(x);
+  const t = x - i;
+  const p0 = profile[(i - 1 + n) % n];
+  const p1 = profile[i % n];
+  const p2 = profile[(i + 1) % n];
+  const p3 = profile[(i + 2) % n];
+  return (
+    p1 +
+    0.5 *
+      t *
+      (p2 -
+        p0 +
+        t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)))
+  );
+};
+
+/** Latitude (radians) of the trail at a given longitude - routed clear of every landmass (see relaxPathProfile). */
+const pathLatitude = (lon: number, planetRadius: number): number =>
+  sampleProfile(pathProfile(planetRadius), lon);
 
 export interface PathFrame {
   position: Vector3;
@@ -149,16 +182,23 @@ export const pathFrameAt = (
   lon: number,
   center: Vector3 = new Vector3(),
 ): PathFrame => {
+  // Routing is done against the planet's own surface radius, not `radius`:
+  // `radius` is whichever shell is being sampled (the ship's cruise shell,
+  // the trail ring just above the surface), but a continent's outline is
+  // defined in the tangent plane at the *surface* (see planetTerrain.ts), so
+  // that's the radius its geometry has to be measured against. The routed
+  // latitudes are the same for every shell above it.
+  const planetRadius = getActivePlanet().radius;
   const position = pointOnSphere(
     radius,
-    pathLatitude(lon, radius, center),
+    pathLatitude(lon, planetRadius),
     lon,
     center,
   );
   const normal = surfaceNormal(position, center);
   const ahead = pointOnSphere(
     radius,
-    pathLatitude(lon + TANGENT_EPSILON, radius, center),
+    pathLatitude(lon + TANGENT_EPSILON, planetRadius),
     lon + TANGENT_EPSILON,
     center,
   );

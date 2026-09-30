@@ -19,9 +19,12 @@ import {
 } from "../timeline/calculatedBoardPositionsAndRotations";
 import { getBoardMatWorldPosition } from "../../utils/3d";
 import { getActivePlanet, getShellRadius } from "../../utils/planets";
+import { slerpOnSphere } from "../../utils/planetSurface";
 import {
   CONTINENTS,
   continentOutlinePoint,
+  scatterDesertFeatures,
+  scatterRidges,
   scatterTrees,
 } from "../planet/planetTerrain";
 import {
@@ -66,19 +69,36 @@ const useMapSize = (ref: RefObject<HTMLDivElement>) => {
 // enough to read as smooth curves rather than faceted polygons at minimap
 // scale, without needing the 3D mesh's much higher fidelity.
 const PATH_SAMPLES = 180;
-const OUTLINE_SAMPLES = 20;
+// Enough to keep the autopilot arc smooth even across half the planet.
+const ROUTE_SAMPLES = 96;
+const OUTLINE_SAMPLES = 64;
 // Reuses the exact same deterministic scatter the 3D scene itself uses
 // (see planet/index.tsx) - same count, same seeded positions - so the
 // minimap shows literally the same trees the camera could see, not a
 // separate approximation of them.
 const TREE_COUNT = 90;
+const DESERT_FEATURE_COUNT = 70;
+const RIDGE_CHAIN_COUNT = 14;
 
+// One per landmass biome, matching landmass.tsx's own materials so a
+// continent reads as the same biome on the map as it does out the window.
 const GREEN = "#7cc542";
 const TAN = "#e3c896";
+const SNOW_ROCK = "#dde6ef";
+const SNOW_PEAK = "#ffffff";
 
 interface ContinentShape {
   points: Vector3[];
   color: string;
+}
+
+type FeatureGlyphKind = "tree" | "dune" | "peak";
+
+interface FeatureGlyphs {
+  points: Vector3[];
+  color: string;
+  size: number;
+  kind: FeatureGlyphKind;
 }
 
 /**
@@ -103,7 +123,14 @@ const buildContinentShapes = (
         1,
       ),
     );
-    shapes.push({ points: outer, color: c.variant === "desert" ? TAN : GREEN });
+    const variant = c.variant ?? "forest";
+    // Every biome needs its own entry here: with only a desert case, the
+    // snow continent fell through to green and was indistinguishable from
+    // the forest one on the map, which made the planet look like it had two
+    // forest continents and no snow one at all.
+    const baseColor =
+      variant === "desert" ? TAN : variant === "snow" ? SNOW_ROCK : GREEN;
+    shapes.push({ points: outer, color: baseColor });
     if (c.highland) {
       const inner = Array.from({ length: OUTLINE_SAMPLES }, (_, i) =>
         continentOutlinePoint(
@@ -114,7 +141,10 @@ const buildContinentShapes = (
           c.highland!.scale,
         ),
       );
-      shapes.push({ points: inner, color: TAN });
+      shapes.push({
+        points: inner,
+        color: variant === "snow" ? SNOW_PEAK : TAN,
+      });
     }
   }
   return shapes;
@@ -143,13 +173,40 @@ const useMinimapWorldData = () => {
         ).position,
     );
     const continentShapes = buildContinentShapes(planet.radius, planet.center);
-    const treePoints = scatterTrees(
-      TREE_COUNT,
-      planet.radius,
-      planet.center,
-    ).map((t) => t.position);
+    // Exactly the same deterministic scatters the 3D scene renders, so the
+    // map shows the real props rather than a separate approximation.
+    const features: FeatureGlyphs[] = [
+      {
+        points: scatterTrees(TREE_COUNT, planet.radius, planet.center).map(
+          (t) => t.position,
+        ),
+        color: "#2f6e3a",
+        size: 2.2,
+        kind: "tree",
+      },
+      {
+        points: scatterDesertFeatures(
+          DESERT_FEATURE_COUNT,
+          planet.radius,
+          planet.center,
+        ).map((f) => f.position),
+        color: "#c79a5e",
+        size: 2.4,
+        kind: "dune",
+      },
+      {
+        points: scatterRidges(
+          RIDGE_CHAIN_COUNT,
+          planet.radius,
+          planet.center,
+        ).map((r) => r.position),
+        color: "#52627a",
+        size: 3,
+        kind: "peak",
+      },
+    ];
 
-    return { boardsData, pathPoints, continentShapes, treePoints, planet };
+    return { boardsData, pathPoints, continentShapes, features, planet };
   }, [items, planet]);
 };
 
@@ -196,6 +253,60 @@ const drawBook = (
   ctx.textBaseline = "middle";
   ctx.fillText(String(projectNumber), 5.5, -5.2);
 
+  ctx.restore();
+};
+
+/**
+ * The autopilot's route, as a dashed red line ending in a ringed destination
+ * marker. Autopilot flies a pure great-circle slerp from where it engaged to
+ * its target (see motions/autopilot/autopilot.ts), so slerping the ship's
+ * current direction to the target's reproduces the *remaining* arc exactly,
+ * recomputed free each frame - no route state to plumb through.
+ */
+const drawAutopilotRoute = (
+  ctx: CanvasRenderingContext2D,
+  shipPosition: Vector3,
+  target: Vector3,
+  planetCenter: Vector3,
+  toMap: AzimuthalProjection["toMap"],
+  size: number,
+) => {
+  const from = shipPosition.clone().sub(planetCenter);
+  const to = target.clone().sub(planetCenter);
+  const radius = from.length();
+  const arc = Array.from({ length: ROUTE_SAMPLES + 1 }, (_, i) =>
+    slerpOnSphere(from, to, i / ROUTE_SAMPLES)
+      .multiplyScalar(radius)
+      .add(planetCenter),
+  );
+
+  ctx.save();
+  ctx.setLineDash([6, 5]);
+  ctx.strokeStyle = "#ff3b3b";
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  // Split at the projection's antipodal singularity like the trail does - a
+  // route to the planet's far side crosses it and would otherwise streak
+  // straight across the map.
+  for (const segment of projectPolyline(arc, toMap, size)) {
+    ctx.beginPath();
+    segment.forEach(([x, y], i) => {
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  // "X marks the spot" ring at the destination.
+  const [tx, ty] = toMap(target);
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(tx, ty, 6.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(tx, ty, 2, 0, Math.PI * 2);
+  ctx.fillStyle = "#ff3b3b";
+  ctx.fill();
   ctx.restore();
 };
 
@@ -255,6 +366,66 @@ const projectPolyline = (
   return segments;
 };
 
+/**
+ * Fills one landmass outline, handling the case where it wraps the map's
+ * antipodal rim.
+ *
+ * On an azimuthal equidistant map the antipode of the centre is not a point
+ * but the whole outer rim, so an outline that crosses it leaves one edge of
+ * the disc and re-enters at a completely different bearing. Joining those two
+ * points directly - which is what filling the raw projected polygon does -
+ * draws a chord straight across the map and floods the disc with that
+ * landmass's colour. Now that continents span ~50 degrees of arc, that fires
+ * often enough to paint the whole minimap green.
+ *
+ * The fix is the standard one for azimuthal projections: where the outline
+ * leaves the rim, walk *along* the rim to where it comes back, so the filled
+ * region follows the disc's edge instead of cutting across it.
+ */
+const fillProjectedOutline = (
+  ctx: CanvasRenderingContext2D,
+  points: Vector3[],
+  toMap: AzimuthalProjection["toMap"],
+  size: number,
+  color: string,
+) => {
+  const segments = projectPolyline(points, toMap, size);
+  if (segments.length === 0) return;
+  const mapRadius = size / 2;
+  const bearingOf = ([x, y]: [number, number]): number =>
+    Math.atan2(x - mapRadius, mapRadius - y);
+
+  ctx.fillStyle = color;
+  for (const segment of segments) {
+    if (segment.length < 3) continue;
+    ctx.beginPath();
+    segment.forEach(([x, y], i) => {
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+
+    // Only a split piece needs rim closure; a whole outline closes itself.
+    if (segments.length > 1) {
+      const from = bearingOf(segment[segment.length - 1]);
+      const to = bearingOf(segment[0]);
+      let sweep = to - from;
+      while (sweep > Math.PI) sweep -= Math.PI * 2;
+      while (sweep < -Math.PI) sweep += Math.PI * 2;
+      const steps = Math.max(2, Math.ceil(Math.abs(sweep) / 0.12));
+      for (let i = 1; i <= steps; i++) {
+        const bearing = from + (sweep * i) / steps;
+        ctx.lineTo(
+          mapRadius + mapRadius * Math.sin(bearing),
+          mapRadius - mapRadius * Math.cos(bearing),
+        );
+      }
+    }
+
+    ctx.closePath();
+    ctx.fill();
+  }
+};
+
 const drawContinents = (
   ctx: CanvasRenderingContext2D,
   shapes: ContinentShape[],
@@ -262,41 +433,74 @@ const drawContinents = (
   size: number,
 ) => {
   for (const shape of shapes) {
-    // A landmass that straddles the antipodal singularity would self-
-    // intersect if filled as one polygon - split it like the path and
-    // fill each clean piece on its own (visually near-invisible in
-    // practice, since it only bites right at the map's outer rim).
-    const segments = projectPolyline(shape.points, toMap, size);
-    ctx.fillStyle = shape.color;
-    for (const segment of segments) {
-      if (segment.length < 3) continue;
+    fillProjectedOutline(ctx, shape.points, toMap, size, shape.color);
+  }
+};
+
+/**
+ * The scene's own scattered props, drawn as small iconic glyphs - conifers on
+ * the forest, dunes on the desert, snow-capped peaks on the snow.
+ *
+ * Deliberately not plain dots: a field of identical circles tells you
+ * something is *there* but not what it is, so the map stopped resembling the
+ * planet you can actually see. A triangle with a white tip reads as a
+ * mountain at four pixels across; a circle doesn't.
+ */
+const drawFeatureGlyphs = (
+  ctx: CanvasRenderingContext2D,
+  features: FeatureGlyphs[],
+  toMap: AzimuthalProjection["toMap"],
+  scale: number,
+) => {
+  for (const group of features) {
+    const size = group.size * scale;
+    ctx.fillStyle = group.color;
+
+    for (const point of group.points) {
+      const [x, y] = toMap(point);
+
+      if (group.kind === "peak") {
+        // Mountain: a triangle with a white cap, matching the 3D ridges.
+        ctx.beginPath();
+        ctx.moveTo(x, y - size);
+        ctx.lineTo(x + size * 0.85, y + size * 0.7);
+        ctx.lineTo(x - size * 0.85, y + size * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(x, y - size);
+        ctx.lineTo(x + size * 0.34, y - size * 0.2);
+        ctx.lineTo(x - size * 0.34, y - size * 0.2);
+        ctx.closePath();
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.fillStyle = group.color;
+        continue;
+      }
+
+      if (group.kind === "tree") {
+        // Conifer: a narrow triangle on a short trunk.
+        ctx.beginPath();
+        ctx.moveTo(x, y - size);
+        ctx.lineTo(x + size * 0.62, y + size * 0.55);
+        ctx.lineTo(x - size * 0.62, y + size * 0.55);
+        ctx.closePath();
+        ctx.fill();
+        continue;
+      }
+
+      // Dune: a low mound, flat along the sand.
       ctx.beginPath();
-      segment.forEach(([x, y], i) => {
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.closePath();
+      ctx.ellipse(x, y, size, size * 0.5, 0, Math.PI, 0);
       ctx.fill();
     }
   }
 };
 
-const drawTrees = (
-  ctx: CanvasRenderingContext2D,
-  treePoints: Vector3[],
-  toMap: AzimuthalProjection["toMap"],
-) => {
-  ctx.fillStyle = "#2f6e3a";
-  for (const p of treePoints) {
-    const [x, y] = toMap(p);
-    ctx.beginPath();
-    ctx.arc(x, y, 1.6, 0, Math.PI * 2);
-    ctx.fill();
-  }
-};
-
 interface DrawOptions {
   showTrees: boolean;
+  /** Where autopilot is flying to, when engaged - drives the dashed route. */
+  autopilotTarget?: Vector3;
 }
 
 /**
@@ -319,7 +523,11 @@ interface DrawOptions {
  */
 const Minimap = () => {
   const { shipRef } = useScene();
-  const { requestAutopilot } = useAutopilot();
+  const {
+    requestAutopilot,
+    target: autopilotTarget,
+    isFlying,
+  } = useAutopilot();
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -327,7 +535,7 @@ const Minimap = () => {
   // consumed by the FLIP effect below.
   const preToggleRectRef = useRef<DOMRect | null>(null);
   const size = useMapSize(containerRef);
-  const { boardsData, pathPoints, continentShapes, treePoints, planet } =
+  const { boardsData, pathPoints, continentShapes, features, planet } =
     useMinimapWorldData();
 
   // The expanded view's single frozen snapshot - null while collapsed
@@ -339,6 +547,9 @@ const Minimap = () => {
   // so a click anywhere on the expanded map can be resolved back to a
   // world position via its toWorld - see handleMapClick below.
   const frozenProjectionRef = useRef<AzimuthalProjection | null>(null);
+  // Read through a ref rather than a draw() dependency: autopilot engaging or
+  // arriving would otherwise cancel and restart the rAF loop below.
+  const autopilotRouteRef = useRef<Vector3 | null>(null);
 
   const draw = useCallback(
     (
@@ -370,7 +581,7 @@ const Minimap = () => {
         ctx.stroke();
       }
 
-      if (options.showTrees) drawTrees(ctx, treePoints, toMap);
+      drawFeatureGlyphs(ctx, features, toMap, options.showTrees ? 1 : 0.72);
 
       boardsData.forEach((board, i) => {
         const [x, y] = toMap(
@@ -379,12 +590,22 @@ const Minimap = () => {
         drawBook(ctx, x, y, i + 1);
       });
 
-      void shipPosition;
+      if (options.autopilotTarget) {
+        drawAutopilotRoute(
+          ctx,
+          shipPosition,
+          options.autopilotTarget,
+          planet.center,
+          toMap,
+          drawSize,
+        );
+      }
+
       // The projection is centered on the ship by construction, so its
       // own marker always sits at the exact middle of the circle.
       drawShipArrow(ctx, drawSize / 2, drawSize / 2, shipBearing);
     },
-    [continentShapes, pathPoints, treePoints, boardsData],
+    [continentShapes, pathPoints, features, boardsData, planet],
   );
 
   // Collapsed: a live rAF loop, re-centering the projection on the ship's
@@ -415,7 +636,10 @@ const Minimap = () => {
           ship.position,
           planet.center,
         );
-        draw(ctx, toMap, size, ship.position, bearing, { showTrees: false });
+        draw(ctx, toMap, size, ship.position, bearing, {
+          showTrees: false,
+          autopilotTarget: autopilotRouteRef.current ?? undefined,
+        });
       }
       frameId = requestAnimationFrame(tick);
     };
@@ -467,6 +691,15 @@ const Minimap = () => {
   // Both directions go through the same rect capture so the FLIP effect
   // below can animate the toggle as one continuous element resizing,
   // rather than an instant jump followed by a width/height tween.
+  useEffect(() => {
+    // Gate on isFlying, not target alone: isFlying is separate state written
+    // only by Physics, so target can briefly hold a stale value between the
+    // useFrame write and the React re-render. Together they're only valid
+    // during an actual flight.
+    autopilotRouteRef.current =
+      isFlying && autopilotTarget ? autopilotTarget.position : null;
+  }, [isFlying, autopilotTarget]);
+
   const toggleExpanded = useCallback((next: boolean) => {
     if (containerRef.current) {
       preToggleRectRef.current = containerRef.current.getBoundingClientRect();
@@ -591,14 +824,6 @@ const Minimap = () => {
         <div className="minimap-compass minimap-compass--w">W</div>
         {expanded && (
           <>
-            <button
-              type="button"
-              className="minimap-close"
-              aria-label="Close map"
-              onClick={collapse}
-            >
-              &times;
-            </button>
             {frozenBoardPoints.map(({ id, x, y }) => {
               const board = boardsData.find((b) => b.id === id);
               if (!board) return null;

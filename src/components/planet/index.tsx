@@ -22,13 +22,21 @@ import { createPlanetTexture } from "./planetTexture";
 import {
   CONTINENTS,
   scatterAnimals,
+  scatterBushes,
+  scatterDesertFeatures,
+  scatterPenguins,
+  scatterRidges,
+  scatterSnowProps,
   scatterTrees,
+  type ContinentVariant,
   type ScatteredTree,
 } from "./planetTerrain";
+import { Bush, DesertFeature, Ridge, SnowProp } from "./feature";
 import Continent from "./landmass";
 import Moon from "./moon";
 import Cloud, { type CloudVariant } from "./cloud";
 import Animal from "./animal";
+import AutopilotRoute from "./autopilotRoute";
 
 // How far above the planet's own surface the glowing cruise ring and board
 // beacons float, purely to avoid z-fighting with the sphere mesh.
@@ -48,10 +56,28 @@ const RING_SEGMENTS = 256;
 const SPHERE_SEGMENTS = 22;
 const TREE_COUNT = 90;
 const ANIMAL_COUNT = 14;
+const BUSH_COUNT = 150;
+const DESERT_FEATURE_COUNT = 70;
+// Ridge *chains*, not individual summits - each one walks several segments
+// across the snow continent (see scatterRidges).
+const RIDGE_CHAIN_COUNT = 14;
+const SNOW_PROP_COUNT = 70;
+const PENGUIN_COUNT = 10;
+// How many of the tallest peaks get their own snow cloud hanging at the
+// summit, per the "clouds around the mountain tops" intent.
+const PEAK_CLOUD_COUNT = 6;
 
 const deg = (d: number): number => (d * Math.PI) / 180;
 
 interface CloudDef {
+  /**
+   * Which continent this cloud belongs over. When set, lon/lat below are
+   * read as an offset from that continent's own centroid rather than as
+   * absolute coordinates, so the clouds follow the CONTINENTS layout
+   * instead of silently ending up over open water the next time a continent
+   * moves. Omit it for the ocean clouds, which are absolute by nature.
+   */
+  over?: ContinentVariant;
   lon: number;
   lat: number;
   altitude: number;
@@ -60,57 +86,47 @@ interface CloudDef {
   precipitationCount?: number;
 }
 
-// Hand-placed rather than scattered: a couple of rain clouds sit over the
-// forested continent, a small frequent cluster snows right at the
-// snow-mountain's peak, a few plain ones drift over open ocean, and the
-// desert continent and small islands are deliberately left cloud-free.
+// Hand-placed rather than scattered: rain clouds sit over the forested
+// continent, a small frequent cluster snows right at the snow-mountain's
+// peak, a few plain ones drift over open ocean, and the desert continent is
+// deliberately left cloud-free. The land ones are positioned relative to
+// their continent's own centroid (see CloudDef.over) so they keep sitting
+// over the right biome when the layout changes.
 const CLOUD_DEFS: CloudDef[] = [
-  // Rain over the forest continent (CONTINENTS[0]).
+  // Rain over the forest continent.
   {
-    lon: deg(5),
-    lat: deg(21),
-    altitude: 7,
-    scale: 1.4,
+    over: "forest",
+    lon: deg(6),
+    lat: deg(-2),
+    altitude: 8,
+    scale: 1.5,
     variant: "rain",
     precipitationCount: 5,
   },
   {
-    lon: deg(17),
-    lat: deg(11),
-    altitude: 8,
-    scale: 1.1,
+    over: "forest",
+    lon: deg(-9),
+    lat: deg(7),
+    altitude: 9,
+    scale: 1.2,
     variant: "rain",
     precipitationCount: 4,
   },
-  // Small, frequent snow clouds right at the snow-mountain's peak (CONTINENTS[2]).
   {
-    lon: deg(248),
-    lat: deg(15),
-    altitude: 9,
-    scale: 0.6,
-    variant: "snow",
-    precipitationCount: 4,
-  },
-  {
-    lon: deg(252),
-    lat: deg(10),
-    altitude: 10,
-    scale: 0.55,
-    variant: "snow",
-    precipitationCount: 4,
-  },
-  {
-    lon: deg(250),
-    lat: deg(18),
+    over: "forest",
+    lon: deg(14),
+    lat: deg(9),
     altitude: 8.5,
-    scale: 0.5,
-    variant: "snow",
-    precipitationCount: 3,
+    scale: 1.3,
+    variant: "rain",
+    precipitationCount: 4,
   },
-  // Plain clouds drifting over open ocean - no rain/snow, no specific landmass.
-  { lon: deg(340), lat: deg(42), altitude: 6, scale: 1.2, variant: "plain" },
-  { lon: deg(100), lat: deg(-42), altitude: 6, scale: 1, variant: "plain" },
-  { lon: deg(200), lat: deg(-38), altitude: 6.5, scale: 1.3, variant: "plain" },
+  // Plain clouds drifting over open ocean - no rain/snow, no landmass
+  // underneath (these latitudes are verified clear of land by the
+  // "ocean clouds sit over open water" test).
+  { lon: deg(85), lat: deg(35), altitude: 7, scale: 1.4, variant: "plain" },
+  { lon: deg(291), lat: deg(-72), altitude: 7, scale: 1.25, variant: "plain" },
+  { lon: deg(162), lat: deg(39), altitude: 7.5, scale: 1.5, variant: "plain" },
 ];
 
 // Shared across every tree instance (see Tree below) rather than one
@@ -282,22 +298,76 @@ const Planet = () => {
     [planet],
   );
 
+  // The texture each of the other two biomes needs so it doesn't render as
+  // one flat slab of colour: undergrowth between the forest's trees, dunes
+  // and rock on the sand, and a whole range of peaks on the snow.
+  const bushes = useMemo(
+    () => scatterBushes(BUSH_COUNT, planet.radius, planet.center),
+    [planet],
+  );
+  const desertFeatures = useMemo(
+    () =>
+      scatterDesertFeatures(DESERT_FEATURE_COUNT, planet.radius, planet.center),
+    [planet],
+  );
+  const ridges = useMemo(
+    () => scatterRidges(RIDGE_CHAIN_COUNT, planet.radius, planet.center),
+    [planet],
+  );
+  const snowProps = useMemo(
+    () => scatterSnowProps(SNOW_PROP_COUNT, planet.radius, planet.center),
+    [planet],
+  );
+  const penguins = useMemo(
+    () => scatterPenguins(PENGUIN_COUNT, planet.radius, planet.center),
+    [planet],
+  );
+
   // Hand-placed (see CLOUD_DEFS) rather than scattered - each one floats
   // at a fixed altitude above its own target spot, oriented so its local
   // "down" points at the ground beneath it.
   const clouds = useMemo(
     () =>
       CLOUD_DEFS.map((cloud) => {
+        const anchor = cloud.over
+          ? CONTINENTS.find((c) => (c.variant ?? "forest") === cloud.over)
+          : undefined;
+        const lon = (anchor?.lon ?? 0) + cloud.lon;
+        const lat = (anchor?.lat ?? 0) + cloud.lat;
         const position = pointOnSphere(
           planet.radius + cloud.altitude,
-          cloud.lat,
-          cloud.lon,
+          lat,
+          lon,
           planet.center,
         );
         const normal = position.clone().sub(planet.center).normalize();
         return { ...cloud, position, normal };
       }),
     [planet],
+  );
+
+  // Snow clouds hang off the tallest summits rather than at hand-picked
+  // coordinates, so they actually sit around the peaks of the range instead
+  // of floating over whatever happens to be at a fixed lon/lat.
+  const peakClouds = useMemo(
+    () =>
+      [...ridges]
+        .sort((a, b) => b.height - a.height)
+        .slice(0, PEAK_CLOUD_COUNT)
+        .map((peak, i) => {
+          const summit = peak.position.distanceTo(planet.center) + peak.height;
+          const position = peak.normal
+            .clone()
+            .multiplyScalar(summit + 1.4)
+            .add(planet.center);
+          return {
+            position,
+            normal: peak.normal,
+            scale: 0.65 + (i % 3) * 0.12,
+            precipitationCount: 4,
+          };
+        }),
+    [ridges, planet],
   );
 
   // Where the ship (and so the default medium camera, once the intro
@@ -363,16 +433,76 @@ const Planet = () => {
         <Animal
           key={i}
           position={animal.position}
-          normal={animal.normal}
           heading={animal.heading}
           variant={animal.seed > 0.5 ? "cow" : "sheep"}
           scale={0.8 + animal.seed * 0.5}
+          seed={animal.seed}
+          planetRadius={planet.radius}
+          planetCenter={planet.center}
+        />
+      ))}
+      {bushes.map((bush, i) => (
+        <Bush
+          key={i}
+          position={bush.position}
+          normal={bush.normal}
+          seed={bush.seed}
+        />
+      ))}
+      {desertFeatures.map((feature, i) => (
+        <DesertFeature
+          key={i}
+          position={feature.position}
+          normal={feature.normal}
+          seed={feature.seed}
+        />
+      ))}
+      {ridges.map((segment, i) => (
+        <Ridge
+          key={i}
+          position={segment.position}
+          normal={segment.normal}
+          seed={segment.seed}
+          bearing={segment.bearing}
+          height={segment.height}
+          width={segment.width}
+        />
+      ))}
+      {snowProps.map((prop, i) => (
+        <SnowProp
+          key={i}
+          position={prop.position}
+          normal={prop.normal}
+          seed={prop.seed}
+        />
+      ))}
+      {penguins.map((penguin, i) => (
+        <Animal
+          key={`penguin-${i}`}
+          position={penguin.position}
+          heading={penguin.seed * Math.PI * 2}
+          variant="penguin"
+          scale={0.7 + penguin.seed * 0.3}
+          seed={penguin.seed}
+          planetRadius={planet.radius}
+          planetCenter={planet.center}
         />
       ))}
 
       {/* Low-poly clouds (see CLOUD_DEFS) - rain over the forest, snow
           right at the mountain's peak, plain ones drifting over open
           ocean, desert and the small islands left clear. */}
+      <AutopilotRoute />
+      {peakClouds.map((cloud, i) => (
+        <Cloud
+          key={`peak-${i}`}
+          position={cloud.position}
+          normal={cloud.normal}
+          scale={cloud.scale}
+          variant="snow"
+          precipitationCount={cloud.precipitationCount}
+        />
+      ))}
       {clouds.map((cloud, i) => (
         <Cloud
           key={i}
