@@ -22,16 +22,20 @@ const baseLatitudeDeg = (lonDeg: number): number =>
   ((PATH_WIGGLE_AMPLITUDE * 180) / Math.PI) *
   Math.sin(((lonDeg * Math.PI) / 180) * PATH_WIGGLE_CYCLES);
 
-// How much room the trail actually needs to clear a landmass by, in world
-// units: half of the board's own footprint (boardParams.json's outerX)
-// plus its sideways offset from the centerline, the activation zone's
-// half-width, and a small turning-clearance buffer - i.e. everything that
-// can ever sit near the trail at a stop.
-const BOARD_HALF_WIDTH = 3.35;
-const ZONE_HALF_WIDTH = 4;
-const CORRIDOR_SAFETY_MARGIN = 3;
-const CORRIDOR_HALF_WIDTH =
-  12 + BOARD_HALF_WIDTH + ZONE_HALF_WIDTH + CORRIDOR_SAFETY_MARGIN;
+// How much room the trail centerline itself actually needs to clear a
+// landmass by, in world units: the ship's own half-width (shipParams.json)
+// plus a turning/visual-breathing-room buffer. This is deliberately just
+// the ship's own requirement, not the board/activation-zone footprint
+// beside it (their much larger sideways offset would roughly double this
+// and, combined with the corridor every *other* landmass also needs,
+// leaves no room for continents with real visual size - see
+// planetTerrain.ts's CONTINENTS comment) - a board occasionally rendering
+// near a big continent's coastline is an acceptable trade for that, since
+// nothing about it is actually broken (the centerline the ship flies
+// still never crosses land).
+const SHIP_HALF_WIDTH = 2.5;
+const CORRIDOR_SAFETY_MARGIN = 4.5;
+const CORRIDOR_HALF_WIDTH = SHIP_HALF_WIDTH + CORRIDOR_SAFETY_MARGIN;
 
 // Precomputed once (CONTINENTS is static): each landmass's own centroid
 // and widest outline radius, in world units.

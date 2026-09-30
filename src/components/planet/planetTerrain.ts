@@ -11,7 +11,7 @@ export interface OutlineHarmonic {
   phase: number;
 }
 
-export type ContinentVariant = "forest" | "desert";
+export type ContinentVariant = "forest" | "desert" | "snow";
 
 export interface ContinentDef {
   lon: number; // radians, centroid - planetSurface's pointOnSphere convention
@@ -20,72 +20,96 @@ export interface ContinentDef {
   baseRadius: number;
   /** Summed sine wobble on top of baseRadius - what turns a circle into an organic, wavy-coastline landmass silhouette. */
   harmonics: OutlineHarmonic[];
-  /** "forest" (green, the default - trees grow here) or "desert" (solid tan/sand, no green layer, no trees - see landmass.tsx). */
+  /** "forest" (green, the default - trees grow here), "desert" (solid tan/sand, no green layer, no trees), or "snow" (forested green slopes with a mandatory white snow-capped peak) - see landmass.tsx. */
   variant?: ContinentVariant;
-  /** A smaller inset "highland" cap (tan, stacked on the green layer) - forest continents only. */
+  /** A smaller inset cap stacked on the base layer - tan "highland" on a forest continent (optional), or the mandatory white peak on a "snow" one. */
   highland?: { scale: number };
 }
 
 const deg = (d: number): number => (d * Math.PI) / 180;
 
 /**
- * Hand-authored continents and islands. The ship's actual footprint plus
- * its boards' own required clearance (see calculatedBoardPositionsAndRota
- * tions.ts's CORRIDOR_HALF_WIDTH) means the single continuous trail that
- * has to route around every landmass fundamentally limits how much big
- * land this planet can hold at once - two meaningfully large continents
- * (one with its own highland) plus two smaller landmasses is close to the
- * practical ceiling for that corridor width before the trail runs out of
- * safe latitude somewhere around the loop. Positions and sizes were found
- * by placing the two big continents with deliberate longitude separation
- * first, then rejection-sampling the smaller ones into what room was left
- * - not hand-picked by eye - and are verified end to end by
+ * Hand-authored continents and islands. The ship's own physical footprint
+ * (not the much larger board/activation-zone one - see
+ * calculatedBoardPositionsAndRotations.ts's CORRIDOR_HALF_WIDTH, which
+ * deliberately excludes that) is what the single continuous trail has to
+ * keep clear of every landmass, and that's the real ceiling on how much
+ * land this planet can hold at once: three continents this size, spread
+ * 120 degrees apart, is close to it - a fourth this big, or these three
+ * much bigger, would start leaving no safe latitude at all somewhere
+ * around the loop. Positions and sizes were found by placing the three at
+ * deliberate 120-degree longitude separation first, then rejection-
+ * sampling the smaller islands into what room was left - not hand-picked
+ * by eye - and the whole layout is verified end to end by
  * calculatedBoardPositionsAndRotations.test.ts's "never runs through a
  * continent/island" test, which checks the trail's *actual* generated
  * shape, not just these positions in isolation.
  */
 export const CONTINENTS: ContinentDef[] = [
+  // Forest continent, with its own (optional) tan highland.
   {
     lon: deg(10),
-    lat: deg(12),
-    baseRadius: 9,
+    lat: deg(16),
+    baseRadius: 20,
     harmonics: [
-      { amplitude: 0.15, freq: 2, phase: 0.4 },
-      { amplitude: 0.1, freq: 3, phase: 2.1 },
+      { amplitude: 0.14, freq: 2, phase: 0.4 },
+      { amplitude: 0.09, freq: 3, phase: 2.1 },
       { amplitude: 0.05, freq: 5, phase: 1.0 },
     ],
-    highland: { scale: 0.5 },
+    highland: { scale: 0.4 },
   },
+  // Desert continent - solid tan/sand, no trees.
   {
-    lon: deg(190),
-    lat: deg(-12),
-    baseRadius: 8,
+    lon: deg(130),
+    lat: deg(-14),
+    baseRadius: 19,
     harmonics: [
-      { amplitude: 0.17, freq: 2, phase: 0.1 },
-      { amplitude: 0.1, freq: 4, phase: 1.8 },
+      { amplitude: 0.15, freq: 2, phase: 1.2 },
+      { amplitude: 0.09, freq: 4, phase: 0.3 },
     ],
+    variant: "desert",
   },
-  // Smaller landmasses, tucked into the longitude gaps the two big
-  // continents above leave open.
+  // Snow-mountain continent - forested green slopes with a mandatory
+  // white peak cap.
   {
-    lon: deg(100.8),
-    lat: deg(-6.7),
+    lon: deg(250),
+    lat: deg(11),
+    baseRadius: 18,
+    harmonics: [
+      { amplitude: 0.14, freq: 2, phase: 0.1 },
+      { amplitude: 0.08, freq: 4, phase: 1.8 },
+    ],
+    variant: "snow",
+    highland: { scale: 0.3 },
+  },
+  // Smaller islands, tucked into the longitude gaps the three continents
+  // above leave open.
+  {
+    lon: deg(70),
+    lat: deg(-5),
     baseRadius: 2.5,
     harmonics: [
       { amplitude: 0.16, freq: 3, phase: 2.6 },
       { amplitude: 0.1, freq: 5, phase: 0.7 },
     ],
-    variant: "desert",
   },
   {
-    lon: deg(279.1),
-    lat: deg(-4.2),
-    baseRadius: 2.5,
+    lon: deg(190),
+    lat: deg(4),
+    baseRadius: 2.2,
     harmonics: [
       { amplitude: 0.18, freq: 2, phase: 1.2 },
       { amplitude: 0.1, freq: 4, phase: 0.3 },
     ],
-    variant: "desert",
+  },
+  {
+    lon: deg(310),
+    lat: deg(-3),
+    baseRadius: 2,
+    harmonics: [
+      { amplitude: 0.17, freq: 3, phase: 0.9 },
+      { amplitude: 0.1, freq: 5, phase: 2.2 },
+    ],
   },
 ];
 
@@ -136,11 +160,15 @@ export const continentOutlinePoint = (
 export const GREEN_HEIGHT = 1.5;
 export const TAN_HEIGHT = 0.9;
 export const DESERT_HEIGHT = 1.3;
+// Taller than a forest continent's optional tan highland - a mountain
+// peak, not just a raised plateau.
+export const SNOW_HEIGHT = 2.2;
 export const TERRAIN_EMBED = 0.1;
-/** Where a highland layer's own local z=0 should land, in the green layer's height space - see landmass.tsx. */
+/** Where a highland/peak layer's own local z=0 should land, in the base layer's height space - see landmass.tsx. */
 export const TAN_BASE_Z_OFFSET = GREEN_HEIGHT - TERRAIN_EMBED;
 const GREEN_TOP_HEIGHT = GREEN_HEIGHT - TERRAIN_EMBED;
 const TAN_TOP_HEIGHT = GREEN_TOP_HEIGHT - TERRAIN_EMBED + TAN_HEIGHT;
+const SNOW_TOP_HEIGHT = GREEN_TOP_HEIGHT - TERRAIN_EMBED + SNOW_HEIGHT;
 const DESERT_TOP_HEIGHT = DESERT_HEIGHT - TERRAIN_EMBED;
 
 /**
@@ -198,7 +226,7 @@ export const heightAt = (
   lon: number,
   lat: number,
   margin = 0,
-  variants: ContinentVariant[] = ["forest", "desert"],
+  variants: ContinentVariant[] = ["forest", "desert", "snow"],
 ): number => {
   for (const c of CONTINENTS) {
     if (!variants.includes(c.variant ?? "forest")) continue;
@@ -210,7 +238,7 @@ export const heightAt = (
     if (dist >= radius) continue;
     if (c.variant === "desert") return DESERT_TOP_HEIGHT;
     if (c.highland && dist < radius * c.highland.scale - margin) {
-      return TAN_TOP_HEIGHT;
+      return c.variant === "snow" ? SNOW_TOP_HEIGHT : TAN_TOP_HEIGHT;
     }
     return GREEN_TOP_HEIGHT;
   }
@@ -260,6 +288,7 @@ export const scatterTrees = (
     const lat = (seededRandom(a * 2 + 2) - 0.5) * Math.PI * 0.9;
     const height = heightAt(planetRadius, center, lon, lat, TREE_EDGE_MARGIN, [
       "forest",
+      "snow",
     ]);
     if (height <= 0) continue;
 

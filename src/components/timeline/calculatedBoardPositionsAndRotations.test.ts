@@ -153,7 +153,7 @@ describe("pathFrameAt", () => {
   // corridor a board/activation zone actually needs.
   test("never runs through a continent/island - clears every landmass by the required corridor", () => {
     const shellRadius = testPlanet.radius + testPlanet.shipAltitude;
-    const corridorHalfWidth = 12 + 3.35 + 4 + 3; // mirrors the module's own CORRIDOR_HALF_WIDTH
+    const corridorHalfWidth = 2.5 + 4.5; // mirrors the module's own CORRIDOR_HALF_WIDTH (ship half-width + safety margin)
     const pathSamples = 720;
     const pathPoints = Array.from(
       { length: pathSamples },

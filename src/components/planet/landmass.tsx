@@ -16,6 +16,7 @@ import {
   ContinentDef,
   DESERT_HEIGHT,
   GREEN_HEIGHT,
+  SNOW_HEIGHT,
   TAN_BASE_Z_OFFSET,
   TAN_HEIGHT,
   TERRAIN_EMBED,
@@ -91,6 +92,12 @@ const tanMaterial = new MeshPhysicalMaterial({
   clearcoat: 0.3,
   clearcoatRoughness: 0.3,
 });
+const snowMaterial = new MeshPhysicalMaterial({
+  color: "#f4f7fa",
+  roughness: 0.5,
+  clearcoat: 0.4,
+  clearcoatRoughness: 0.2,
+});
 
 const extrudeSettings = (depth: number) => ({
   depth,
@@ -108,19 +115,22 @@ interface ContinentProps {
 }
 
 /**
- * One organic landmass, either:
+ * One organic landmass, one of:
  * - "forest" (the default): a green base layer following its own wavy
  *   coastline (see outlineRadiusAt), with a smaller tan "highland" cap
- *   stacked directly on top for continents that have one; or
+ *   stacked directly on top for continents that have one;
  * - "desert": a single solid tan/sand layer covering the whole outline,
  *   no green - a distinct barren landmass type (see scatterTrees, which
- *   skips these entirely).
- * Both are genuinely extruded and bent around the sphere's curvature (see
+ *   skips these entirely); or
+ * - "snow": the same green base as forest, but with a mandatory, taller
+ *   white peak cap - a snow-capped mountain rather than an optional
+ *   plateau.
+ * All are genuinely extruded and bent around the sphere's curvature (see
  * wrapGeometryOntoSphere), sitting flush with zero gap against the ocean
  * shell beneath.
  */
 const Continent = ({ def, planetRadius, center }: ContinentProps) => {
-  const { greenGeo, tanGeo, desertGeo } = useMemo(() => {
+  const { greenGeo, tanGeo, snowGeo, desertGeo } = useMemo(() => {
     const centroidPos = pointOnSphere(planetRadius, def.lat, def.lon, center);
     const normal = surfaceNormal(centroidPos, center);
     const { east, north } = eastNorthAt(normal);
@@ -140,7 +150,7 @@ const Continent = ({ def, planetRadius, center }: ContinentProps) => {
         0,
         TERRAIN_EMBED,
       );
-      return { greenGeo: null, tanGeo: null, desertGeo };
+      return { greenGeo: null, tanGeo: null, snowGeo: null, desertGeo };
     }
 
     const greenGeo = new ExtrudeGeometry(
@@ -159,13 +169,15 @@ const Continent = ({ def, planetRadius, center }: ContinentProps) => {
     );
 
     let tanGeo: ExtrudeGeometry | null = null;
+    let snowGeo: ExtrudeGeometry | null = null;
     if (def.highland) {
-      tanGeo = new ExtrudeGeometry(
+      const isSnow = def.variant === "snow";
+      const capGeo = new ExtrudeGeometry(
         buildOutlineShape(def, def.highland.scale),
-        extrudeSettings(TAN_HEIGHT),
+        extrudeSettings(isSnow ? SNOW_HEIGHT : TAN_HEIGHT),
       );
       wrapGeometryOntoSphere(
-        tanGeo,
+        capGeo,
         planetRadius,
         center,
         centroidPos,
@@ -174,15 +186,18 @@ const Continent = ({ def, planetRadius, center }: ContinentProps) => {
         TAN_BASE_Z_OFFSET,
         TERRAIN_EMBED,
       );
+      if (isSnow) snowGeo = capGeo;
+      else tanGeo = capGeo;
     }
 
-    return { greenGeo, tanGeo, desertGeo: null };
+    return { greenGeo, tanGeo, snowGeo, desertGeo: null };
   }, [def, planetRadius, center]);
 
   return (
     <>
       {greenGeo && <mesh geometry={greenGeo} material={greenMaterial} />}
       {tanGeo && <mesh geometry={tanGeo} material={tanMaterial} />}
+      {snowGeo && <mesh geometry={snowGeo} material={snowMaterial} />}
       {desertGeo && <mesh geometry={desertGeo} material={tanMaterial} />}
     </>
   );
