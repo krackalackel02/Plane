@@ -8,6 +8,7 @@ import {
   scatterTrees,
 } from "./planetTerrain";
 import { getActivePlanet } from "../../utils/planets";
+import { pointOnSphere } from "../../utils/planetSurface";
 
 const planet = getActivePlanet();
 const center = new Vector3(0, 0, 0);
@@ -19,6 +20,15 @@ const maxOutlineRadius = (c: (typeof CONTINENTS)[number]): number => {
   }
   return max;
 };
+
+/** Great-circle distance (world units) between two continents' centroids. */
+const centroidDistance = (
+  a: (typeof CONTINENTS)[number],
+  b: (typeof CONTINENTS)[number],
+): number =>
+  pointOnSphere(planet.radius, a.lat, a.lon, center).distanceTo(
+    pointOnSphere(planet.radius, b.lat, b.lon, center),
+  );
 
 describe("CONTINENTS layout", () => {
   // Regression test: continents used to sit near the equator and overlap
@@ -32,6 +42,22 @@ describe("CONTINENTS layout", () => {
         (maxOutlineRadius(c) / planet.radius) * (180 / Math.PI);
       const innermostReachDeg = centroidLatDeg - maxRadiusDeg;
       expect(innermostReachDeg).toBeGreaterThan(SAFE_LAT_DEG);
+    }
+  });
+
+  // Regression test: adding more (smaller) islands to fill the gaps
+  // between continents makes accidental overlap an easy mistake - every
+  // pair's centroids must stay farther apart than the sum of their own
+  // widest outline radii, with a little breathing room.
+  test("no two continents/islands overlap", () => {
+    for (let i = 0; i < CONTINENTS.length; i++) {
+      for (let j = i + 1; j < CONTINENTS.length; j++) {
+        const a = CONTINENTS[i];
+        const b = CONTINENTS[j];
+        const clearance =
+          centroidDistance(a, b) - maxOutlineRadius(a) - maxOutlineRadius(b);
+        expect(clearance).toBeGreaterThan(0);
+      }
     }
   });
 });

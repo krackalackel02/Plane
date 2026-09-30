@@ -135,6 +135,80 @@ export const CONTINENTS: ContinentDef[] = [
       { amplitude: 0.11, freq: 4, phase: 2.9 },
     ],
   },
+
+  // Smaller islands, filling the gaps between the continents above - same
+  // wavy-outline shape, just scaled down, so the planet reads as an
+  // archipelago-dotted world rather than a handful of isolated landmasses.
+  // Positions were found by rejection-sampling the safe latitude band for
+  // spots that clear every other landmass with margin (see
+  // planetTerrain.test.ts's "no two continents/islands overlap") - near
+  // the poles, longitude alone is a poor guide to actual separation, since
+  // circles of longitude converge there.
+  // Northern hemisphere.
+  {
+    lon: deg(68.3),
+    lat: deg(56.9),
+    baseRadius: 3,
+    harmonics: [
+      { amplitude: 0.2, freq: 2, phase: 1.6 },
+      { amplitude: 0.12, freq: 4, phase: 0.6 },
+    ],
+  },
+  {
+    lon: deg(161.2),
+    lat: deg(56.1),
+    baseRadius: 2.5,
+    harmonics: [
+      { amplitude: 0.18, freq: 3, phase: 0.2 },
+      { amplitude: 0.11, freq: 5, phase: 1.9 },
+    ],
+  },
+  {
+    lon: deg(236.1),
+    lat: deg(56.1),
+    baseRadius: 3.5,
+    harmonics: [
+      { amplitude: 0.2, freq: 2, phase: 2.4 },
+      { amplitude: 0.13, freq: 4, phase: 1.1 },
+    ],
+  },
+  {
+    lon: deg(328.7),
+    lat: deg(55.8),
+    baseRadius: 3,
+    harmonics: [
+      { amplitude: 0.19, freq: 3, phase: 1.3 },
+      { amplitude: 0.12, freq: 5, phase: 0.4 },
+    ],
+  },
+  // Southern hemisphere.
+  {
+    lon: deg(350.6),
+    lat: deg(-57.9),
+    baseRadius: 3,
+    harmonics: [
+      { amplitude: 0.19, freq: 2, phase: 0.5 },
+      { amplitude: 0.12, freq: 4, phase: 2.2 },
+    ],
+  },
+  {
+    lon: deg(128.0),
+    lat: deg(-60.1),
+    baseRadius: 3.5,
+    harmonics: [
+      { amplitude: 0.18, freq: 3, phase: 1.8 },
+      { amplitude: 0.11, freq: 5, phase: 0.3 },
+    ],
+  },
+  {
+    lon: deg(350.5),
+    lat: deg(-79.8),
+    baseRadius: 2.5,
+    harmonics: [
+      { amplitude: 0.2, freq: 2, phase: 0.9 },
+      { amplitude: 0.13, freq: 4, phase: 2.7 },
+    ],
+  },
 ];
 
 /** The wobbled outline radius (world units) at a given bearing (radians) around a continent's own centroid. */
