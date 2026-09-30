@@ -5,12 +5,14 @@ import {
   boardSideOffset,
   boardVisualTransform,
   calculatedBoardPositionsAndRotations,
+  pathFrameAt,
   spawnTransform,
 } from "./calculatedBoardPositionsAndRotations";
 import { getBoardMatWorldPosition } from "../../utils/3d";
-import { surfaceNormal } from "../../utils/planetSurface";
+import { pointOnSphere, surfaceNormal } from "../../utils/planetSurface";
 import { boardJsonProps } from "../types/boardTypes";
 import { Planet } from "../../utils/planets";
+import { CONTINENTS, outlineRadiusAt } from "../planet/planetTerrain";
 
 const testPlanet: Planet = {
   id: "test",
@@ -138,5 +140,52 @@ describe("boardVisualTransform", () => {
     const trueNormal = visualPos.clone().sub(testPlanet.center).normalize();
     const localUp = new Vector3(0, 1, 0).applyQuaternion(visualQuaternion);
     expect(localUp.distanceTo(trueNormal)).toBeLessThan(1e-5);
+  });
+});
+
+describe("pathFrameAt", () => {
+  // Regression test: continents/islands are now scattered freely across
+  // the whole sphere (see planetTerrain.ts) rather than confined to a
+  // keep-out band, so it's the trail itself that has to detour around
+  // wherever they land (see pathLatitude's islandBumpDeg). This checks
+  // that detour actually works: sampling the whole loop densely, the
+  // trail's closest approach to every landmass must still clear the same
+  // corridor a board/activation zone actually needs.
+  test("never runs through a continent/island - clears every landmass by the required corridor", () => {
+    const shellRadius = testPlanet.radius + testPlanet.shipAltitude;
+    const corridorHalfWidth = 12 + 3.35 + 4 + 3; // mirrors the module's own CORRIDOR_HALF_WIDTH
+    const pathSamples = 720;
+    const pathPoints = Array.from(
+      { length: pathSamples },
+      (_, i) =>
+        pathFrameAt(
+          shellRadius,
+          (i / pathSamples) * Math.PI * 2,
+          testPlanet.center,
+        ).position,
+    );
+
+    for (const c of CONTINENTS) {
+      const islandCenter = pointOnSphere(
+        testPlanet.radius,
+        c.lat,
+        c.lon,
+        testPlanet.center,
+      );
+      let maxRadius = 0;
+      for (let b = 0; b < 36; b++) {
+        maxRadius = Math.max(
+          maxRadius,
+          outlineRadiusAt(c, (b / 36) * Math.PI * 2),
+        );
+      }
+
+      let minClearance = Infinity;
+      for (const p of pathPoints) {
+        const clearance = p.distanceTo(islandCenter) - maxRadius;
+        if (clearance < minClearance) minClearance = clearance;
+      }
+      expect(minClearance).toBeGreaterThan(corridorHalfWidth);
+    }
   });
 });

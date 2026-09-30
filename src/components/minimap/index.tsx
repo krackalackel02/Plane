@@ -532,8 +532,13 @@ const Minimap = () => {
         className={`minimap${expanded ? " minimap-expanded" : ""}`}
         {...containerProps}
       >
-        <div className="minimap-compass">N</div>
-        <canvas ref={canvasRef} />
+        <div className="minimap-canvas-clip">
+          <canvas ref={canvasRef} />
+        </div>
+        <div className="minimap-compass minimap-compass--n">N</div>
+        <div className="minimap-compass minimap-compass--e">E</div>
+        <div className="minimap-compass minimap-compass--s">S</div>
+        <div className="minimap-compass minimap-compass--w">W</div>
         {expanded && (
           <>
             <button

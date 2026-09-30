@@ -4,10 +4,6 @@ import {
   pointOnSphere,
   surfaceNormal,
 } from "../../utils/planetSurface";
-import {
-  BOARD_SIDE_OFFSET,
-  pathFrameAt,
-} from "../timeline/calculatedBoardPositionsAndRotations";
 
 export interface OutlineHarmonic {
   amplitude: number;
@@ -32,68 +28,27 @@ export interface ContinentDef {
 
 const deg = (d: number): number => (d * Math.PI) / 180;
 
-// How much room the ship's cruise trail actually needs, in world units:
-// half of the board's own footprint (boardParams.json's outerX) plus its
-// sideways offset from the centerline, the activation zone's half-width,
-// and a small turning-clearance buffer - i.e. everything that can ever sit
-// near the trail.
-const BOARD_HALF_WIDTH = 3.35;
-const ZONE_HALF_WIDTH = 4;
-const CORRIDOR_SAFETY_MARGIN = 3;
-export const CORRIDOR_HALF_WIDTH =
-  BOARD_SIDE_OFFSET +
-  BOARD_HALF_WIDTH +
-  ZONE_HALF_WIDTH +
-  CORRIDOR_SAFETY_MARGIN;
-
-// How finely the trail is sampled when checking a candidate landmass's
-// clearance from it - dense enough that the wiggle (5 cycles around the
-// planet) can't hide a close approach between samples.
-const PATH_DISTANCE_SAMPLES = 720;
-
 /**
- * The closest the ship's trail ever gets to a given point, in world units -
- * a real per-point check against the actual (wiggly) path, rather than a
- * blanket "stay above this latitude" rule. That's what lets landmasses sit
- * at a wide range of latitudes - as close to the route as the trail's own
- * wiggle happens to allow at that specific spot - instead of being pushed
- * into two tidy polar caps regardless of longitude.
- */
-export const minDistanceToPath = (
-  planetRadius: number,
-  center: Vector3,
-  lon: number,
-  lat: number,
-): number => {
-  const point = pointOnSphere(planetRadius, lat, lon, center);
-  let min = Infinity;
-  for (let i = 0; i < PATH_DISTANCE_SAMPLES; i++) {
-    const sampleLon = (i / PATH_DISTANCE_SAMPLES) * Math.PI * 2;
-    const samplePos = pathFrameAt(planetRadius, sampleLon, center).position;
-    const d = point.distanceTo(samplePos);
-    if (d < min) min = d;
-  }
-  return min;
-};
-
-/**
- * Hand-authored continents and islands. Positions were found by
- * rejection-sampling the full lat/lon space for spots whose closest
- * approach to the trail (see minDistanceToPath) clears CORRIDOR_HALF_WIDTH
- * and that don't overlap any other landmass (see planetTerrain.test.ts's
- * "no two continents/islands overlap" and "every landmass clears the
- * trail/board/zone corridor") - not hand-picked by eye, since near the
- * poles circles of longitude converge and a "safe-looking" gap can still
- * overlap. The result scatters landmasses across a wide range of
- * latitudes rather than clustering at the extreme poles, since the trail's
- * own wiggle (not a fixed latitude line) is what each one actually has to
- * clear.
+ * Hand-authored continents and islands. The ship's actual footprint plus
+ * its boards' own required clearance (see calculatedBoardPositionsAndRota
+ * tions.ts's CORRIDOR_HALF_WIDTH) means the single continuous trail that
+ * has to route around every landmass fundamentally limits how much big
+ * land this planet can hold at once - two meaningfully large continents
+ * (one with its own highland) plus two smaller landmasses is close to the
+ * practical ceiling for that corridor width before the trail runs out of
+ * safe latitude somewhere around the loop. Positions and sizes were found
+ * by placing the two big continents with deliberate longitude separation
+ * first, then rejection-sampling the smaller ones into what room was left
+ * - not hand-picked by eye - and are verified end to end by
+ * calculatedBoardPositionsAndRotations.test.ts's "never runs through a
+ * continent/island" test, which checks the trail's *actual* generated
+ * shape, not just these positions in isolation.
  */
 export const CONTINENTS: ContinentDef[] = [
   {
-    lon: deg(335.9),
-    lat: deg(-71.6),
-    baseRadius: 7.5,
+    lon: deg(10),
+    lat: deg(12),
+    baseRadius: 9,
     harmonics: [
       { amplitude: 0.15, freq: 2, phase: 0.4 },
       { amplitude: 0.1, freq: 3, phase: 2.1 },
@@ -102,144 +57,35 @@ export const CONTINENTS: ContinentDef[] = [
     highland: { scale: 0.5 },
   },
   {
-    lon: deg(274.6),
-    lat: deg(80.6),
-    baseRadius: 6,
-    harmonics: [
-      { amplitude: 0.18, freq: 2, phase: 1.2 },
-      { amplitude: 0.1, freq: 4, phase: 0.3 },
-    ],
-  },
-  {
-    lon: deg(75.3),
-    lat: deg(73.8),
-    baseRadius: 5.5,
-    harmonics: [
-      { amplitude: 0.16, freq: 3, phase: 2.6 },
-      { amplitude: 0.1, freq: 5, phase: 0.7 },
-    ],
-  },
-  {
-    lon: deg(197.9),
-    lat: deg(-71.9),
-    baseRadius: 6,
+    lon: deg(190),
+    lat: deg(-12),
+    baseRadius: 8,
     harmonics: [
       { amplitude: 0.17, freq: 2, phase: 0.1 },
       { amplitude: 0.1, freq: 4, phase: 1.8 },
     ],
   },
+  // Smaller landmasses, tucked into the longitude gaps the two big
+  // continents above leave open.
   {
-    lon: deg(142.5),
-    lat: deg(59.3),
-    baseRadius: 5.5,
+    lon: deg(100.8),
+    lat: deg(-6.7),
+    baseRadius: 2.5,
     harmonics: [
-      { amplitude: 0.16, freq: 2, phase: 2.0 },
-      { amplitude: 0.1, freq: 3, phase: 0.9 },
-    ],
-  },
-  {
-    lon: deg(347.0),
-    lat: deg(61.4),
-    baseRadius: 5,
-    harmonics: [
-      { amplitude: 0.15, freq: 3, phase: 1.4 },
-      { amplitude: 0.1, freq: 4, phase: 2.4 },
-    ],
-  },
-  {
-    lon: deg(103.6),
-    lat: deg(-64.3),
-    baseRadius: 5.5,
-    harmonics: [
-      { amplitude: 0.15, freq: 2, phase: 0.8 },
-      { amplitude: 0.11, freq: 4, phase: 2.9 },
-    ],
-  },
-  // Desert continents - solid tan/sand, no green layer, no trees (see
-  // landmass.tsx and scatterTrees below).
-  {
-    lon: deg(194.6),
-    lat: deg(54.1),
-    baseRadius: 4.5,
-    harmonics: [
-      { amplitude: 0.17, freq: 2, phase: 0.6 },
-      { amplitude: 0.1, freq: 4, phase: 2.0 },
+      { amplitude: 0.16, freq: 3, phase: 2.6 },
+      { amplitude: 0.1, freq: 5, phase: 0.7 },
     ],
     variant: "desert",
   },
   {
-    lon: deg(268.7),
-    lat: deg(-62.8),
-    baseRadius: 4,
+    lon: deg(279.1),
+    lat: deg(-4.2),
+    baseRadius: 2.5,
     harmonics: [
-      { amplitude: 0.16, freq: 3, phase: 1.7 },
-      { amplitude: 0.1, freq: 5, phase: 0.5 },
+      { amplitude: 0.18, freq: 2, phase: 1.2 },
+      { amplitude: 0.1, freq: 4, phase: 0.3 },
     ],
     variant: "desert",
-  },
-  // Smaller islands, filling the gaps between the continents above.
-  {
-    lon: deg(286.9),
-    lat: deg(54.7),
-    baseRadius: 3,
-    harmonics: [
-      { amplitude: 0.2, freq: 2, phase: 1.6 },
-      { amplitude: 0.12, freq: 4, phase: 0.6 },
-    ],
-  },
-  {
-    lon: deg(42.0),
-    lat: deg(-55.4),
-    baseRadius: 3.5,
-    harmonics: [
-      { amplitude: 0.18, freq: 3, phase: 0.2 },
-      { amplitude: 0.11, freq: 5, phase: 1.9 },
-    ],
-  },
-  {
-    lon: deg(254.2),
-    lat: deg(52.0),
-    baseRadius: 2.5,
-    harmonics: [
-      { amplitude: 0.2, freq: 2, phase: 2.4 },
-      { amplitude: 0.13, freq: 4, phase: 1.1 },
-    ],
-  },
-  {
-    lon: deg(228.3),
-    lat: deg(-56.1),
-    baseRadius: 3,
-    harmonics: [
-      { amplitude: 0.19, freq: 3, phase: 1.3 },
-      { amplitude: 0.12, freq: 5, phase: 0.4 },
-    ],
-  },
-  {
-    lon: deg(166.6),
-    lat: deg(-46.8),
-    baseRadius: 3,
-    harmonics: [
-      { amplitude: 0.19, freq: 2, phase: 0.5 },
-      { amplitude: 0.12, freq: 4, phase: 2.2 },
-    ],
-  },
-  {
-    lon: deg(41.2),
-    lat: deg(54.7),
-    baseRadius: 3.5,
-    harmonics: [
-      { amplitude: 0.18, freq: 3, phase: 1.8 },
-      { amplitude: 0.11, freq: 5, phase: 0.3 },
-    ],
-  },
-  {
-    lon: deg(290.7),
-    lat: deg(-51.5),
-    baseRadius: 2.5,
-    harmonics: [
-      { amplitude: 0.2, freq: 2, phase: 0.9 },
-      { amplitude: 0.13, freq: 4, phase: 2.7 },
-    ],
   },
 ];
 

@@ -2,9 +2,7 @@ import { describe, test, expect } from "vitest";
 import { Vector3 } from "three";
 import {
   CONTINENTS,
-  CORRIDOR_HALF_WIDTH,
   heightAt,
-  minDistanceToPath,
   outlineRadiusAt,
   scatterTrees,
 } from "./planetTerrain";
@@ -32,21 +30,11 @@ const centroidDistance = (
   );
 
 describe("CONTINENTS layout", () => {
-  // Regression test: continents used to sit near the equator and overlap
-  // the ship's trail, boards, and activation zones. Every continent's
-  // closest possible edge (its centroid's own closest approach to the
-  // actual wiggly trail, minus its own widest outline radius) must clear
-  // the corridor the trail/boards/zones actually need - a real per-point
-  // check against the trail's own path, not a blanket latitude line, so
-  // landmasses can sit anywhere the trail's wiggle happens to leave clear.
-  test("every continent's closest edge clears the trail/board/zone corridor", () => {
-    for (const c of CONTINENTS) {
-      const clearance =
-        minDistanceToPath(planet.radius, center, c.lon, c.lat) -
-        maxOutlineRadius(c);
-      expect(clearance).toBeGreaterThan(CORRIDOR_HALF_WIDTH);
-    }
-  });
+  // Trail/board/activation-zone clearance is validated from the trail's
+  // own side now (see calculatedBoardPositionsAndRotations.test.ts) -
+  // continents and islands are placed freely across the whole sphere (not
+  // confined to any keep-out band), and it's the trail that detours around
+  // wherever they land.
 
   // Regression test: adding more (smaller) islands to fill the gaps
   // between continents makes accidental overlap an easy mistake - every
@@ -67,7 +55,9 @@ describe("CONTINENTS layout", () => {
 
 describe("heightAt", () => {
   test("is 0 over open ocean (far from every continent)", () => {
-    expect(heightAt(planet.radius, center, 0, 0)).toBe(0);
+    // Every CONTINENTS entry sits within about +-12 degrees of the
+    // equator (see planetTerrain.ts) - deep southern latitude is clear.
+    expect(heightAt(planet.radius, center, 0, (-75 * Math.PI) / 180)).toBe(0);
   });
 
   test("is positive exactly at a continent's own centroid", () => {

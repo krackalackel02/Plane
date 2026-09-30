@@ -8,20 +8,117 @@ import {
   surfaceNormal,
 } from "../../utils/planetSurface";
 import { getBoardMatWorldPosition } from "../../utils/3d";
+import { CONTINENTS, outlineRadiusAt } from "../planet/planetTerrain";
 
-// How far the trail swings in latitude as it goes, and how many full swings
-// it makes over one complete loop - turns the trail from a perfect
-// equatorial circle into a deterministic zigzag, so following it takes real
-// steering rather than holding a straight throttle line. Exported so
-// anything placed on the planet (see planetTerrain.ts's continent layout)
-// can compute how much latitude the trail - and everything anchored to it
-// (boards, activation zones) - ever actually reaches.
-export const PATH_WIGGLE_AMPLITUDE = (16 * Math.PI) / 180; // ~16 degrees of latitude swing
+// A gentle base swing, on top of which each nearby landmass adds its own
+// detour (see islandBumpDeg below) - most of the trail's actual shape now
+// comes from routing around wherever the (deliberately scattered, not
+// latitude-banded - see planetTerrain.ts) continents and islands happen to
+// be, rather than from this wiggle alone.
+export const PATH_WIGGLE_AMPLITUDE = (10 * Math.PI) / 180; // ~10 degrees of latitude swing
 const PATH_WIGGLE_CYCLES = 5; // full swings per full loop of the planet
 
-/** Latitude (radians) of the trail at a given longitude - the zigzag itself. */
-const pathLatitude = (lon: number): number =>
-  PATH_WIGGLE_AMPLITUDE * Math.sin(lon * PATH_WIGGLE_CYCLES);
+const baseLatitudeDeg = (lonDeg: number): number =>
+  ((PATH_WIGGLE_AMPLITUDE * 180) / Math.PI) *
+  Math.sin(((lonDeg * Math.PI) / 180) * PATH_WIGGLE_CYCLES);
+
+// How much room the trail actually needs to clear a landmass by, in world
+// units: half of the board's own footprint (boardParams.json's outerX)
+// plus its sideways offset from the centerline, the activation zone's
+// half-width, and a small turning-clearance buffer - i.e. everything that
+// can ever sit near the trail at a stop.
+const BOARD_HALF_WIDTH = 3.35;
+const ZONE_HALF_WIDTH = 4;
+const CORRIDOR_SAFETY_MARGIN = 3;
+const CORRIDOR_HALF_WIDTH =
+  12 + BOARD_HALF_WIDTH + ZONE_HALF_WIDTH + CORRIDOR_SAFETY_MARGIN;
+
+// Precomputed once (CONTINENTS is static): each landmass's own centroid
+// and widest outline radius, in world units.
+const islandProfiles = CONTINENTS.map((c) => {
+  let maxRadius = 0;
+  for (let i = 0; i < 36; i++) {
+    maxRadius = Math.max(maxRadius, outlineRadiusAt(c, (i / 36) * Math.PI * 2));
+  }
+  return { lat: c.lat, lon: c.lon, radiusWorldUnits: maxRadius };
+});
+
+// A first (coarse) search pass finds roughly where it's safe, a second
+// (fine) pass refines tightly around that; SEARCH_MARGIN is extra
+// world-unit headroom beyond the bare CORRIDOR_HALF_WIDTH requirement, to
+// absorb both passes' step size and keep genuine margin rather than
+// landing exactly on the boundary.
+const COARSE_LAT_STEP_DEG = 2;
+const FINE_LAT_STEP_DEG = 0.1;
+const SEARCH_MARGIN = 5;
+
+/**
+ * Finds a safe trail latitude (radians) at a given longitude: the one
+ * closest to the gentle base wiggle that still keeps true 3D distance to
+ * every landmass's centroid, minus that landmass's own radius, at least
+ * CORRIDOR_HALF_WIDTH (plus a safety margin) - a direct numeric search
+ * over real 3D distances, not a closed-form approximation. An earlier
+ * attempt summed a per-island "nudge" instead, which broke down whenever
+ * two landmasses' influence zones overlapped - the sum could silently
+ * produce a latitude that cleared *neither* of them. This can't have that
+ * failure mode: every candidate is checked directly against every
+ * landmass, so "safe" always means safe from all of them at once.
+ */
+const searchSafeLatitude = (
+  lon: number,
+  radius: number,
+  center: Vector3,
+): number => {
+  const baseDeg = baseLatitudeDeg((lon * 180) / Math.PI);
+  const requiredClearance = CORRIDOR_HALF_WIDTH + SEARCH_MARGIN;
+  const islandCenters = islandProfiles.map((island) =>
+    pointOnSphere(radius, island.lat, island.lon, center),
+  );
+
+  const clearanceAt = (latDeg: number): number => {
+    const point = pointOnSphere(radius, (latDeg * Math.PI) / 180, lon, center);
+    let min = Infinity;
+    for (let i = 0; i < islandProfiles.length; i++) {
+      const clearance =
+        point.distanceTo(islandCenters[i]) - islandProfiles[i].radiusWorldUnits;
+      if (clearance < min) min = clearance;
+    }
+    return min;
+  };
+
+  const pickBest = (
+    step: number,
+    from: number,
+    to: number,
+    fallback: number,
+  ): number => {
+    let best: number | null = null;
+    let bestDeviation = Infinity;
+    for (let lat = from; lat <= to; lat += step) {
+      if (clearanceAt(lat) >= requiredClearance) {
+        const deviation = Math.abs(lat - baseDeg);
+        if (deviation < bestDeviation) {
+          bestDeviation = deviation;
+          best = lat;
+        }
+      }
+    }
+    return best ?? fallback;
+  };
+
+  const coarse = pickBest(COARSE_LAT_STEP_DEG, -84, 84, baseDeg);
+  const fine = pickBest(
+    FINE_LAT_STEP_DEG,
+    coarse - COARSE_LAT_STEP_DEG,
+    coarse + COARSE_LAT_STEP_DEG,
+    coarse,
+  );
+  return (fine * Math.PI) / 180;
+};
+
+/** Latitude (radians) of the trail at a given longitude/shell radius - the gentle base wiggle, nudged to clear every landmass (see searchSafeLatitude). */
+const pathLatitude = (lon: number, radius: number, center: Vector3): number =>
+  searchSafeLatitude(lon, radius, center);
 
 export interface PathFrame {
   position: Vector3;
@@ -48,11 +145,16 @@ export const pathFrameAt = (
   lon: number,
   center: Vector3 = new Vector3(),
 ): PathFrame => {
-  const position = pointOnSphere(radius, pathLatitude(lon), lon, center);
+  const position = pointOnSphere(
+    radius,
+    pathLatitude(lon, radius, center),
+    lon,
+    center,
+  );
   const normal = surfaceNormal(position, center);
   const ahead = pointOnSphere(
     radius,
-    pathLatitude(lon + TANGENT_EPSILON),
+    pathLatitude(lon + TANGENT_EPSILON, radius, center),
     lon + TANGENT_EPSILON,
     center,
   );

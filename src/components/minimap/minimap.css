@@ -12,7 +12,10 @@
   );
   border: 2px solid rgba(255, 255, 255, 0.25);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
+  /* Deliberately NOT overflow:hidden here - the N/E/S/W badges (see
+     .minimap-compass) straddle this box's own edge on purpose and must
+     stay visible, not clipped. Only the canvas itself needs clipping to a
+     circle - see .minimap-canvas-clip below. */
   z-index: 20;
   cursor: pointer;
   /* Only `transform` animates - width/height/position flip to their new
@@ -27,24 +30,65 @@
   outline-offset: 2px;
 }
 
+.minimap-canvas-clip {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
 .minimap canvas {
   display: block;
   width: 100%;
   height: 100%;
 }
 
+/* Small black-box/white-text badges straddling the four cardinal points on
+   the map's own circular border, compass-rose style - each one centered
+   exactly on the edge (half in, half out), positioned in percent (not
+   fixed pixels) so it stays glued there whether the map is docked or
+   expanded. */
 .minimap-compass {
   position: absolute;
-  top: 4px;
-  left: 50%;
-  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 4px;
   font-family: "Orbitron", sans-serif;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.65);
-  letter-spacing: 0.05em;
-  z-index: 1;
+  color: #fff;
+  letter-spacing: 0.02em;
+  z-index: 2;
   pointer-events: none;
+}
+
+.minimap-compass--n {
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.minimap-compass--s {
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 50%);
+}
+
+.minimap-compass--e {
+  right: 0;
+  top: 50%;
+  transform: translate(50%, -50%);
+}
+
+.minimap-compass--w {
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 @media (max-width: 768px) {
@@ -56,8 +100,17 @@
   }
 
   .minimap-compass {
-    font-size: 9px;
+    width: 15px;
+    height: 15px;
+    font-size: 8px;
   }
+}
+
+.minimap-expanded .minimap-compass {
+  width: 26px;
+  height: 26px;
+  font-size: 14px;
+  border-radius: 5px;
 }
 
 /* Expanded, GTAV-style full map. Overrides the docked position/size above
