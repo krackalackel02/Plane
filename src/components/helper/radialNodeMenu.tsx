@@ -107,8 +107,8 @@ const renderNode = (node: RadialMenuNode, extraClassName: string) => {
  * in the CSS) covers the physical gap the mouse sweeps through between the
  * trigger and a fanned-out node - without it, that gap is bare page/canvas,
  * not part of this component's DOM subtree, so crossing it would fire
- * onMouseLeave and collapse the branch before the cursor ever reaches the
- * node it's headed for.
+ * the pointer-leave handler and collapse the branch before the cursor ever
+ * reaches the node it's headed for.
  */
 const RadialNodeMenu: React.FC<RadialNodeMenuProps> = ({
   trigger,
@@ -123,6 +123,39 @@ const RadialNodeMenu: React.FC<RadialNodeMenuProps> = ({
 
   const close = useCallback(() => setExpanded(false), []);
   const open = useCallback(() => setExpanded(true), []);
+
+  // Hover-to-open is a mouse-only affordance - gated on pointerType rather
+  // than using onMouseEnter/onMouseLeave directly, because touch taps also
+  // fire the legacy mouseover/mouseout compatibility events those synthesize
+  // from (so React's derived mouseenter/mouseleave fire for touch too, not
+  // just real hover). Letting a tap's synthesized mouseenter call open()
+  // races the same tap's click: open() from the compat mouseenter flips
+  // expanded true, then the trigger's onClick immediately toggles it back
+  // to false (see its blind `!current` below) - the tap appears to do
+  // nothing, and it takes a second tap to actually land the branch open.
+  // Real pointerenter/pointerleave carry an accurate pointerType (native
+  // browser behavior, not something touch spoofs), so checking it here
+  // restricts hover-to-open to non-touch input, leaving touch to open
+  // exclusively through that same onClick toggle - the one path
+  // HelpButton (no hover state at all) already uses single-tap.
+  //
+  // Excludes "touch"/"pen" rather than requiring exactly "mouse", so an
+  // environment that leaves pointerType unset still behaves like a mouse
+  // (the permissive direction to fail toward - jsdom's fireEvent can't
+  // actually populate pointerType on a dispatched PointerEvent, so
+  // radialNodeMenu.test.tsx's hover coverage depends on this default).
+  const handlePointerEnter = useCallback(
+    (event: React.PointerEvent) => {
+      if (event.pointerType !== "touch" && event.pointerType !== "pen") open();
+    },
+    [open],
+  );
+  const handlePointerLeave = useCallback(
+    (event: React.PointerEvent) => {
+      if (event.pointerType !== "touch" && event.pointerType !== "pen") close();
+    },
+    [close],
+  );
 
   // Tap/click outside while expanded folds the branch back in - the only
   // way touch devices (no hover-away) can dismiss it.
@@ -192,8 +225,8 @@ const RadialNodeMenu: React.FC<RadialNodeMenuProps> = ({
       className={`radial-node-menu${expanded ? " radial-node-menu--expanded" : ""}${
         className ? ` ${className}` : ""
       }`}
-      onMouseEnter={open}
-      onMouseLeave={close}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
     >
       <div className="radial-node-menu__hover-bridge" aria-hidden="true" />
 
