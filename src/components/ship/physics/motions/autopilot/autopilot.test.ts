@@ -1,121 +1,81 @@
-import { Group, Vector3 } from "three";
+import { Vector3 } from "three";
 import { describe, test, expect, beforeEach } from "vitest";
 import { AutopilotMotion } from "./autopilot";
-import type { BoardObb } from "../../collision/boardCollision";
+import { Planet } from "../../../../../utils/planets";
+
+// A radius-1 planet keeps the arithmetic simple; every test's from/to
+// points are already unit vectors so start() reprojects them unchanged.
+const testPlanet: Planet = {
+  id: "test",
+  center: new Vector3(0, 0, 0),
+  radius: 1,
+  shipAltitude: 0,
+};
 
 describe("AutopilotMotion", () => {
-  let group: Group;
   let motion: AutopilotMotion;
 
   beforeEach(() => {
-    group = new Group();
     motion = new AutopilotMotion();
-    motion.attachTo(group);
   });
 
-  test("flies directly to the target when already inside the board shell", () => {
-    const from = new Vector3(5, 0, 5); // well inside a radius of 40
-    const to = new Vector3(30, 0, 20);
-    motion.start(from, to, 40, [], 12);
+  test("flies along the great circle toward the target", () => {
+    const from = new Vector3(1, 0, 0);
+    const to = new Vector3(0, 0, 1);
+    motion.start(from, to, 12, testPlanet);
 
-    // A big single step should still land short of arrival, but moving
-    // toward the target rather than detouring through the origin first.
-    const status = motion.update(0.1, false);
-    expect(status).toBe("flying");
-    expect(group.position.distanceTo(to)).toBeLessThan(from.distanceTo(to));
-  });
-
-  test("detours via the origin when starting outside the board shell", () => {
-    const from = new Vector3(0, 0, 50); // outside a radius of 40
-    const to = new Vector3(30, 0, 5);
-    motion.start(from, to, 40, [], 12);
-
-    // Early in the flight, a detoured path should be closer to the origin
-    // waypoint than a direct path would ever bring it.
-    motion.update(0.05, false);
-    const distanceFromOrigin = group.position.length();
-    expect(distanceFromOrigin).toBeLessThan(
-      from.distanceTo(new Vector3(0, 0, 0)),
-    );
+    const result = motion.update(0.1, false);
+    expect(result.status).toBe("flying");
+    expect(result.position.distanceTo(to)).toBeLessThan(from.distanceTo(to));
+    // Every point along the arc stays on the shell - this is the whole
+    // point of slerping instead of lerping: it can never dip inside the
+    // planet.
+    expect(result.position.length()).toBeCloseTo(1, 5);
   });
 
   test("reaches the exact target position on arrival", () => {
-    const from = new Vector3(5, 0, 5);
-    const to = new Vector3(20, 0, 10);
-    motion.start(from, to, 40, [], 1000); // fast speed so it arrives quickly
+    const from = new Vector3(1, 0, 0);
+    const to = new Vector3(0, 1, 0);
+    motion.start(from, to, 1000, testPlanet); // fast speed so it arrives quickly
 
-    let status;
-    for (let i = 0; i < 20 && status !== "arrived"; i++) {
-      status = motion.update(0.5, false);
+    let result;
+    for (let i = 0; i < 20 && result?.status !== "arrived"; i++) {
+      result = motion.update(0.5, false);
     }
 
-    expect(status).toBe("arrived");
-    expect(group.position.x).toBeCloseTo(to.x, 3);
-    expect(group.position.y).toBeCloseTo(to.y, 3);
-    expect(group.position.z).toBeCloseTo(to.z, 3);
+    expect(result?.status).toBe("arrived");
+    expect(result?.position.x).toBeCloseTo(to.x, 3);
+    expect(result?.position.y).toBeCloseTo(to.y, 3);
+    expect(result?.position.z).toBeCloseTo(to.z, 3);
   });
 
-  test("cancels immediately when manual input is present", () => {
-    const from = new Vector3(0, 0, 0);
-    const to = new Vector3(20, 0, 10);
-    motion.start(from, to, 40, []);
+  test("cancels immediately when manual input is present, holding position", () => {
+    const from = new Vector3(1, 0, 0);
+    const to = new Vector3(0, 0, 1);
+    motion.start(from, to, 12, testPlanet);
 
-    expect(motion.update(0.1, true)).toBe("cancelled");
+    const result = motion.update(0.1, true);
+    expect(result.status).toBe("cancelled");
+    expect(result.position.distanceTo(from)).toBeCloseTo(0, 5);
   });
 
-  test("cancels if update is called before attaching to a group", () => {
-    const unattached = new AutopilotMotion();
-    expect(unattached.update(0.1, false)).toBe("cancelled");
+  test("cancels if update is called before start()", () => {
+    const fresh = new AutopilotMotion();
+    expect(fresh.update(0.1, false).status).toBe("cancelled");
   });
 
-  describe("board avoidance", () => {
-    // A board sitting on the +x axis, 40 units out - its facing axis
-    // (away from the origin - see boardCollision.ts) is world +x.
-    const boardOnPositiveX: BoardObb = {
-      centerX: 40,
-      centerZ: 0,
-      rotationY: 0,
-      halfDepth: 0.2,
-      halfWidth: 3.35,
-    };
+  test("a widely separated start/end never dips below the shell radius mid-flight", () => {
+    // Nearly opposite sides of the planet (just short of the antipode,
+    // where the great-circle direction is undefined) - the straight
+    // Euclidean line between them would pass through the core; the
+    // great-circle arc must not.
+    const from = new Vector3(1, 0, 0);
+    const to = new Vector3(-1, 0, 0.05).normalize();
+    motion.start(from, to, 4, testPlanet);
 
-    test("routes around a board the ship is currently shadowed behind, instead of straight through it via the origin", () => {
-      // Starting well past the board, lined up on its exact bearing - the
-      // naive "detour via the origin" fallback would otherwise cut
-      // straight through it on the way in.
-      const from = new Vector3(60, 0, 0);
-      const to = new Vector3(-30, 0, 20);
-      motion.start(from, to, 40, [boardOnPositiveX], 1000);
-
-      let minLateralClearance = Infinity;
-      let status;
-      for (let i = 0; i < 200 && status !== "arrived"; i++) {
-        status = motion.update(0.02, false);
-        // Only relevant while still near the board's own radius band.
-        if (Math.abs(group.position.x - 40) < 5) {
-          minLateralClearance = Math.min(
-            minLateralClearance,
-            Math.abs(group.position.z),
-          );
-        }
-      }
-
-      expect(status).toBe("arrived");
-      // Never came closer to the board's own bearing (z=0) than its
-      // lateral span while passing through that radius band.
-      expect(minLateralClearance).toBeGreaterThanOrEqual(
-        boardOnPositiveX.halfWidth,
-      );
-    });
-
-    test("a path that never needed the origin detour is untouched by an unrelated board", () => {
-      const from = new Vector3(5, 0, 5); // inside the shell, nowhere near boardOnPositiveX's bearing
-      const to = new Vector3(10, 0, 20);
-      motion.start(from, to, 40, [boardOnPositiveX], 12);
-
-      const status = motion.update(0.1, false);
-      expect(status).toBe("flying");
-      expect(group.position.distanceTo(to)).toBeLessThan(from.distanceTo(to));
-    });
+    for (let i = 0; i < 10; i++) {
+      const result = motion.update(0.05, false);
+      expect(result.position.length()).toBeCloseTo(1, 5);
+    }
   });
 });

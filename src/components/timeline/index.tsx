@@ -1,21 +1,20 @@
 import Board from "./board";
 import AutopilotHotkeys from "./autopilotHotkeys";
 import { useProjects } from "../../context/projectContext";
-import {
-  calculatedBoardPositionsAndRotations,
-  computeArcRadius,
-} from "./calculatedBoardPositionsAndRotations";
+import { calculatedBoardPositionsAndRotations } from "./calculatedBoardPositionsAndRotations";
 
 /**
- * Timeline component for managing multiple boards
- * Renders a series of boards positioned along the z-axis
+ * Timeline component for managing multiple boards.
+ *
+ * Each board stands in open water beside the trail, facing back along the
+ * ship's line of approach, with its activation mat on the trail in front of
+ * it (see calculatedBoardPositionsAndRotations for how both are chosen).
  * @returns JSX.Element
  */
 const Timeline = () => {
   const { items } = useProjects();
 
-  const boardsData = calculatedBoardPositionsAndRotations(items, "arc");
-  const arcRadius = computeArcRadius(items.length);
+  const boardsData = calculatedBoardPositionsAndRotations(items);
 
   return (
     <>
@@ -25,14 +24,15 @@ const Timeline = () => {
             key={board.id}
             id={board.id}
             position={board.position}
-            rotation={board.rotation} // Pass the calculated rotation to the Board
+            quaternion={board.quaternion}
+            matPosition={board.matPosition}
+            matQuaternion={board.matQuaternion}
             helper={false}
             imagePath={board.imagePath}
-            arcRadius={arcRadius}
           />
         ))}
       </group>
-      <AutopilotHotkeys boards={boardsData} arcRadius={arcRadius} />
+      <AutopilotHotkeys boards={boardsData} />
     </>
   );
 };

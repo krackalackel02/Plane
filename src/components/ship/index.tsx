@@ -6,7 +6,7 @@ import { useScene } from "../../context/sceneContext";
 import Exhaust from "./exhaust"; // Exhaust effects component
 import Body from "./body"; // Ship body model component (also fits shipRef's scale to the loaded model)
 import Physics from "./physics"; // Physics and movement component
-import ShipCollision from "./physics/collision"; // Boundary/board collision & bounce physics
+import ShipCollision from "./physics/collision"; // Board collision & bounce physics
 
 const Ship: React.FC = () => {
   // bodyRef wraps just the ship model (not the exhaust flame, which would

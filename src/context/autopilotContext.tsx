@@ -10,14 +10,20 @@ import { Vector3 } from "three";
 
 export interface AutopilotTarget {
   position: Vector3;
-  // Board-shell radius at request time, so the autopilot motion can decide
-  // whether a direct path is already safe or needs to detour via the origin.
-  arcRadius: number;
+  // The specific board this flight is heading to, if any - lets
+  // ActivationZone (see activationZone.tsx) tell "arrived at the actual
+  // destination" apart from "the great-circle arc happened to pass near a
+  // completely different board's zone en route," which would otherwise
+  // pop up the wrong project and cut the flight short. Left undefined for
+  // destinations that aren't a specific board (e.g. "0" returns to spawn,
+  // or a future "fly wherever I click" minimap target) - zones activate
+  // normally in that case, since there's no specific destination to guard.
+  boardId?: string;
 }
 
 interface AutopilotContextType {
   target: AutopilotTarget | null;
-  requestAutopilot: (position: Vector3, arcRadius: number) => void;
+  requestAutopilot: (position: Vector3, boardId?: string) => void;
   cancelAutopilot: () => void;
   isFlying: boolean;
   setIsFlying: (flying: boolean) => void;
@@ -32,8 +38,8 @@ export const AutopilotProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isFlying, setIsFlying] = useState(false);
 
   const requestAutopilot = useCallback(
-    (position: Vector3, arcRadius: number) => {
-      setTarget({ position, arcRadius });
+    (position: Vector3, boardId?: string) => {
+      setTarget({ position, boardId });
     },
     [],
   );

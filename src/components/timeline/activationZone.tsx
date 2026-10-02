@@ -17,6 +17,7 @@ import {
 } from "three";
 import { useScene } from "../../context/sceneContext";
 import { useProjects } from "../../context/projectContext";
+import { useAutopilot } from "../../context/autopilotContext";
 import { print, useFrameDelay } from "../../utils/common";
 import { audioEngine } from "../../audio/audioEngine";
 import Sphere from "../helper/sphere";
@@ -28,6 +29,13 @@ interface ActivationZoneProps {
   depth?: number;
   numberOfSquares?: number; // New prop for multiple squares
 }
+
+// How far the ship is allowed to be off the mat's own plane (its normal
+// axis) and still register as hovering it, in world units - generous
+// enough to cover the ship's actual cruise altitude above the mat plus
+// some slack for bounce jitter, but nowhere near enough to reach anything
+// on the far side of the planet.
+const NORMAL_TOLERANCE = 5;
 
 const ActivationZone: React.FC<ActivationZoneProps> = ({
   id,
@@ -45,6 +53,7 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
   const { shipRef } = useScene();
   // State and Context
   const { activeProjectId, setActiveProjectId } = useProjects();
+  const { target: autopilotTarget, isFlying: autopilotFlying } = useAutopilot();
   const [isHovered, setIsHovered] = useState(false);
   const [isActivated, setIsActivated] = useState(false);
   // Colors, vectors, and scaling
@@ -135,13 +144,34 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
     zoneMeshRef.current.worldToLocal(
       shipRef.current.getWorldPosition(shipToSquareLocalPosition),
     );
+    // On a sphere, checking only the mat's own 2D footprint (x, y here) is
+    // not enough: a ship on the far side of the planet - nowhere near this
+    // board - can land almost exactly within that flat footprint purely by
+    // coincidence, because "opposite side of a sphere" is entirely a
+    // difference along the mat's own normal axis (z here, after the mat's
+    // -90deg X rotation - see the offsetRotation below). Requiring the ship
+    // to also be close along that axis (not just above/below it by any
+    // amount) is what tells a genuine flyover apart from that.
     const currentlyHovered =
       Math.abs(shipToSquareLocalPosition.x) <= size[1] / 2 &&
-      Math.abs(shipToSquareLocalPosition.y) <= size[0] / 2;
+      Math.abs(shipToSquareLocalPosition.y) <= size[0] / 2 &&
+      Math.abs(shipToSquareLocalPosition.z) <= NORMAL_TOLERANCE;
 
     if (currentlyHovered !== isHovered) {
       setIsHovered(currentlyHovered);
+      // Autopilot flying toward a *specific* board (see
+      // autopilotContext.tsx's boardId) shouldn't let some other zone the
+      // great-circle arc merely happens to pass near cut the flight short
+      // and pop up the wrong project - only the actual destination (or a
+      // flight with no specific board target, e.g. spawn/minimap-click)
+      // gets to activate here.
+      const blockedByAutopilot =
+        autopilotFlying &&
+        !!autopilotTarget?.boardId &&
+        autopilotTarget.boardId !== id;
+
       if (currentlyHovered) {
+        if (blockedByAutopilot) return;
         setActiveProjectId(id);
         audioEngine.playBleep();
         print("Entered activation zone for ID:", id);
@@ -170,15 +200,16 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
     });
   });
 
-  const offsetPosition: [number, number, number] = [-5, -2.5, 0];
+  // The parent group is the mat's own transform (see board.tsx), already on
+  // the planet's surface and oriented along the trail, so the only thing left
+  // to do here is lay the extruded frame flat.
   const offsetRotation: [number, number, number] = [-Math.PI / 2, 0, 0];
 
   return (
-    <group position={offsetPosition} rotation={offsetRotation}>
+    <group rotation={offsetRotation}>
       <Sphere position={[0, 0, 0]} />
 
       {/* Outermost Mesh (index 0) */}
-      {/* eslint-disable-next-line react/no-unknown-property */}
       <mesh ref={zoneMeshRef} material={sharedMaterial}>
         <extrudeGeometry
           args={[frameGeometry.shape, frameGeometry.extrudeSettings]}
@@ -193,7 +224,6 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
           <mesh
             key={index}
             ref={(el) => (innerMeshRefs.current[index] = el)}
-            // eslint-disable-next-line react/no-unknown-property
             material={sharedMaterial}
             scale={[scale, scale, 1]}
           >
