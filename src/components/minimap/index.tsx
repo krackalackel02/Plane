@@ -24,7 +24,7 @@ import {
   CONTINENTS,
   continentOutlinePoint,
   scatterDesertFeatures,
-  scatterRidges,
+  ridgeChains,
   scatterTrees,
 } from "../planet/planetTerrain";
 import {
@@ -71,20 +71,19 @@ const useMapSize = (ref: RefObject<HTMLDivElement>) => {
 const PATH_SAMPLES = 180;
 // Enough to keep the autopilot arc smooth even across half the planet.
 const ROUTE_SAMPLES = 96;
-const OUTLINE_SAMPLES = 64;
+const OUTLINE_SAMPLES = 160;
 // Reuses the exact same deterministic scatter the 3D scene itself uses
 // (see planet/index.tsx) - same count, same seeded positions - so the
 // minimap shows literally the same trees the camera could see, not a
 // separate approximation of them.
 const TREE_COUNT = 90;
 const DESERT_FEATURE_COUNT = 70;
-const RIDGE_CHAIN_COUNT = 14;
 
 // One per landmass biome, matching landmass.tsx's own materials so a
 // continent reads as the same biome on the map as it does out the window.
 const GREEN = "#7cc542";
 const TAN = "#e3c896";
-const SNOW_ROCK = "#dde6ef";
+const SNOW_ROCK = "#e8f4f8";
 const SNOW_PEAK = "#ffffff";
 
 interface ContinentShape {
@@ -193,11 +192,10 @@ const useMinimapWorldData = () => {
         kind: "dune",
       },
       {
-        points: scatterRidges(
-          RIDGE_CHAIN_COUNT,
-          planet.radius,
-          planet.center,
-        ).map((r) => r.position),
+        points: ridgeChains(planet.radius, planet.center)
+          // The map marks the range's real peaks, not every foothill.
+          .filter((r) => r.height > 3)
+          .map((r) => r.position),
         color: "#52627a",
         size: 3,
         kind: "peak",

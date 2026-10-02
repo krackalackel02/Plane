@@ -25,7 +25,50 @@ export interface ContinentDef {
   variant?: ContinentVariant;
   /** A smaller inset cap stacked on the base layer - tan "highland" on a forest continent (optional), or the mandatory white peak on a "snow" one. */
   highland?: { scale: number };
+  /**
+   * Narrow, deep inlets cut into the coastline - fjords. Sine harmonics can
+   * only make broad, gentle bays; an inlet is a localised notch, so each is a
+   * Gaussian dip in the outline radius centred on its own bearing.
+   */
+  inlets?: Inlet[];
 }
+
+export interface Inlet {
+  /** Bearing around the centroid, radians (0 = north, clockwise). */
+  bearing: number;
+  /** How far in it cuts, as a fraction of baseRadius. */
+  depth: number;
+  /** Half-width of the notch, radians of bearing. */
+  width: number;
+}
+
+/** Signed difference a - b of two bearings, wrapped into (-PI, PI]. */
+const bearingDelta = (a: number, b: number): number => {
+  const d = (a - b) % (Math.PI * 2);
+  if (d > Math.PI) return d - Math.PI * 2;
+  if (d <= -Math.PI) return d + Math.PI * 2;
+  return d;
+};
+
+/** The outline's fractional wobble at a bearing, and its rate of change with bearing. */
+const outlineShape = (
+  c: ContinentDef,
+  bearing: number,
+): { wobble: number; rate: number } => {
+  let wobble = 0;
+  let rate = 0;
+  for (const h of c.harmonics) {
+    wobble += h.amplitude * Math.sin(h.freq * bearing + h.phase);
+    rate += h.amplitude * h.freq * Math.cos(h.freq * bearing + h.phase);
+  }
+  for (const inlet of c.inlets ?? []) {
+    const d = bearingDelta(bearing, inlet.bearing);
+    const notch = inlet.depth * Math.exp(-((d / inlet.width) ** 2));
+    wobble -= notch;
+    rate += (notch * 2 * d) / inlet.width ** 2;
+  }
+  return { wobble, rate };
+};
 
 const deg = (d: number): number => (d * Math.PI) / 180;
 
@@ -88,17 +131,26 @@ export const CONTINENTS: ContinentDef[] = [
     ],
     variant: "desert",
   },
-  // Snow continent - bare white rock carrying a range of peaks.
+  // Snow continent - an ice-shelf base carrying two mountain chains, its
+  // coast cut by fjords. Smaller than the other two: at full size it
+  // dominated every view of this side of the planet.
   {
     lon: deg(240),
     lat: deg(26),
-    baseRadius: 32.8,
+    baseRadius: 28,
     harmonics: [
       { amplitude: 0.19, freq: 1, phase: 4.1 },
       { amplitude: 0.14, freq: 2, phase: 0.1 },
       { amplitude: 0.09, freq: 4, phase: 1.8 },
       { amplitude: 0.05, freq: 6, phase: 0.9 },
       { amplitude: 0.03, freq: 9, phase: 2.2 },
+    ],
+    inlets: [
+      { bearing: 0.4, depth: 0.26, width: 0.07 },
+      { bearing: 1.7, depth: 0.2, width: 0.09 },
+      { bearing: 2.9, depth: 0.3, width: 0.06 },
+      { bearing: 4.1, depth: 0.18, width: 0.08 },
+      { bearing: 5.3, depth: 0.24, width: 0.07 },
     ],
     variant: "snow",
   },
@@ -145,12 +197,7 @@ export const CONTINENTS: ContinentDef[] = [
 
 /** The wobbled outline radius (world units) at a given bearing (radians) around a continent's own centroid. */
 export const outlineRadiusAt = (c: ContinentDef, bearing: number): number =>
-  c.baseRadius *
-  (1 +
-    c.harmonics.reduce(
-      (sum, h) => sum + h.amplitude * Math.sin(h.freq * bearing + h.phase),
-      0,
-    ));
+  c.baseRadius * (1 + outlineShape(c, bearing).wobble);
 
 /** Unit direction from the planet's center toward a lat/lon - center-independent, so nothing here needs one. */
 const directionAt = (lat: number, lon: number): Vector3 =>
@@ -234,12 +281,9 @@ export const surfaceClearanceWithGradient = (
     const alongNorth = direction.dot(north);
     const bearing = Math.atan2(alongEast, alongNorth);
 
-    let wobble = 0;
-    let wobbleRate = 0;
-    for (const h of c.harmonics) {
-      wobble += h.amplitude * Math.sin(h.freq * bearing + h.phase);
-      wobbleRate += h.amplitude * h.freq * Math.cos(h.freq * bearing + h.phase);
-    }
+    // Same shape function outlineRadiusAt uses, inlets included, so the
+    // gradient can never disagree with the clearance it differentiates.
+    const { wobble, rate: wobbleRate } = outlineShape(c, bearing);
     const radius = c.baseRadius * (1 + wobble);
     const value =
       (separation - Math.atan(radius / planetRadius)) * planetRadius;
@@ -576,141 +620,138 @@ export const scatterDesertFeatures = (
   scatterFeatures(count, planetRadius, center, ["desert"], 787);
 
 export interface RidgeSegment {
+  /** Ground point the segment stands on, on the snow continent's surface. */
   position: Vector3;
   normal: Vector3;
   seed: number;
-  /** Compass bearing the ridge line runs along here, radians. */
-  bearing: number;
+  /** Unit tangent: the direction its chain runs at this point. */
+  along: Vector3;
   /** Summit height above the ground it stands on, world units. */
   height: number;
-  /** Footprint half-width, world units. */
+  /** Footprint half-width across the chain, world units. */
   width: number;
+  /** Which of the two chains it belongs to (0 or 1). */
+  chain: number;
 }
 
-// Width of the clear valley kept through the middle of the snow continent,
-// measured either side of its centroid's east axis. Mountains are rejected
-// inside it, so there's always a navigable pass through the range rather
-// than an unbroken wall.
-const SNOW_PASS_HALF_WIDTH = 10;
-// Segments are spaced closer together than they are wide, so consecutive
-// ones overlap and the chain reads as one continuous ridge line rather than
-// a row of separate cones.
-const RIDGE_SPACING_RATIO = 0.62;
-const RIDGE_MIN_SEGMENTS = 4;
-const RIDGE_MAX_SEGMENTS = 9;
-
-/** How far north of the snow continent's own centroid a point sits, world units. */
-const snowNorthOffset = (
-  planetRadius: number,
-  center: Vector3,
-  lon: number,
-  lat: number,
-): number | null => {
-  const snow = CONTINENTS.find((c) => c.variant === "snow");
-  if (!snow) return null;
-  const offset = continentTangentOffset(planetRadius, center, snow, lon, lat);
-  return offset ? offset.north : null;
-};
+// Half-width of the open valley kept between the two chains, world units -
+// the pass through the range.
+const SNOW_VALLEY_HALF_WIDTH = 9;
+// How far either side of that valley each chain's crest line runs.
+const CHAIN_OFFSET = 6;
+// Along-chain spacing of segments, world units. Closer than a segment is
+// long, so neighbours interpenetrate and the chain renders as one continuous
+// crest rather than a row of separate peaks.
+const RIDGE_SPACING = 2.4;
+// Central summits, and the foothills the chain tapers to at the coast.
+const RIDGE_PEAK_HEIGHT = 9;
+const RIDGE_FOOTHILL_HEIGHT = 1.3;
+// Gentle sideways wander of each crest line, so the chains aren't ruled.
+const CHAIN_SINUOSITY = 2.6;
 
 /**
- * The snow continent's mountain range, as connected ridge *lines* rather than
- * isolated peaks.
+ * The snow continent's mountain range: two continuous chains running along
+ * the continent's long axis, one either side of an open central valley.
  *
- * Each chain starts from a scattered seed point and walks a fixed bearing
- * across the landmass, dropping a segment every RIDGE_SPACING_RATIO of its
- * own width - close enough that neighbouring segments interpenetrate and
- * render as one continuous crest with a rising-and-falling skyline, instead
- * of the field of separate cones that reads as scattered debris. A chain
- * stops as soon as the next step would leave the snow or enter the central
- * pass, so ridges end at the coast and never wall the valley off.
+ * Deliberately not scattered. Scattering seed points and walking a random
+ * bearing from each - an earlier version - put most peaks round the coast and
+ * never lined them up into crests; it read as a ring of spikes. Here each
+ * chain is a crest line laid along the long axis (the bearing where the
+ * continent is widest end to end), every segment is oriented along it, and
+ * height comes from position rather than chance: tallest at the middle of a
+ * chain, tapering to foothills toward both ends and toward the coast.
  */
-export const scatterRidges = (
-  chainCount: number,
+export const ridgeChains = (
   planetRadius: number,
   center: Vector3,
 ): RidgeSegment[] => {
-  const segments: RidgeSegment[] = [];
-  // Over-sample seeds: many get rejected for starting in the pass.
-  const seeds = scatterFeatures(
-    chainCount * 3,
-    planetRadius,
-    center,
-    ["snow"],
-    1229,
-    5,
-  );
+  const snow = CONTINENTS.find((c) => c.variant === "snow");
+  if (!snow) return [];
 
-  let chains = 0;
-  for (const seed of seeds) {
-    if (chains >= chainCount) break;
+  const centroid = directionAt(snow.lat, snow.lon);
+  const { east, north } = eastNorthAt(centroid);
 
-    let direction = seed.normal.clone();
-    const startLon = Math.atan2(direction.x, direction.z);
-    const startLat = Math.asin(Math.max(-1, Math.min(1, direction.y)));
-    const startOffset = snowNorthOffset(
-      planetRadius,
-      center,
-      startLon,
-      startLat,
-    );
-    if (startOffset === null || Math.abs(startOffset) < SNOW_PASS_HALF_WIDTH) {
-      continue;
+  // The long axis: the bearing whose full diameter through the centroid is
+  // largest.
+  let axisBearing = 0;
+  let widest = 0;
+  for (let i = 0; i < 180; i++) {
+    const b = (i / 180) * Math.PI;
+    const span = outlineRadiusAt(snow, b) + outlineRadiusAt(snow, b + Math.PI);
+    if (span > widest) {
+      widest = span;
+      axisBearing = b;
     }
+  }
+  const axis = east
+    .clone()
+    .multiplyScalar(Math.sin(axisBearing))
+    .addScaledVector(north, Math.cos(axisBearing));
+  const across = east
+    .clone()
+    .multiplyScalar(Math.cos(axisBearing))
+    .addScaledVector(north, -Math.sin(axisBearing));
 
-    const bearing = seed.seed * Math.PI * 2;
-    const length =
-      RIDGE_MIN_SEGMENTS +
-      Math.floor(seed.seed * (RIDGE_MAX_SEGMENTS - RIDGE_MIN_SEGMENTS + 1));
-    let placed = 0;
+  const forward = outlineRadiusAt(snow, axisBearing);
+  const backward = outlineRadiusAt(snow, axisBearing + Math.PI);
+  // A point at tangent-plane offset (x along the axis, y across it), placed
+  // exactly the way the landmass mesh itself is wrapped onto the sphere.
+  const surfaceDirection = (x: number, y: number): Vector3 =>
+    centroid
+      .clone()
+      .multiplyScalar(planetRadius)
+      .addScaledVector(axis, x)
+      .addScaledVector(across, y)
+      .normalize();
 
-    for (let i = 0; i < length; i++) {
+  const segments: RidgeSegment[] = [];
+  [-1, 1].forEach((side, chain) => {
+    const steps = Math.floor((forward + backward) / RIDGE_SPACING);
+    const phase = chain * 2.1;
+    for (let i = 0; i <= steps; i++) {
+      const x = -backward + i * RIDGE_SPACING;
+      const u = i / steps; // 0..1 along the chain
+      const wander = CHAIN_SINUOSITY * Math.sin(u * Math.PI * 2.6 + phase);
+      const y = side * (SNOW_VALLEY_HALF_WIDTH + CHAIN_OFFSET) + wander;
+
+      const direction = surfaceDirection(x, y);
       const lon = Math.atan2(direction.x, direction.z);
       const lat = Math.asin(Math.max(-1, Math.min(1, direction.y)));
+      // Stay inland: off the coastal bevel and out of the fjords.
       const ground = heightAt(planetRadius, center, lon, lat, 2.5, ["snow"]);
-      if (ground <= 0) break;
-      const northOffset = snowNorthOffset(planetRadius, center, lon, lat);
-      if (
-        northOffset === null ||
-        Math.abs(northOffset) < SNOW_PASS_HALF_WIDTH
-      ) {
-        break;
-      }
+      if (ground <= 0) continue;
 
-      // Skyline rises toward the middle of the chain and falls off at both
-      // ends, so a ridge has a dominant summit rather than a flat top.
-      const along = length > 1 ? i / (length - 1) : 0.5;
-      const profile = Math.sin(along * Math.PI) * 0.75 + 0.25;
-      const wobble = seededRandom(i * 3.7 + seed.seed * 91) * 0.5 + 0.75;
-      const height = (3.5 + seed.seed * 5.5) * profile * wobble;
-      const width = (1.7 + seed.seed * 1.3) * (0.8 + profile * 0.4);
+      // Height from position: tallest mid-chain, tapering toward both ends,
+      // and toward the coast so the range gives way to foothills.
+      const middle = 1 - (2 * u - 1) ** 2;
+      const inland = -surfaceClearanceOf(planetRadius, direction);
+      const coastward = Math.min(1, Math.max(0, (inland - 2) / 9));
+      const seed = seededRandom(i * 3.71 + chain * 101.3);
+      const height =
+        RIDGE_FOOTHILL_HEIGHT +
+        (RIDGE_PEAK_HEIGHT - RIDGE_FOOTHILL_HEIGHT) *
+          middle *
+          coastward *
+          (0.82 + seed * 0.36);
+
+      const ahead = surfaceDirection(x + 0.5, y);
+      const along = ahead.sub(direction);
+      along.addScaledVector(direction, -along.dot(direction)).normalize();
 
       segments.push({
-        position: pointOnSphere(planetRadius + ground, lat, lon, center),
-        normal: direction.clone(),
-        seed: seededRandom(i * 5.1 + seed.seed * 57),
-        bearing,
+        position: direction
+          .clone()
+          .multiplyScalar(planetRadius + ground)
+          .add(center),
+        normal: direction,
+        seed,
+        along,
         height,
-        width,
+        width: 1.4 + height * 0.22,
+        chain,
       });
-      placed++;
-
-      // Step along the ridge's own bearing.
-      const { east, north } = eastNorthAt(direction);
-      const forward = east
-        .clone()
-        .multiplyScalar(Math.sin(bearing))
-        .addScaledVector(north, Math.cos(bearing))
-        .normalize();
-      const stepAngle = (width * 2 * RIDGE_SPACING_RATIO) / planetRadius;
-      direction = direction
-        .clone()
-        .multiplyScalar(Math.cos(stepAngle))
-        .addScaledVector(forward, Math.sin(stepAngle))
-        .normalize();
     }
-
-    if (placed >= RIDGE_MIN_SEGMENTS) chains++;
-  }
+  });
 
   return segments;
 };

@@ -25,7 +25,7 @@ import {
   scatterBushes,
   scatterDesertFeatures,
   scatterPenguins,
-  scatterRidges,
+  ridgeChains,
   scatterSnowProps,
   scatterTrees,
   type ContinentVariant,
@@ -57,14 +57,12 @@ const TREE_COUNT = 90;
 const ANIMAL_COUNT = 14;
 const BUSH_COUNT = 150;
 const DESERT_FEATURE_COUNT = 70;
-// Ridge *chains*, not individual summits - each one walks several segments
-// across the snow continent (see scatterRidges).
-const RIDGE_CHAIN_COUNT = 14;
+// Frosted pines and icy hillocks round the range's feet, and the penguins.
 const SNOW_PROP_COUNT = 70;
 const PENGUIN_COUNT = 10;
-// How many of the tallest peaks get their own snow cloud hanging at the
-// summit, per the "clouds around the mountain tops" intent.
-const PEAK_CLOUD_COUNT = 6;
+// How many of the range's highest summits carry a cloud cluster (the range
+// itself is two chains - see ridgeChains).
+const PEAK_CLUSTERS = 4;
 
 const deg = (d: number): number => (d * Math.PI) / 180;
 
@@ -309,7 +307,7 @@ const Planet = () => {
     [planet],
   );
   const ridges = useMemo(
-    () => scatterRidges(RIDGE_CHAIN_COUNT, planet.radius, planet.center),
+    () => ridgeChains(planet.radius, planet.center),
     [planet],
   );
   const snowProps = useMemo(
@@ -347,26 +345,53 @@ const Planet = () => {
   // Snow clouds hang off the tallest summits rather than at hand-picked
   // coordinates, so they actually sit around the peaks of the range instead
   // of floating over whatever happens to be at a fixed lon/lat.
-  const peakClouds = useMemo(
-    () =>
-      [...ridges]
-        .sort((a, b) => b.height - a.height)
-        .slice(0, PEAK_CLOUD_COUNT)
-        .map((peak, i) => {
-          const summit = peak.position.distanceTo(planet.center) + peak.height;
-          const position = peak.normal
-            .clone()
-            .multiplyScalar(summit + 1.4)
-            .add(planet.center);
-          return {
-            position,
-            normal: peak.normal,
-            scale: 0.65 + (i % 3) * 0.12,
-            precipitationCount: 4,
-          };
-        }),
-    [ridges, planet],
-  );
+  // Cloud clusters hanging around the range's highest summits - 3 to 5 puffs
+  // each, spread through the upper 30% of the peak and deliberately allowed to
+  // sink into the rock, so they read as mist banks clinging to the mountain
+  // rather than single clouds floating politely above it. Summits are picked
+  // spread out (never two within a few segments of each other), so the mist
+  // doesn't all pile onto one peak.
+  const peakClouds = useMemo(() => {
+    const summits: typeof ridges = [];
+    for (const segment of [...ridges].sort((a, b) => b.height - a.height)) {
+      if (summits.length >= PEAK_CLUSTERS) break;
+      if (summits.some((s) => s.position.distanceTo(segment.position) < 10)) {
+        continue;
+      }
+      summits.push(segment);
+    }
+
+    return summits.flatMap((peak, cluster) => {
+      const ground = peak.position.distanceTo(planet.center);
+      const side = new Vector3()
+        .crossVectors(peak.normal, peak.along)
+        .normalize();
+      const puffs = 3 + Math.floor(peak.seed * 3);
+      return Array.from({ length: puffs }, (_, i) => {
+        const angle = (i / puffs) * Math.PI * 2 + cluster;
+        const spread = peak.width * (0.6 + 0.5 * ((i * 0.37 + peak.seed) % 1));
+        const altitude =
+          peak.height * (0.72 + 0.28 * ((i * 0.61 + peak.seed) % 1));
+        const position = peak.normal
+          .clone()
+          .multiplyScalar(ground + altitude)
+          .addScaledVector(peak.along, Math.cos(angle) * spread)
+          .addScaledVector(side, Math.sin(angle) * spread)
+          .sub(planet.center)
+          .normalize()
+          .multiplyScalar(ground + altitude)
+          .add(planet.center);
+        return {
+          position,
+          normal: position.clone().sub(planet.center).normalize(),
+          scale: 0.42 + 0.2 * ((i * 0.53 + cluster * 0.29) % 1),
+          // One puff per cluster snows; the rest are mist.
+          variant: (i === 0 ? "snow" : "plain") as CloudVariant,
+          precipitationCount: i === 0 ? 4 : 0,
+        };
+      });
+    });
+  }, [ridges, planet]);
 
   // Where the ship (and so the default medium camera, once the intro
   // finishes) actually starts - used as the moons' starting orbital angle
@@ -461,7 +486,7 @@ const Planet = () => {
           position={segment.position}
           normal={segment.normal}
           seed={segment.seed}
-          bearing={segment.bearing}
+          along={segment.along}
           height={segment.height}
           width={segment.width}
         />
@@ -497,7 +522,7 @@ const Planet = () => {
           position={cloud.position}
           normal={cloud.normal}
           scale={cloud.scale}
-          variant="snow"
+          variant={cloud.variant}
           precipitationCount={cloud.precipitationCount}
         />
       ))}

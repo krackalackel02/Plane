@@ -7,10 +7,11 @@ import {
   scatterAnimals,
   scatterBushes,
   scatterDesertFeatures,
-  scatterRidges,
+  ridgeChains,
   scatterTrees,
   surfaceClearanceAt,
   surfaceClearanceOf,
+  surfaceClearanceWithGradient,
   surfaceCoverageFraction,
 } from "./planetTerrain";
 import { getActivePlanet } from "../../utils/planets";
@@ -119,6 +120,46 @@ describe("CONTINENTS layout", () => {
   });
 });
 
+describe("surfaceClearanceWithGradient", () => {
+  // The trail's elastic band steers by this gradient every iteration, so it
+  // has to be the true derivative of the clearance - fjord notches included.
+  test("matches central differences of the clearance itself", () => {
+    let worst = 0;
+    for (let i = 0; i < 300; i++) {
+      const lat = Math.sin(i * 12.9898) * 1.3;
+      const lon = (i * 2.399) % (Math.PI * 2);
+      const d = pointOnSphere(1, lat, lon);
+      const { clearance, gradient } = surfaceClearanceWithGradient(
+        planet.radius,
+        d,
+      );
+      if (clearance < 0.5) continue; // not differentiable across a coast
+      const { east, north } = eastNorthAt(d);
+      const h = 1e-5;
+      const step = (t: typeof east, a: number) =>
+        d
+          .clone()
+          .multiplyScalar(Math.cos(a))
+          .addScaledVector(t, Math.sin(a))
+          .normalize();
+      const fe =
+        (surfaceClearanceOf(planet.radius, step(east, h)) -
+          surfaceClearanceOf(planet.radius, step(east, -h))) /
+        (2 * h * planet.radius);
+      const fn =
+        (surfaceClearanceOf(planet.radius, step(north, h)) -
+          surfaceClearanceOf(planet.radius, step(north, -h))) /
+        (2 * h * planet.radius);
+      worst = Math.max(
+        worst,
+        Math.abs(fe - gradient.dot(east)),
+        Math.abs(fn - gradient.dot(north)),
+      );
+    }
+    expect(worst).toBeLessThan(1e-5);
+  });
+});
+
 describe("heightAt", () => {
   test("is 0 over open ocean", () => {
     // Derived rather than hardcoded: an earlier version of this test pinned a
@@ -145,40 +186,103 @@ describe("heightAt", () => {
     }
   });
 
-  test("the snow continent carries a scattered mountain range", () => {
-    const snow = CONTINENTS.find((c) => c.variant === "snow");
-    expect(snow).toBeDefined();
-    if (!snow) return;
+  describe("the snow continent's mountain range", () => {
+    const ridges = ridgeChains(planet.radius, center);
+    const chains = [0, 1].map((c) => ridges.filter((r) => r.chain === c));
 
-    // Peaks are separate scattered props rather than one inset plateau cap -
-    // a single cap is what made the continent read as a flat white dome.
-    expect(snow.highland).toBeUndefined();
-
-    const ridges = scatterRidges(14, planet.radius, center);
-    expect(ridges.length).toBeGreaterThan(20);
-    for (const segment of ridges) {
-      const { lon, lat } = lonLatOf(segment.normal);
-      expect(
-        heightAt(planet.radius, center, lon, lat, 0, ["snow"]),
-      ).toBeGreaterThan(0);
-    }
-
-    // Segments must vary in height, or the "range" is a plateau of clones.
-    const heights = ridges.map((r) => r.height);
-    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(2);
-
-    // Ridges run in chains, so consecutive segments sit close enough together
-    // to interpenetrate rather than standing apart as separate cones.
-    let touching = 0;
-    for (let i = 1; i < ridges.length; i++) {
-      if (
-        ridges[i].position.distanceTo(ridges[i - 1].position) <
-        ridges[i].width * 2
-      ) {
-        touching++;
+    test("is two chains of segments, all standing on the snow", () => {
+      const snow = CONTINENTS.find((c) => c.variant === "snow");
+      // Peaks are props, not one inset plateau cap - a single cap is what
+      // made the continent read as a flat white dome.
+      expect(snow?.highland).toBeUndefined();
+      expect(chains[0].length).toBeGreaterThan(8);
+      expect(chains[1].length).toBeGreaterThan(8);
+      for (const segment of ridges) {
+        const { lon, lat } = lonLatOf(segment.normal);
+        expect(
+          heightAt(planet.radius, center, lon, lat, 0, ["snow"]),
+        ).toBeGreaterThan(0);
       }
+    });
+
+    // Fewer, deliberate mountains: the scattered version had ~90 segments
+    // ringing the coast.
+    test("uses a restrained number of segments", () => {
+      expect(ridges.length).toBeLessThan(60);
+    });
+
+    // Each chain is continuous: consecutive segments overlap, so a run of
+    // them renders as one crest rather than a row of separate peaks.
+    test("each chain is a continuous crest", () => {
+      for (const chain of chains) {
+        let joined = 0;
+        for (let i = 1; i < chain.length; i++) {
+          if (
+            chain[i].position.distanceTo(chain[i - 1].position) <
+            chain[i].width * 2.5
+          ) {
+            joined++;
+          }
+        }
+        expect(joined).toBeGreaterThan((chain.length - 1) * 0.8);
+      }
+    });
+
+    // Tallest in the middle of a chain, tapering to foothills at its ends.
+    test("rises to central summits and tapers to foothills", () => {
+      for (const chain of chains) {
+        const heights = chain.map((r) => r.height);
+        const peak = Math.max(...heights);
+        expect(peak).toBeGreaterThan(5);
+        expect(heights[0]).toBeLessThan(peak * 0.6);
+        expect(heights[heights.length - 1]).toBeLessThan(peak * 0.6);
+      }
+    });
+
+    // The pass: the two chains never close the valley between them.
+    test("keeps an open valley between the chains", () => {
+      for (const a of chains[0]) {
+        const nearest = Math.min(
+          ...chains[1].map((b) => a.position.distanceTo(b.position)),
+        );
+        expect(nearest).toBeGreaterThan(12);
+      }
+    });
+
+    // Every segment's crest runs along its own chain, which is what lines the
+    // segments up into a ridge at all.
+    test("orients every segment along its chain", () => {
+      for (const chain of chains) {
+        for (let i = 1; i < chain.length - 1; i++) {
+          const run = chain[i + 1].position
+            .clone()
+            .sub(chain[i - 1].position)
+            .normalize();
+          if (chain[i + 1].position.distanceTo(chain[i - 1].position) > 8)
+            continue; // gap in the chain
+          expect(Math.abs(run.dot(chain[i].along))).toBeGreaterThan(0.85);
+        }
+      }
+    });
+  });
+
+  test("the snow continent's coast is cut by fjords", () => {
+    const snow = CONTINENTS.find((c) => c.variant === "snow");
+    expect(snow?.inlets?.length ?? 0).toBeGreaterThanOrEqual(3);
+    const withoutInlets = { ...snow!, inlets: [] };
+    for (const inlet of snow?.inlets ?? []) {
+      // Each notch cuts the coast in by (nearly) its full depth at its own
+      // bearing, compared with the same coastline without any inlets.
+      const cut =
+        outlineRadiusAt(withoutInlets, inlet.bearing) -
+        outlineRadiusAt(snow!, inlet.bearing);
+      expect(cut).toBeGreaterThan(snow!.baseRadius * inlet.depth * 0.95);
+      // ...and it is narrow: three half-widths away it's almost gone.
+      const away =
+        outlineRadiusAt(withoutInlets, inlet.bearing + inlet.width * 3) -
+        outlineRadiusAt(snow!, inlet.bearing + inlet.width * 3);
+      expect(away).toBeLessThan(cut * 0.05);
     }
-    expect(touching).toBeGreaterThan(ridges.length / 2);
   });
 
   test("desert features and bushes land on their own biome only", () => {

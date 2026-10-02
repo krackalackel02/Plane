@@ -1,7 +1,11 @@
 import { useMemo } from "react";
+import { buildSurfaceOrientation } from "../../utils/planetSurface";
 import {
+  BoxGeometry,
+  BufferGeometry,
   ConeGeometry,
   CylinderGeometry,
+  Float32BufferAttribute,
   IcosahedronGeometry,
   MeshStandardMaterial,
   Quaternion,
@@ -31,15 +35,126 @@ const useSurfaceQuaternion = (normal: Vector3, spin: number): Quaternion =>
 
 // --- snow: mountain ridges ----------------------------------------------
 
-// Few radial segments, so each cone is a faceted, asymmetric wedge rather
-// than a smooth circular pyramid - and rotating each instance about its own
-// axis makes the facets of neighbouring segments disagree, which is what
-// stops a chain reading as a row of identical cones.
-const ridgeGeometry = new ConeGeometry(1, 1, 5);
-const ridgeCapGeometry = new ConeGeometry(1, 1, 5);
+type Vec3 = [number, number, number];
+
+/**
+ * A closed low-poly solid from vertices and triangles, wound so every face
+ * points outward (away from `inside`), flat-shaded. Building the mountain by
+ * hand rather than from a cone is what gives it a ridge *line* along the top -
+ * an arete - instead of a single point.
+ */
+const solid = (
+  vertices: Vec3[],
+  faces: [number, number, number][],
+  inside: Vec3,
+): BufferGeometry => {
+  const out: number[] = [];
+  for (const [ia, ib, ic] of faces) {
+    const a = vertices[ia];
+    let [b, c] = [vertices[ib], vertices[ic]];
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const normal = [
+      ab[1] * ac[2] - ab[2] * ac[1],
+      ab[2] * ac[0] - ab[0] * ac[2],
+      ab[0] * ac[1] - ab[1] * ac[0],
+    ];
+    const centroid = [
+      (a[0] + b[0] + c[0]) / 3,
+      (a[1] + b[1] + c[1]) / 3,
+      (a[2] + b[2] + c[2]) / 3,
+    ];
+    const outward = [
+      centroid[0] - inside[0],
+      centroid[1] - inside[1],
+      centroid[2] - inside[2],
+    ];
+    if (
+      normal[0] * outward[0] + normal[1] * outward[1] + normal[2] * outward[2] <
+      0
+    )
+      [b, c] = [c, b];
+    out.push(...a, ...b, ...c);
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute(out, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+};
+
+/**
+ * One crest segment, its ridge line running along local Z: an irregular
+ * hexagonal base rising to two summit points, the far one a little lower so
+ * the crest is asymmetric. Base at y = 0, summit at y = 1, unit footprint.
+ */
+const CREST_VERTICES: Vec3[] = [
+  [0.0, 0, 1.0],
+  [0.72, 0, 0.5],
+  [0.78, 0, -0.52], // base, one side
+  [0.0, 0, -1.0],
+  [-0.7, 0, -0.48],
+  [-0.8, 0, 0.55], // base, other side
+  [0.04, 1, 0.42],
+  [-0.05, 0.9, -0.44], // the arete
+];
+const CREST_FACES: [number, number, number][] = [
+  [0, 1, 6],
+  [1, 2, 6],
+  [2, 7, 6],
+  [2, 3, 7],
+  [3, 4, 7],
+  [4, 5, 7],
+  [5, 6, 7],
+  [5, 0, 6],
+  [0, 1, 2],
+  [0, 2, 3],
+  [0, 3, 4],
+  [0, 4, 5], // underside
+];
+// Which summit each base vertex's flank rises to.
+const SUMMIT_OF = [6, 6, 7, 7, 7, 6];
+/** The snow cap covers this top fraction of each peak. */
+const SNOW_CAP_FRACTION = 0.4;
+const crestGeometry = solid(CREST_VERTICES, CREST_FACES, [0, 0.35, 0]);
+
+/**
+ * The snow cap: the rock's own cross-section a little below SNOW_CAP_FRACTION
+ * from the top, up to the same arete, inflated a touch so it sits proud of the
+ * rock instead of z-fighting with it. Each base corner is cut at a slightly
+ * different height along its flank, which is what makes the snowline wavy and
+ * irregular rather than a level ring. Built in the rock's own unit space, so
+ * the cap mesh shares the rock's transform exactly.
+ */
+const capGeometry = (() => {
+  // Where along each flank the snowline sits, as a fraction of the way to the
+  // summit: SNOW_CAP_FRACTION from the top, give or take a little per corner.
+  const cuts = [-0.04, 0.06, -0.02, 0.04, -0.05, 0.02].map(
+    (jitter) => 1 - SNOW_CAP_FRACTION + jitter,
+  );
+  const vertices: Vec3[] = CREST_VERTICES.map((v, i) => {
+    if (i >= 6) return v;
+    const top = CREST_VERTICES[SUMMIT_OF[i]];
+    const t = cuts[i];
+    return [
+      v[0] + (top[0] - v[0]) * t,
+      v[1] + (top[1] - v[1]) * t,
+      v[2] + (top[2] - v[2]) * t,
+    ];
+  });
+  const pivot: Vec3 = [0, 0.78, 0];
+  const inflated = vertices.map(
+    (v): Vec3 => [
+      pivot[0] + (v[0] - pivot[0]) * 1.05,
+      pivot[1] + (v[1] - pivot[1]) * 1.03,
+      pivot[2] + (v[2] - pivot[2]) * 1.05,
+    ],
+  );
+  return solid(inflated, CREST_FACES, [0, 0.8, 0]);
+})();
+const iceSlabGeometry = new BoxGeometry(1, 0.14, 1.5);
 const hillockGeometry = new IcosahedronGeometry(1, 0);
 
-// Slate blue-grey rock under pure white caps, on an ice-blue ground.
+// Slate blue-grey rock, pure white snow, ice-blue ground and ice.
 const ridgeRockMaterial = new MeshStandardMaterial({
   color: "#52627a",
   roughness: 0.6,
@@ -55,9 +170,16 @@ const iceMaterial = new MeshStandardMaterial({
   roughness: 0.65,
   flatShading: true,
 });
+const iceSlabMaterial = new MeshStandardMaterial({
+  color: "#cfe7f2",
+  roughness: 0.25,
+  metalness: 0.05,
+  flatShading: true,
+});
 
-/** Fraction of a peak's height covered by its snow cap. */
-const SNOW_CAP_FRACTION = 0.4;
+// How far a segment's base sinks into the ground, so it merges into the ice
+// shelf instead of sitting on it with a visible seam.
+const RIDGE_EMBED = 0.25;
 
 export interface FeatureProps {
   position: Vector3;
@@ -66,75 +188,75 @@ export interface FeatureProps {
 }
 
 export interface RidgeProps extends FeatureProps {
-  /** Compass bearing the ridge line runs along, radians. */
-  bearing: number;
+  /** Unit tangent: the direction the chain runs here. */
+  along: Vector3;
   height: number;
   width: number;
 }
 
 /**
- * One segment of a mountain ridge: a faceted rock wedge with a pure-white cap
- * over its top SNOW_CAP_FRACTION.
+ * One segment of a mountain chain: a slate crest with its arete running along
+ * the chain, a white cap over its top SNOW_CAP_FRACTION, and - on the taller
+ * peaks - an ice slab jutting from one flank.
  *
- * Segments are placed close enough together along a chain (see scatterRidges)
- * that they interpenetrate, so a run of them renders as one continuous crest
- * rather than separate summits. Each is deliberately asymmetric - squashed
- * across the ridge line, stretched along it, and rolled slightly off vertical
- * by its own seed - because a row of upright symmetric cones is exactly what
- * reads as artificial. The snow cap is rotated independently of the rock
- * beneath it, which breaks the snowline into an irregular, wavy join instead
- * of a clean horizontal ring.
+ * Segments overlap their neighbours along the chain, so a run of them renders
+ * as one continuous crest. Each is a little asymmetric (stretched along the
+ * chain, squashed across it, leant off plumb by its own seed); a row of
+ * upright identical shapes is exactly what reads as artificial.
  */
 export const Ridge = ({
   position,
   normal,
   seed,
-  bearing,
+  along,
   height,
   width,
 }: RidgeProps) => {
-  // Align up to the surface, then turn so the segment's long axis follows the
-  // ridge line, then lean it a little off plumb.
   const quaternion = useMemo(() => {
-    const align = new Quaternion().setFromUnitVectors(WORLD_UP, normal);
-    const turn = new Quaternion().setFromAxisAngle(normal, bearing);
+    const base = buildSurfaceOrientation(normal, along);
     const lean = new Quaternion().setFromAxisAngle(
-      new Vector3(1, 0, 0),
-      (seed - 0.5) * 0.24,
+      new Vector3(0, 0, 1),
+      (seed - 0.5) * 0.2,
     );
-    return turn.multiply(align).multiply(lean);
-  }, [normal, bearing, seed]);
+    return base.multiply(lean);
+  }, [normal, along, seed]);
 
-  // Narrow across the ridge, long along it - a crest, not a pyramid.
-  const across = width * (0.72 + seed * 0.3);
-  const along = width * (1.35 + seed * 0.55);
-  const capHeight = height * SNOW_CAP_FRACTION;
+  const across = width * (0.85 + seed * 0.25);
+  const length = width * (1.5 + seed * 0.4);
+  const hasIce = seed > 0.62 && height > 4.5;
 
   return (
     <group position={position} quaternion={quaternion}>
       <mesh
-        geometry={ridgeGeometry}
+        geometry={crestGeometry}
         material={ridgeRockMaterial}
-        position={[0, height / 2, 0]}
-        rotation={[0, seed * Math.PI * 2, 0]}
-        scale={[across, height, along]}
+        position={[0, -RIDGE_EMBED, 0]}
+        scale={[across, height + RIDGE_EMBED, length]}
         castShadow
         receiveShadow
       />
       <mesh
-        geometry={ridgeCapGeometry}
+        geometry={capGeometry}
         material={snowCapMaterial}
-        position={[0, height - capHeight / 2, 0]}
-        // A different spin from the rock below, so the two faceted silhouettes
-        // disagree and the snowline comes out wavy rather than a clean ring.
-        rotation={[0, seed * Math.PI * 2 + 0.7, 0]}
-        scale={[
-          across * SNOW_CAP_FRACTION * 1.08,
-          capHeight,
-          along * SNOW_CAP_FRACTION * 1.08,
-        ]}
+        // Same transform as the rock: the cap was built in its unit space.
+        position={[0, -RIDGE_EMBED, 0]}
+        scale={[across, height + RIDGE_EMBED, length]}
         castShadow
       />
+      {hasIce && (
+        <mesh
+          geometry={iceSlabGeometry}
+          material={iceSlabMaterial}
+          position={[
+            across * (seed > 0.8 ? 0.45 : -0.45),
+            height * 0.55,
+            length * 0.1,
+          ]}
+          rotation={[0.15, seed * 0.8, seed > 0.8 ? -0.55 : 0.55]}
+          scale={[width * 0.7, 1, width * 0.6]}
+          castShadow
+        />
+      )}
     </group>
   );
 };

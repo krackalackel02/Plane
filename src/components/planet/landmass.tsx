@@ -27,16 +27,21 @@ import {
   outlineRadiusAt,
 } from "./planetTerrain";
 
-// Dense enough to resolve the highest-frequency coastline harmonic (freq 9,
-// see planetTerrain.ts) - Nyquist alone needs 18, and several times that to
-// render as a curve rather than a polygon.
-const OUTLINE_SAMPLES = 96;
+// Outline samples scale with a landmass's size: dense enough on the big
+// continents to resolve the narrowest coastline feature - a fjord inlet is a
+// notch only ~7 degrees of bearing wide (see planetTerrain's Inlet), and it
+// takes a few samples across one to read as an inlet - but no denser than a
+// small island's short coastline needs, since every sample becomes a column of
+// side-wall triangles.
+const outlineSamplesFor = (def: ContinentDef): number =>
+  Math.max(48, Math.min(220, Math.round(def.baseRadius * 6.5)));
 
 /** A closed, wavy-coastline outline (see outlineRadiusAt) as a flat 2D THREE.Shape, ready to extrude. */
 const buildOutlineShape = (def: ContinentDef, scale: number): Shape => {
+  const samples = outlineSamplesFor(def);
   const points: Vector2[] = [];
-  for (let i = 0; i < OUTLINE_SAMPLES; i++) {
-    const bearing = (i / OUTLINE_SAMPLES) * Math.PI * 2;
+  for (let i = 0; i < samples; i++) {
+    const bearing = (i / samples) * Math.PI * 2;
     const radius = outlineRadiusAt(def, bearing) * scale;
     points.push(
       new Vector2(radius * Math.sin(bearing), radius * Math.cos(bearing)),
@@ -105,11 +110,11 @@ const snowMaterial = new MeshPhysicalMaterial({
   clearcoat: 0.45,
   clearcoatRoughness: 0.2,
 });
-// The snow continent's base layer: bare, faintly blue-grey snow-over-rock,
-// distinct enough from the pure-white peak above it that the massif still
-// reads as having relief rather than as one flat white blob.
+// The snow continent's base layer: a pale ice-blue shelf (#e8f4f8), so the
+// slate mountains and pure-white caps above it read clearly against it rather
+// than everything being one white mass.
 const snowRockMaterial = new MeshPhysicalMaterial({
-  color: "#dde6ef",
+  color: "#e8f4f8",
   roughness: 0.6,
   clearcoat: 0.3,
   clearcoatRoughness: 0.3,
@@ -124,7 +129,12 @@ const extrudeSettings = (depth: number) => ({
   bevelThickness: bevelThicknessFor(depth),
   bevelSize: bevelSizeFor(depth),
   bevelSegments: 3,
-  curveSegments: 20,
+  // Per *control point*, not per shape: three.js subdivides a spline into
+  // curveSegments x points.length. The outline is already sampled every
+  // OUTLINE_SAMPLES bearings, so anything above a couple here only multiplies
+  // the mesh - at 20 it turned a radius-5 island into 72k triangles and all
+  // six landmasses into ~600k, taking seconds to build at load.
+  curveSegments: 2,
 });
 
 /**

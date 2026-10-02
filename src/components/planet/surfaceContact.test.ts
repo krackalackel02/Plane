@@ -113,7 +113,7 @@ describe("landmass surfaces conform to the planet", () => {
       const radii = triangleCentroidRadii(geometry);
       expect(radii.length).toBeGreaterThan(0);
 
-      const deepest = Math.min(...radii);
+      const deepest = radii.reduce((a, b) => Math.min(a, b), Infinity);
       const floor =
         planet.radius - bevelThicknessFor(baseDepthOf(c)) - TERRAIN_EMBED;
       expect(
@@ -127,7 +127,10 @@ describe("landmass surfaces conform to the planet", () => {
   test("no landmass floats above its own extruded height", () => {
     for (const c of CONTINENTS) {
       const geometry = buildBase(c);
-      const highest = Math.max(...triangleCentroidRadii(geometry));
+      const highest = triangleCentroidRadii(geometry).reduce(
+        (a, b) => Math.max(a, b),
+        -Infinity,
+      );
       const ceiling =
         planet.radius +
         baseDepthOf(c) +
@@ -195,6 +198,22 @@ describe("landmass surfaces conform to the planet", () => {
       expect(lowest).toBeCloseTo(baseTop - TERRAIN_EMBED, 4);
       cap.dispose();
     }
+  });
+});
+
+describe("landmass mesh budget", () => {
+  // Regression test: ExtrudeGeometry subdivides a spline into
+  // curveSegments x (number of control points), and the outline is already
+  // densely sampled - with curveSegments at 20 the six landmasses came to
+  // ~600k triangles and took seconds to build at load. Keeps it honest.
+  test("all landmasses together stay within a sane triangle budget", () => {
+    let total = 0;
+    for (const c of CONTINENTS) {
+      const geometry = buildBase(c);
+      total += geometry.getAttribute("position").count / 3;
+      geometry.dispose();
+    }
+    expect(total).toBeLessThan(80_000);
   });
 });
 
