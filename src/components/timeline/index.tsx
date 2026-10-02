@@ -6,12 +6,9 @@ import { calculatedBoardPositionsAndRotations } from "./calculatedBoardPositions
 /**
  * Timeline component for managing multiple boards.
  *
- * Each board stands at its own stop - a patch of open water searched out by
- * calculatedBoardPositionsAndRotations - with its activation zone in front of
- * it, facing the ship's line of approach. The board renders at the same
- * anchor as its zone (as on main) rather than offset off to one side: the
- * trail turns a right angle at the zone, so the ship never carries on into
- * the board behind it.
+ * Each board stands in open water beside the trail, facing back along the
+ * ship's line of approach, with its activation mat on the trail in front of
+ * it (see calculatedBoardPositionsAndRotations for how both are chosen).
  * @returns JSX.Element
  */
 const Timeline = () => {
@@ -28,6 +25,8 @@ const Timeline = () => {
             id={board.id}
             position={board.position}
             quaternion={board.quaternion}
+            matPosition={board.matPosition}
+            matQuaternion={board.matQuaternion}
             helper={false}
             imagePath={board.imagePath}
           />

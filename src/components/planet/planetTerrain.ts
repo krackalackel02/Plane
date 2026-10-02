@@ -206,6 +206,73 @@ export const surfaceClearanceOf = (
   return min * planetRadius;
 };
 
+/**
+ * surfaceClearanceOf together with its gradient: a unit-sphere tangent vector
+ * giving the clearance gained per world unit moved in each direction.
+ *
+ * Analytic rather than finite-differenced. For the nearest landmass the
+ * clearance is R * (sep - atan(r(bearing) / R)), so its gradient is the
+ * direction directly away from that landmass's centroid, minus how fast the
+ * coastline's own angular radius changes as the bearing around it turns.
+ * That matters to anything steering by it - the trail's elastic band follows
+ * this gradient every iteration, and a gradient sampled off a grid is only
+ * piecewise-constant, which was enough to make the band jitter cell-to-cell
+ * and fold on itself in narrow channels.
+ */
+export const surfaceClearanceWithGradient = (
+  planetRadius: number,
+  direction: Vector3,
+): { clearance: number; gradient: Vector3 } => {
+  let clearance = Infinity;
+  const gradient = new Vector3();
+  for (const c of CONTINENTS) {
+    const centroid = directionAt(c.lat, c.lon);
+    const { east, north } = eastNorthAt(centroid);
+    const cosSep = Math.max(-1, Math.min(1, centroid.dot(direction)));
+    const separation = Math.acos(cosSep);
+    const alongEast = direction.dot(east);
+    const alongNorth = direction.dot(north);
+    const bearing = Math.atan2(alongEast, alongNorth);
+
+    let wobble = 0;
+    let wobbleRate = 0;
+    for (const h of c.harmonics) {
+      wobble += h.amplitude * Math.sin(h.freq * bearing + h.phase);
+      wobbleRate += h.amplitude * h.freq * Math.cos(h.freq * bearing + h.phase);
+    }
+    const radius = c.baseRadius * (1 + wobble);
+    const value =
+      (separation - Math.atan(radius / planetRadius)) * planetRadius;
+    if (value >= clearance) continue;
+    clearance = value;
+
+    // d(separation): straight away from the centroid.
+    const away = direction
+      .clone()
+      .multiplyScalar(cosSep)
+      .sub(centroid)
+      .normalize();
+    // d(bearing): perpendicular to that, scaled by how tightly bearings bunch
+    // up near the centroid.
+    const spread = alongEast * alongEast + alongNorth * alongNorth;
+    const bearingGradient =
+      spread < 1e-12
+        ? new Vector3()
+        : east
+            .clone()
+            .multiplyScalar(alongNorth)
+            .addScaledVector(north, -alongEast)
+            .multiplyScalar(1 / spread);
+    bearingGradient.addScaledVector(direction, -bearingGradient.dot(direction));
+    const thetaRate =
+      (c.baseRadius * wobbleRate) /
+      planetRadius /
+      (1 + (radius / planetRadius) ** 2);
+    gradient.copy(away).addScaledVector(bearingGradient, -thetaRate);
+  }
+  return { clearance, gradient };
+};
+
 /** surfaceClearanceOf at a lat/lon rather than a direction. */
 export const surfaceClearanceAt = (
   planetRadius: number,

@@ -43,10 +43,8 @@ import AutopilotRoute from "./autopilotRoute";
 const SURFACE_OFFSET = 0.15;
 const RING_TUBE_RADIUS = 0.12;
 const BEACON_RADIUS = 0.5;
-// How finely the ring curve is sampled around the loop. The trail now has
-// hard right-angle corners at every stop (see pathFrameAt), so this needs to
-// be dense enough that a corner reads as a corner rather than being rounded
-// away by the tube's own Catmull-Rom.
+// How finely the ring curve is sampled around the loop - dense enough that
+// the trail's gentle curves read as curves rather than a faceted polygon.
 const RING_SEGMENTS = 256;
 // Deliberately chunky (not the old 96x96) - low, flat-shaded segment counts
 // are what give the sphere its "mild planar facets" claymation feel, per
@@ -260,24 +258,22 @@ const Planet = () => {
       { length: RING_SEGMENTS },
       (_, i) =>
         // Fraction of the way around the loop, not longitude - the trail
-        // turns a right angle at every stop (see pathFrameAt).
+        // is a free curve on the sphere (see pathFrameAt).
         pathFrameAt(radius, i / RING_SEGMENTS, planet.center).position,
     );
     const curve = new CatmullRomCurve3(points, true);
     return new TubeGeometry(curve, RING_SEGMENTS, RING_TUBE_RADIUS, 8, true);
   }, [planet]);
 
-  // Each beacon marks the center of that stop's activation zone - not the
-  // (now sideways-offset) board itself - since the zone, not the board, is
-  // what the ship actually flies through. The zone sits at a fixed local
-  // offset from the board's own anchor (see activationZone.tsx), so its
-  // world position is found the same way autopilot finds it, then snapped
-  // back onto the ground (the offset isn't perfectly on-sphere on its own).
+  // Each beacon marks the center of that stop's activation mat - on the
+  // trail itself, not the billboard standing off beside it - since the mat
+  // is what the ship actually flies through. Found the same way autopilot
+  // finds it, then dropped onto the ring's own height.
   const beaconPositions = useMemo(() => {
     const boardsData = calculatedBoardPositionsAndRotations(items, planet);
     return boardsData.map((board) =>
       projectToShell(
-        getBoardMatWorldPosition(board.position, board.quaternion),
+        getBoardMatWorldPosition(board),
         planet.radius + SURFACE_OFFSET,
         planet.center,
       ),

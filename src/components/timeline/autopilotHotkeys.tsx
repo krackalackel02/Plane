@@ -8,8 +8,7 @@ import { spawnTransform } from "./calculatedBoardPositionsAndRotations";
 interface AutopilotHotkeysProps {
   boards: {
     id: string;
-    position: [number, number, number];
-    quaternion: [number, number, number, number];
+    matPosition: [number, number, number];
   }[];
 }
 
@@ -33,10 +32,7 @@ const AutopilotHotkeys: React.FC<AutopilotHotkeysProps> = ({ boards }) => {
 
       const board = boards[Number(event.key) - 1];
       if (!board) return;
-      requestAutopilot(
-        getBoardMatWorldPosition(board.position, board.quaternion),
-        board.id,
-      );
+      requestAutopilot(getBoardMatWorldPosition(board), board.id);
     };
 
     window.addEventListener("keydown", handleKeyDown);

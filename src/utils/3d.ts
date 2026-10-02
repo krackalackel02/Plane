@@ -1,5 +1,6 @@
 import { Color, ColorMapEntry, Range } from "../components/types/colourTypes";
-import { Box3, Quaternion, Vector3 } from "three";
+import { PositionedBoard } from "../components/types/boardTypes";
+import { Box3, Vector3 } from "three";
 
 /**
  * Precompute ranges for color mapping based on lifetime limits
@@ -102,19 +103,15 @@ export const lerpAngle = (from: number, to: number, t: number) => {
 };
 
 /**
- * World position of a board's ActivationZone mat, given the board's own
- * position/orientation. Mirrors ActivationZone's own fixed local offset
- * ([-5, -2.5, 0]), so this is the same open, floor-level spot
- * ActivationZone itself checks for ship proximity - landing here (rather
- * than on the board's own position, which sits in the solid frame's plane)
- * is what keeps autopilot from clipping the board. Boards standing upright
- * around a planet are tilted differently at every longitude, so the full
- * orientation quaternion is needed here, not just a Y angle.
+ * World position of a board's ActivationZone mat - the open, floor-level spot
+ * on the trail that ActivationZone itself checks for ship proximity, and the
+ * one autopilot flies to (landing on the mat rather than the board itself,
+ * which stands well back from it, is what keeps autopilot from flying into
+ * the billboard). The layout computes this directly on the sphere (see
+ * calculatedBoardPositionsAndRotations); it is no longer derived from a fixed
+ * offset in the board's own frame, which stops working once the two are far
+ * enough apart for the planet's curvature to matter.
  */
 export const getBoardMatWorldPosition = (
-  position: [number, number, number],
-  quaternion: [number, number, number, number],
-): Vector3 =>
-  new Vector3(-5, -2.5, 0)
-    .applyQuaternion(new Quaternion(...quaternion))
-    .add(new Vector3(...position));
+  board: Pick<PositionedBoard, "matPosition">,
+): Vector3 => new Vector3(...board.matPosition);

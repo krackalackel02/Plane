@@ -200,11 +200,13 @@ const ActivationZone: React.FC<ActivationZoneProps> = ({
     });
   });
 
-  const offsetPosition: [number, number, number] = [-5, -2.5, 0];
+  // The parent group is the mat's own transform (see board.tsx), already on
+  // the planet's surface and oriented along the trail, so the only thing left
+  // to do here is lay the extruded frame flat.
   const offsetRotation: [number, number, number] = [-Math.PI / 2, 0, 0];
 
   return (
-    <group position={offsetPosition} rotation={offsetRotation}>
+    <group rotation={offsetRotation}>
       <Sphere position={[0, 0, 0]} />
 
       {/* Outermost Mesh (index 0) */}

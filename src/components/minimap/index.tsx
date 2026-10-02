@@ -166,8 +166,8 @@ const useMinimapWorldData = () => {
     const pathPoints = Array.from(
       { length: PATH_SAMPLES + 1 },
       (_, i) =>
-        // pathFrameAt is parameterised by fraction-of-the-loop now, not
-        // longitude - the trail turns a right angle at every stop.
+        // pathFrameAt is parameterised by fraction-of-the-loop, not
+        // longitude - the trail is a free curve on the sphere.
         pathFrameAt(shellRadius, i / PATH_SAMPLES, planet.center).position,
     );
     const continentShapes = buildContinentShapes(planet.radius, planet.center);
@@ -582,9 +582,7 @@ const Minimap = () => {
       drawFeatureGlyphs(ctx, features, toMap, options.showTrees ? 1 : 0.72);
 
       boardsData.forEach((board, i) => {
-        const [x, y] = toMap(
-          getBoardMatWorldPosition(board.position, board.quaternion),
-        );
+        const [x, y] = toMap(getBoardMatWorldPosition(board));
         drawBook(ctx, x, y, i + 1);
       });
 
@@ -678,9 +676,7 @@ const Minimap = () => {
 
     setFrozenBoardPoints(
       boardsData.map((board) => {
-        const [x, y] = toMap(
-          getBoardMatWorldPosition(board.position, board.quaternion),
-        );
+        const [x, y] = toMap(getBoardMatWorldPosition(board));
         return { id: board.id, x, y };
       }),
     );
@@ -753,10 +749,7 @@ const Minimap = () => {
   }, [expanded, collapse]);
 
   const flyToBoard = (board: (typeof boardsData)[number]) => {
-    requestAutopilot(
-      getBoardMatWorldPosition(board.position, board.quaternion),
-      board.id,
-    );
+    requestAutopilot(getBoardMatWorldPosition(board), board.id);
     collapse();
   };
 
