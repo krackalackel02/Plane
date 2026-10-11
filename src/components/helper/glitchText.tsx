@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./glitchText.css";
 
 /* eslint-disable react/prop-types -- TS interfaces already cover this */
 
@@ -72,7 +73,20 @@ const GlitchText: React.FC<GlitchTextProps> = ({
     return () => cancelAnimationFrame(frame);
   }, [text, charDelayMs, startDelayMs]);
 
-  return <Tag className={className}>{display}</Tag>;
+  // Two layers: the final text lays the box out from the very first frame
+  // (transparent - and what assistive tech reads), and the scramble is drawn
+  // over it. A glitch glyph is rarely the width of the letter it stands in
+  // for, so scrambling the laid-out text itself re-wrapped its lines every
+  // frame, resizing - and, since the welcome popup is centred, moving - the
+  // whole panel, close button included, while the text resolved.
+  return (
+    <Tag className={`glitch-text${className ? ` ${className}` : ""}`}>
+      <span className="glitch-text__final">{text}</span>
+      <span className="glitch-text__live" aria-hidden="true">
+        {display}
+      </span>
+    </Tag>
+  );
 };
 
 export default GlitchText;

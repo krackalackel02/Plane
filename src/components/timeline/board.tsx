@@ -166,9 +166,13 @@ export interface BoardProps {
   imagePath?: string;
   helper?: boolean;
   position?: [number, number, number];
-  rotation?: [number, number, number];
+  quaternion?: [number, number, number, number];
+  // The activation mat's own transform, on the trail and on the planet's
+  // surface (see PositionedBoard) - it stands well in front of the board, so
+  // it gets its own placement rather than a fixed offset in the board's frame.
+  matPosition?: [number, number, number];
+  matQuaternion?: [number, number, number, number];
   debug?: boolean;
-  arcRadius?: number;
 }
 
 /**
@@ -176,8 +180,10 @@ export interface BoardProps {
  * @param id Unique identifier for the board
  * @param imagePath Path to the image texture
  * @param helper Boolean to enable Leva controls
- * @param position 3D position of the board
- * @param rotation 3D rotation of the board
+ * @param position Where the billboard itself stands, in open water beside the trail
+ * @param quaternion Its orientation, facing back toward the trail's approach
+ * @param matPosition Where its activation mat sits, on the trail itself
+ * @param matQuaternion The mat's orientation, along the direction of travel
  * @param debug Boolean to enable debug mode (shows ID on board)
  * @returns JSX.Element
  */
@@ -186,9 +192,10 @@ const Board = ({
   imagePath,
   helper = false,
   position = [4.0, 2.5, 0.5],
-  rotation = [0, 0, 0], // Add rotation prop with a default
+  quaternion = [0, 0, 0, 1],
+  matPosition = position,
+  matQuaternion = quaternion,
   debug = false,
-  arcRadius = 0,
 }: BoardProps) => {
   // Combine default and custom parameters
   const initialValues: BoardParams = { ...defaultValues, ...boardParams };
@@ -201,14 +208,11 @@ const Board = ({
   const frameRef = useRef<THREE.Group>(null);
 
   // Clicking either the picture frame or its floor mat (ActivationZone)
-  // bubbles up to this single handler - both should fly to the same mat
-  // center. Mirrors ActivationZone's own fixed local offset/rotation.
+  // flies to the same place: the mat, on the trail - never the billboard
+  // itself, which stands well back from it.
   const handleAutopilotClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
-    requestAutopilot(
-      getBoardMatWorldPosition(position, rotation[1]),
-      arcRadius,
-    );
+    requestAutopilot(getBoardMatWorldPosition({ matPosition }), id);
   };
 
   // Function to update a specific parameter
@@ -217,9 +221,18 @@ const Board = ({
 
   return (
     <>
+      {/* The mat: on the trail, on the surface, along the direction of
+          travel - the ship crosses it on the approach to the billboard. */}
+      <group
+        position={matPosition}
+        quaternion={matQuaternion}
+        onClick={handleAutopilotClick}
+      >
+        <ActivationZone id={id} />
+      </group>
       <group
         position={position}
-        rotation={rotation}
+        quaternion={quaternion}
         onClick={handleAutopilotClick}
       >
         {helper && (
@@ -227,6 +240,8 @@ const Board = ({
             <BoardDebugControls params={params} updateParam={updateParam} />
           </Suspense>
         )}
+        {/* frameRef traces this group so the "B"-hotkey debug box matches
+            what's actually rendered. */}
         <group ref={frameRef}>
           <PictureFrame
             params={params}
@@ -234,14 +249,7 @@ const Board = ({
             debugValue={debug ? id : undefined}
           />
         </group>
-        <ActivationZone
-          id={id} // Positioned on the floor in front of the board
-        />
       </group>
-      {/* Rendered as a sibling of the (position/rotation-transformed) group
-        above rather than nested inside it - DebugBoundingBox's BoxHelper
-        already computes world-space vertices, so nesting it would apply
-        that transform a second time. */}
       <DebugBoundingBox target={frameRef} color="#ffae00" />
     </>
   );

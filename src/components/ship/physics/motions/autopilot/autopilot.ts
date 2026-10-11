@@ -1,103 +1,121 @@
-import { CatmullRomCurve3, Group, MathUtils, Vector3 } from "three";
-import { lerpAngle } from "../../../../../utils/3d";
-import { BoardObb, clearBoardBearings } from "../../collision/boardCollision";
+import { MathUtils, Vector3 } from "three";
+import {
+  angleBetween,
+  buildSurfaceOrientation,
+  slerpOnSphere,
+} from "../../../../../utils/planetSurface";
+import {
+  Planet,
+  getActivePlanet,
+  getShellRadius,
+} from "../../../../../utils/planets";
+import { SurfaceTransform } from "../planet/planet";
 
 export type AutopilotStatus = "flying" | "arrived" | "cancelled";
 
-// Extra clearance (world units) kept beyond a board's own half-extents
-// when checking whether the straight line home would clip it. A bit more
-// generous than ship/physics/collision's own SHIP_RADIUS (2), since this
-// is a one-time planning check rather than a per-frame reactive nudge.
-const PLANNING_CLEARANCE = 3;
+export interface AutopilotResult extends SurfaceTransform {
+  status: AutopilotStatus;
+}
 
-// Drives the ship along a smooth, obstacle-avoiding path to a target
-// position - a standalone class rather than a BaseMotion subclass, since
-// it's driven by a target position/curve rather than a single key pair.
+/**
+ * Drives the ship along a great-circle arc, at a constant altitude above
+ * the planet, to a target point on its shell. A standalone class rather
+ * than a PlanetMotion subclass, since it's driven by a target position
+ * rather than key input.
+ *
+ * Slerping the two (normalized) endpoint directions keeps every point on
+ * the path at exactly the shell radius throughout - unlike a straight
+ * Euclidean line between two widely separated surface points, which can
+ * dip below the surface, this can never clip through the planet, so no
+ * origin-detour heuristic is needed (as the old flat-world version had).
+ */
 export class AutopilotMotion {
-  private curve: CatmullRomCurve3 | null = null;
+  private from = new Vector3();
+  private to = new Vector3();
   private progress = 0;
   private duration = 0;
-  private group: Group | undefined;
+  private planet: Planet = getActivePlanet();
+  private started = false;
+  private current: SurfaceTransform = this.transformAt(0);
 
-  attachTo(group: Group) {
-    this.group = group;
-  }
-
-  /**
-   * Plans the flight path.
-   *
-   * First, if the ship's current position is "shadowed" behind some board
-   * - farther from the origin than it, along that same bearing - nudge the
-   * launch point sideways off that board's span (see clearBoardBearings).
-   * Without this, a ship that has flown out past the board shell (fully
-   * possible now that ship/physics/collision allows roaming the whole,
-   * much larger world boundary) could have its own straight line home cut
-   * straight through the very board it's lined up behind.
-   *
-   * From that cleared launch point: if it's already closer to the origin
-   * than the board shell's radius, it's on the open/front-facing side of
-   * every board (they all sit on that one shell facing inward), so a
-   * direct path to the target is already safe. Otherwise, detour through
-   * a waypoint at the origin first - a straight line from the origin to
-   * any point inside the shell can never cross it, so this route can't
-   * clip another board either.
-   */
   start(
     from: Vector3,
     to: Vector3,
-    arcRadius: number,
-    boardObbs: BoardObb[],
     speed = 12,
+    planet: Planet = getActivePlanet(),
   ) {
-    const cleared = clearBoardBearings(
-      { x: from.x, z: from.z },
-      boardObbs,
-      PLANNING_CLEARANCE,
+    this.planet = planet;
+    const shellRadius = getShellRadius(planet);
+    const project = (p: Vector3) =>
+      p
+        .clone()
+        .sub(planet.center)
+        .normalize()
+        .multiplyScalar(shellRadius)
+        .add(planet.center);
+
+    this.from = project(from);
+    this.to = project(to);
+
+    const angle = angleBetween(
+      this.from.clone().sub(planet.center),
+      this.to.clone().sub(planet.center),
     );
-    const wasCleared = cleared.x !== from.x || cleared.z !== from.z;
-    const launchPoint = wasCleared
-      ? new Vector3(cleared.x, from.y, cleared.z)
-      : from;
-
-    const shipRadiusFromOrigin = Math.hypot(launchPoint.x, launchPoint.z);
-    const isAlreadySafe = shipRadiusFromOrigin < arcRadius - 2;
-
-    const waypoints: Vector3[] = [];
-    if (wasCleared) waypoints.push(launchPoint);
-    if (!isAlreadySafe) waypoints.push(new Vector3(0, from.y, 0));
-
-    this.curve = new CatmullRomCurve3([from.clone(), ...waypoints, to.clone()]);
+    this.duration = Math.max((angle * shellRadius) / speed, 0.1);
     this.progress = 0;
-    this.duration = Math.max(this.curve.getLength() / speed, 0.1);
+    this.started = true;
+    this.current = this.transformAt(0);
+  }
+
+  /** Position + facing at a given point (0-1) along the arc. */
+  private transformAt(eased: number): SurfaceTransform {
+    const center = this.planet.center;
+    const shellRadius = getShellRadius(this.planet);
+    const a = this.from.clone().sub(center);
+    const b = this.to.clone().sub(center);
+    const toWorld = (t: number) =>
+      slerpOnSphere(a, b, t).multiplyScalar(shellRadius).add(center);
+
+    const point = toWorld(eased);
+    // Finite-difference tangent for heading - accurate enough at these
+    // frame-to-frame step sizes and avoids a separate closed-form
+    // derivative of the slerp formula. Falls back to looking behind near
+    // the very end of the arc, where "ahead" would otherwise land on top
+    // of the point itself.
+    let forwardHint = toWorld(Math.min(eased + 0.01, 1)).sub(point);
+    if (forwardHint.lengthSq() < 1e-8) {
+      forwardHint = point.clone().sub(toWorld(Math.max(eased - 0.01, 0)));
+    }
+
+    const normal = point.clone().sub(center).normalize();
+    const orientation = buildSurfaceOrientation(normal, forwardHint);
+    return { position: point, orientation };
   }
 
   /**
    * Advances the flight by one frame. Returns "cancelled" the instant real
-   * control input appears (manual flight always wins), "arrived" once the
-   * path completes, otherwise "flying".
+   * control input appears (manual flight always wins) - the returned
+   * position/orientation is left exactly where the ship already was, so
+   * Physics can hand control back without a visible jump. Returns "arrived"
+   * once the path completes, otherwise "flying".
    */
-  update(delta: number, hasManualInput: boolean): AutopilotStatus {
-    if (!this.group || !this.curve) return "cancelled";
-    if (hasManualInput) return "cancelled";
+  update(delta: number, hasManualInput: boolean): AutopilotResult {
+    if (!this.started || hasManualInput) {
+      this.started = false;
+      return { status: "cancelled", ...this.current };
+    }
 
     this.progress = Math.min(this.progress + delta / this.duration, 1);
     const eased = MathUtils.smootherstep(this.progress, 0, 1);
+    this.current = this.transformAt(eased);
 
-    const point = this.curve.getPointAt(eased);
-    const tangent = this.curve.getTangentAt(eased);
-
-    this.group.position.copy(point);
-
-    const targetYaw = Math.atan2(tangent.x, tangent.z);
-    this.group.rotation.y = lerpAngle(this.group.rotation.y, targetYaw, 0.1);
-    this.group.rotation.x = MathUtils.lerp(this.group.rotation.x, 0, 0.1);
-    this.group.rotation.z = MathUtils.lerp(this.group.rotation.z, 0, 0.1);
-
-    return this.progress >= 1 ? "arrived" : "flying";
+    return {
+      status: this.progress >= 1 ? "arrived" : "flying",
+      ...this.current,
+    };
   }
 
   cleanup() {
-    this.group = undefined;
-    this.curve = null;
+    this.started = false;
   }
 }

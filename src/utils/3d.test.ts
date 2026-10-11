@@ -23,15 +23,17 @@ describe("lerpAngle", () => {
 });
 
 describe("getBoardMatWorldPosition", () => {
-  test("applies the local offset unrotated when board rotation is 0", () => {
-    const result = getBoardMatWorldPosition([10, 0, 10], 0);
-    expect(result.x).toBeCloseTo(5, 5); // 10 + (-5)
-    expect(result.y).toBeCloseTo(-2.5, 5); // 0 + (-2.5), unaffected by Y rotation
-    expect(result.z).toBeCloseTo(10, 5); // 10 + 0
+  // The mat is placed by the layout in its own right now (on the trail, on
+  // the planet's surface) rather than derived from a fixed offset in the
+  // board's frame - so this simply reads it back, as a fresh vector.
+  test("returns the board's own mat position", () => {
+    const result = getBoardMatWorldPosition({ matPosition: [1, 2, 3] });
+    expect(result.toArray()).toEqual([1, 2, 3]);
   });
 
-  test("Y rotation only mixes x/z, never y", () => {
-    const result = getBoardMatWorldPosition([0, 3, 0], Math.PI / 2);
-    expect(result.y).toBeCloseTo(0.5, 5); // 3 + (-2.5), independent of rotation
+  test("returns a new vector each call, safe to mutate", () => {
+    const board = { matPosition: [4, 5, 6] as [number, number, number] };
+    getBoardMatWorldPosition(board).set(0, 0, 0);
+    expect(getBoardMatWorldPosition(board).toArray()).toEqual([4, 5, 6]);
   });
 });

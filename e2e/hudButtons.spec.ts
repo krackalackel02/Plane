@@ -1,8 +1,8 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 
 // Coverage for the shared top-right HUD button family (see hudCorner.tsx):
-// AudioButton and ExhaustModeButton are both built on the RadialNodeMenu
-// speed-dial template (radialNodeMenu.tsx). Its trigger is meant to open on
+// AudioButton, ExhaustModeButton and CameraModeButton are all built on the
+// RadialNodeMenu speed-dial template (radialNodeMenu.tsx). Its trigger is meant to open on
 // a single tap on touch devices - there's no hover path on mobile, unlike
 // desktop, where opening happens via a mouse actually entering the wrapper.
 //
@@ -155,4 +155,53 @@ test("a single real tap on a fanned option selects it and closes the branch", as
 
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(trigger).toHaveAccessibleName(/Muted/);
+});
+
+// The camera-framing button was once a hand-rolled lookalike of the other
+// two, with none of RadialNodeMenu's touch fixes - so it gets the same
+// real-browser checks: it hit-tests to itself, opens on hover and on a single
+// tap, and a pick lands and folds the fan back in.
+test("the camera-framing trigger - not an invisible overlay - is what a tap actually hits while collapsed", async ({
+  page,
+}) => {
+  const trigger = page.getByRole("button", { name: /^Camera framing:/ });
+  await expect(trigger).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+  expect(await hitTestsToItself(trigger)).toBe(true);
+});
+
+test("hovering the camera trigger opens it, and clicking a fanned framing switches it and closes the branch", async ({
+  page,
+}) => {
+  const trigger = page.getByRole("button", { name: /^Camera framing:/ });
+  await expect(trigger).toBeVisible();
+
+  await trigger.hover();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+  await page
+    .getByRole("menuitemradio", { name: "Switch camera framing to Zoomed Out" })
+    .click();
+
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(trigger).toHaveAccessibleName(/Zoomed Out/);
+});
+
+test("a single real tap opens the camera-framing trigger, and a tap on a framing selects it", async ({
+  page,
+}) => {
+  const trigger = page.getByRole("button", { name: /^Camera framing:/ });
+  await expect(trigger).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+  await trigger.tap();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+  await page
+    .getByRole("menuitemradio", { name: "Switch camera framing to Close" })
+    .tap();
+
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(trigger).toHaveAccessibleName(/Close/);
 });

@@ -7,35 +7,45 @@ import {
   useState,
   type RefObject,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
+import { Vector3 } from "three";
 import { useScene } from "../../context/sceneContext";
 import { useProjects } from "../../context/projectContext";
 import { useAutopilot } from "../../context/autopilotContext";
-import { useWorldBounds } from "../../utils/worldBounds";
 import {
   calculatedBoardPositionsAndRotations,
-  computeArcRadius,
+  pathFrameAt,
 } from "../timeline/calculatedBoardPositionsAndRotations";
 import { getBoardMatWorldPosition } from "../../utils/3d";
+import { getActivePlanet, getShellRadius } from "../../utils/planets";
+import { slerpOnSphere } from "../../utils/planetSurface";
+import { buildMapRelief } from "./mapRelief";
 import {
-  arrowRotationForYaw,
-  computeWorldToMapProjection,
-} from "./mapProjection";
+  CANOPY_RADIUS,
+  drawCanopy,
+  drawDesertRelief,
+  drawLandmasses,
+  drawRidges,
+  projectPolyline,
+} from "./drawTerrain";
+import {
+  computeAzimuthalProjection,
+  headingBearing,
+  type AzimuthalProjection,
+} from "./planetMapProjection";
 import "./minimap.css";
 
 // CSS pixel size of the map's drawing surface when collapsed - actual
 // canvas backing store is this times devicePixelRatio. The expanded size
 // is driven by CSS (see minimap.css) and measured live, see useMapSize.
 const COLLAPSED_SIZE = 200;
-// Fraction of the map reserved as empty margin around the world bounds,
-// so board icons/the ship arrow never touch the rim.
-const PADDING_RATIO = 0.22;
 
 /**
  * Track the minimap's actual rendered box size in CSS pixels. Collapsed
  * vs. expanded sizing lives entirely in CSS (including the mobile media
  * query), so rather than duplicating those breakpoints in JS, a
- * ResizeObserver reports whatever size the box ends up at - the world-to
+ * ResizeObserver reports whatever size the box ends up at - the planet-to
  * map projection and the canvas backing store both key off this.
  */
 const useMapSize = (ref: RefObject<HTMLDivElement>) => {
@@ -55,53 +65,60 @@ const useMapSize = (ref: RefObject<HTMLDivElement>) => {
   return size;
 };
 
+// How finely the trail is sampled for the minimap's own path line - dense
+// enough to read as a smooth curve at minimap scale.
+const PATH_SAMPLES = 180;
+// Enough to keep the autopilot arc smooth even across half the planet.
+const ROUTE_SAMPLES = 96;
+
+const OCEAN = "#1c6bc2";
+
 /**
- * Project world (x, z) coordinates onto the map's CSS-pixel space. The map
- * does not pan or rotate with the ship - it is scaled once to fit the
- * whole world boundary (see utils/worldBounds), GTA5-style "whole area"
- * minimap rather than a close-up chase view. `size` is re-derived from
- * the live rendered box (see useMapSize) so the same projection serves
- * both the collapsed dock and the expanded, tappable overlay.
+ * Everything about the world the minimap needs that *doesn't* depend on
+ * where the ship currently is - computed once (or when the project list
+ * changes) and reprojected through a fresh, ship-centered
+ * computeAzimuthalProjection every time the map actually draws.
  */
-const useWorldToMap = (size: number) => {
+const useMinimapWorldData = () => {
   const { items } = useProjects();
-  const bounds = useWorldBounds();
+  const planet = getActivePlanet();
 
   return useMemo(() => {
-    const boardsData = calculatedBoardPositionsAndRotations(items, "arc");
-    const arcRadius = computeArcRadius(items.length);
-    const projection = computeWorldToMapProjection(
-      bounds,
-      boardsData,
-      size,
-      PADDING_RATIO,
+    const boardsData = calculatedBoardPositionsAndRotations(items, planet);
+    const shellRadius = getShellRadius(planet);
+    const pathPoints = Array.from(
+      { length: PATH_SAMPLES + 1 },
+      (_, i) =>
+        // pathFrameAt is parameterised by fraction-of-the-loop, not
+        // longitude - the trail is a free curve on the sphere.
+        pathFrameAt(shellRadius, i / PATH_SAMPLES, planet.center).position,
     );
-    return { ...projection, boardsData, arcRadius };
-  }, [items, bounds, size]);
+    // The terrain as relief - built from the same terrain and props the 3D
+    // scene renders, so the map shows the real ground, not a separate
+    // approximation of it.
+    const relief = buildMapRelief(planet.radius, planet.center);
+
+    return { boardsData, pathPoints, relief, planet };
+  }, [items, planet]);
 };
 
-const drawBoundary = (
+const drawBook = (
   ctx: CanvasRenderingContext2D,
-  size: number,
-  radius: number,
+  x: number,
+  y: number,
+  projectNumber: number,
 ) => {
-  ctx.save();
-  ctx.strokeStyle = "rgba(120, 190, 255, 0.55)";
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([4, 4]);
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, radius, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-};
-
-const drawBook = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = "#e8c468";
   ctx.strokeStyle = "#4a3a17";
   ctx.lineWidth = 1;
-  // Open-book silhouette: two pages meeting at a center spine.
+  // Open-book silhouette: two pages meeting at a center spine - lifted off
+  // the terrain by a soft shadow, so the projects stay the map's top layer
+  // however busy the relief beneath them gets.
+  ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 1;
   ctx.beginPath();
   ctx.moveTo(0, -3.5);
   ctx.lineTo(-6, -5.5);
@@ -111,12 +128,83 @@ const drawBook = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
   ctx.lineTo(6, -5.5);
   ctx.closePath();
   ctx.fill();
+  ctx.shadowColor = "transparent";
   ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(0, -3.5);
   ctx.lineTo(0, 6.5);
   ctx.strokeStyle = "rgba(74, 58, 23, 0.7)";
   ctx.stroke();
+
+  // Small numbered badge in the corner, so each project's position in the
+  // list is readable at a glance.
+  ctx.beginPath();
+  ctx.arc(5.5, -5.5, 4, 0, Math.PI * 2);
+  ctx.fillStyle = "#1c1c1c";
+  ctx.fill();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 0.75;
+  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 6px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(projectNumber), 5.5, -5.2);
+
+  ctx.restore();
+};
+
+/**
+ * The autopilot's route, as a dashed red line ending in a ringed destination
+ * marker. Autopilot flies a pure great-circle slerp from where it engaged to
+ * its target (see motions/autopilot/autopilot.ts), so slerping the ship's
+ * current direction to the target's reproduces the *remaining* arc exactly,
+ * recomputed free each frame - no route state to plumb through.
+ */
+const drawAutopilotRoute = (
+  ctx: CanvasRenderingContext2D,
+  shipPosition: Vector3,
+  target: Vector3,
+  planetCenter: Vector3,
+  toMap: AzimuthalProjection["toMap"],
+  size: number,
+) => {
+  const from = shipPosition.clone().sub(planetCenter);
+  const to = target.clone().sub(planetCenter);
+  const radius = from.length();
+  const arc = Array.from({ length: ROUTE_SAMPLES + 1 }, (_, i) =>
+    slerpOnSphere(from, to, i / ROUTE_SAMPLES)
+      .multiplyScalar(radius)
+      .add(planetCenter),
+  );
+
+  ctx.save();
+  ctx.setLineDash([6, 5]);
+  ctx.strokeStyle = "#ff3b3b";
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  // Split at the projection's antipodal singularity like the trail does - a
+  // route to the planet's far side crosses it and would otherwise streak
+  // straight across the map.
+  for (const segment of projectPolyline(arc, toMap, size)) {
+    ctx.beginPath();
+    segment.forEach(([x, y], i) => {
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  // "X marks the spot" ring at the destination.
+  const [tx, ty] = toMap(target);
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(tx, ty, 6.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(tx, ty, 2, 0, Math.PI * 2);
+  ctx.fillStyle = "#ff3b3b";
+  ctx.fill();
   ctx.restore();
 };
 
@@ -124,11 +212,11 @@ const drawShipArrow = (
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  yaw: number,
+  bearing: number,
 ) => {
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(arrowRotationForYaw(yaw));
+  ctx.rotate(bearing);
   ctx.fillStyle = "#ff3b3b";
   ctx.strokeStyle = "#7a0000";
   ctx.lineWidth = 1;
@@ -143,20 +231,35 @@ const drawShipArrow = (
   ctx.restore();
 };
 
+interface DrawOptions {
+  /** Where autopilot is flying to, when engaged - drives the dashed route. */
+  autopilotTarget?: Vector3;
+}
+
 /**
- * GTA5-style minimap docked in the bottom-left corner: a fixed-scale
- * top-down view of the whole timeline arc, with a red arrow for the ship
- * (rotates to match heading) and book icons for each project board.
+ * GTA5-style minimap docked in the bottom-left corner: an azimuthal
+ * equidistant "radar" of the whole planet, centered on and pinned to the
+ * ship (see planetMapProjection's computeAzimuthalProjection) - everything
+ * else, terrain included, slides and rotates around it as it flies, with a
+ * red arrow rotating in place to show heading. Distance from center is
+ * true angular distance on the sphere, so the entire planet - including
+ * the far side - is always represented somewhere on the circle, not just
+ * the near hemisphere.
  *
- * Tapping the dock expands it to a large, centered overlay (GTAV-style),
- * where each project icon becomes tappable: picking one engages autopilot
- * to that board and collapses the map back to its dock. Tapping the
- * backdrop, the close button, or Escape collapses it without flying
- * anywhere.
+ * Tapping the dock expands it to a large, centered overlay (GTAV-style): a
+ * single frozen snapshot centered on wherever the ship was the moment you
+ * opened it (rather than continuing to slide live under your cursor while
+ * you're trying to click something), its relief drawn at the larger size. Picking a project marker engages autopilot to that
+ * board and collapses the map back to its dock; tapping the backdrop, the
+ * close button, or Escape collapses it without flying anywhere.
  */
 const Minimap = () => {
   const { shipRef } = useScene();
-  const { requestAutopilot } = useAutopilot();
+  const {
+    requestAutopilot,
+    target: autopilotTarget,
+    isFlying,
+  } = useAutopilot();
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -164,10 +267,89 @@ const Minimap = () => {
   // consumed by the FLIP effect below.
   const preToggleRectRef = useRef<DOMRect | null>(null);
   const size = useMapSize(containerRef);
-  const { boardPoints, boardsData, toMap, arcRadius, boundaryRadius } =
-    useWorldToMap(size);
+  const { boardsData, pathPoints, relief, planet } = useMinimapWorldData();
 
+  // The expanded view's single frozen snapshot - null while collapsed
+  // (live) or before the first expand.
+  const [frozenBoardPoints, setFrozenBoardPoints] = useState<
+    { id: string; x: number; y: number }[]
+  >([]);
+  // The frozen projection itself, kept around (not just its board points)
+  // so a click anywhere on the expanded map can be resolved back to a
+  // world position via its toWorld - see handleMapClick below.
+  const frozenProjectionRef = useRef<AzimuthalProjection | null>(null);
+  // Read through a ref rather than a draw() dependency: autopilot engaging or
+  // arriving would otherwise cancel and restart the rAF loop below.
+  const autopilotRouteRef = useRef<Vector3 | null>(null);
+
+  const draw = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      toMap: AzimuthalProjection["toMap"],
+      drawSize: number,
+      shipPosition: Vector3,
+      shipBearing: number,
+      options: DrawOptions,
+    ) => {
+      ctx.clearRect(0, 0, drawSize, drawSize);
+      ctx.fillStyle = OCEAN;
+      ctx.fillRect(0, 0, drawSize, drawSize);
+
+      // Strokes and glyphs grow with the map, gently - the expanded map has
+      // more room for detail, not just fatter lines.
+      const px = Math.sqrt(drawSize / COLLAPSED_SIZE);
+      // Map pixels per world unit along the surface: the projection keeps
+      // true distance from the centre, the whole sphere fitting in the
+      // radius (see planetMapProjection.ts).
+      const unitPx = drawSize / 2 / (Math.PI * planet.radius);
+
+      drawLandmasses(ctx, relief.landmasses, toMap, drawSize, px);
+      drawCanopy(ctx, relief.canopy, toMap, CANOPY_RADIUS * unitPx, px);
+      drawDesertRelief(ctx, relief.desert, toMap, drawSize, px);
+      drawRidges(ctx, relief.ridges, toMap, drawSize, unitPx, px);
+
+      // The actual trail - the one path every board sits along and the
+      // ship's usual cruise line - drawn as the map's single highlighted
+      // line, matching the wiggly ring in the 3D scene.
+      ctx.strokeStyle = "rgba(125, 211, 252, 0.9)";
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
+      for (const segment of projectPolyline(pathPoints, toMap, drawSize)) {
+        ctx.beginPath();
+        segment.forEach(([x, y], i) => {
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      boardsData.forEach((board, i) => {
+        const [x, y] = toMap(getBoardMatWorldPosition(board));
+        drawBook(ctx, x, y, i + 1);
+      });
+
+      if (options.autopilotTarget) {
+        drawAutopilotRoute(
+          ctx,
+          shipPosition,
+          options.autopilotTarget,
+          planet.center,
+          toMap,
+          drawSize,
+        );
+      }
+
+      // The projection is centered on the ship by construction, so its
+      // own marker always sits at the exact middle of the circle.
+      drawShipArrow(ctx, drawSize / 2, drawSize / 2, shipBearing);
+    },
+    [relief, pathPoints, boardsData, planet],
+  );
+
+  // Collapsed: a live rAF loop, re-centering the projection on the ship's
+  // current position every frame - a real radar.
   useEffect(() => {
+    if (expanded) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -179,43 +361,80 @@ const Minimap = () => {
     ctx.scale(dpr, dpr);
 
     let frameId: number;
-
-    const draw = () => {
-      ctx.clearRect(0, 0, size, size);
-
-      // Range rings, purely decorative.
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-      ctx.lineWidth = 1;
-      [0.33, 0.66, 1].forEach((f) => {
-        ctx.beginPath();
-        ctx.arc(size / 2, size / 2, (size / 2 - 4) * f, 0, Math.PI * 2);
-        ctx.stroke();
-      });
-
-      // The world boundary the ship is physically confined to (see
-      // utils/worldBounds and ship/physics/collision) - always concentric
-      // with the range rings above, since it maps directly onto the
-      // minimap's own circular dock.
-      drawBoundary(ctx, size, boundaryRadius);
-
-      boardPoints.forEach(({ x, y }) => drawBook(ctx, x, y));
-
+    const tick = () => {
       const ship = shipRef.current;
       if (ship) {
-        const [x, y] = toMap(ship.position.x, ship.position.z);
-        drawShipArrow(ctx, x, y, ship.rotation.y);
+        const toMap = computeAzimuthalProjection(
+          ship.position,
+          size,
+          planet.center,
+        ).toMap;
+        const bearing = headingBearing(
+          ship.quaternion,
+          ship.position,
+          planet.center,
+        );
+        draw(ctx, toMap, size, ship.position, bearing, {
+          autopilotTarget: autopilotRouteRef.current ?? undefined,
+        });
       }
-
-      frameId = requestAnimationFrame(draw);
+      frameId = requestAnimationFrame(tick);
     };
-
-    frameId = requestAnimationFrame(draw);
+    frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, [boardPoints, toMap, shipRef, size, boundaryRadius]);
+  }, [expanded, size, shipRef, planet, draw]);
+
+  // Expanded: one frozen snapshot, centered on wherever the ship was the
+  // moment it opened - drawn once (not per-frame), with matching frozen
+  // marker positions for the clickable overlay below.
+  useEffect(() => {
+    if (!expanded) return;
+    const canvas = canvasRef.current;
+    const ship = shipRef.current;
+    if (!canvas || !ship) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    ctx.scale(dpr, dpr);
+
+    const shipPosition = ship.position.clone();
+    const projection = computeAzimuthalProjection(
+      shipPosition,
+      size,
+      planet.center,
+    );
+    frozenProjectionRef.current = projection;
+    const { toMap } = projection;
+    const bearing = headingBearing(
+      ship.quaternion,
+      shipPosition,
+      planet.center,
+    );
+    draw(ctx, toMap, size, shipPosition, bearing, {});
+
+    setFrozenBoardPoints(
+      boardsData.map((board) => {
+        const [x, y] = toMap(getBoardMatWorldPosition(board));
+        return { id: board.id, x, y };
+      }),
+    );
+  }, [expanded, size, shipRef, planet, draw, boardsData]);
 
   // Both directions go through the same rect capture so the FLIP effect
   // below can animate the toggle as one continuous element resizing,
   // rather than an instant jump followed by a width/height tween.
+  useEffect(() => {
+    // Gate on isFlying, not target alone: isFlying is separate state written
+    // only by Physics, so target can briefly hold a stale value between the
+    // useFrame write and the React re-render. Together they're only valid
+    // during an actual flight.
+    autopilotRouteRef.current =
+      isFlying && autopilotTarget ? autopilotTarget.position : null;
+  }, [isFlying, autopilotTarget]);
+
   const toggleExpanded = useCallback((next: boolean) => {
     if (containerRef.current) {
       preToggleRectRef.current = containerRef.current.getBoundingClientRect();
@@ -271,10 +490,25 @@ const Minimap = () => {
   }, [expanded, collapse]);
 
   const flyToBoard = (board: (typeof boardsData)[number]) => {
-    requestAutopilot(
-      getBoardMatWorldPosition(board.position, board.rotation[1]),
-      arcRadius,
-    );
+    requestAutopilot(getBoardMatWorldPosition(board), board.id);
+    collapse();
+  };
+
+  // Clicking anywhere else on the expanded map (not a project marker)
+  // engages autopilot toward that specific point on the planet, resolved
+  // back from map pixels to a world position via the frozen projection's
+  // own exact inverse (see planetMapProjection.ts's toWorld) - no board id,
+  // since it isn't heading to a specific project (see
+  // activationZone.tsx's autopilot-target guard).
+  const handleMapClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const projection = frozenProjectionRef.current;
+    const canvas = canvasRef.current;
+    if (!projection || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const shellRadius = getShellRadius(planet);
+    requestAutopilot(projection.toWorld(x, y, shellRadius));
     collapse();
   };
 
@@ -310,19 +544,19 @@ const Minimap = () => {
         className={`minimap${expanded ? " minimap-expanded" : ""}`}
         {...containerProps}
       >
-        <div className="minimap-compass">N</div>
-        <canvas ref={canvasRef} />
+        <div
+          className="minimap-canvas-clip"
+          onClick={expanded ? handleMapClick : undefined}
+        >
+          <canvas ref={canvasRef} />
+        </div>
+        <div className="minimap-compass minimap-compass--n">N</div>
+        <div className="minimap-compass minimap-compass--e">E</div>
+        <div className="minimap-compass minimap-compass--s">S</div>
+        <div className="minimap-compass minimap-compass--w">W</div>
         {expanded && (
           <>
-            <button
-              type="button"
-              className="minimap-close"
-              aria-label="Close map"
-              onClick={collapse}
-            >
-              &times;
-            </button>
-            {boardPoints.map(({ id, x, y }) => {
+            {frozenBoardPoints.map(({ id, x, y }) => {
               const board = boardsData.find((b) => b.id === id);
               if (!board) return null;
               return (

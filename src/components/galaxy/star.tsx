@@ -1,60 +1,74 @@
-import React, { useMemo } from "react";
-import { Instances, Instance } from "@react-three/drei";
-import { useWorldBounds } from "../../utils/worldBounds";
+import React, { useEffect, useMemo } from "react";
+import { BufferAttribute, BufferGeometry, PointsMaterial } from "three";
+import { getActivePlanet, getShellRadius } from "../../utils/planets";
 
-// Vertical spread for stars - kept independent of the ship's play area
-// since the ship never leaves the y=0 plane, but stars are purely
-// decorative backdrop and should still fill out the sky above/below it.
+// Vertical spread for stars - kept independent of the planet's radius since
+// the sky is purely decorative backdrop and should fill out the space
+// above/below the ship's cruise shell too.
 const STAR_Y_RANGE = 150;
-// Stars spawn across a disk this many times wider than the ship's actual
-// travel boundary. The boundary is where the ship physically stops, not
-// where the sky should stop - a starfield capped at that same radius goes
-// visibly empty the moment the ship reaches the edge and looks toward it.
+// Stars spawn across a disk this many times wider than the planet's own
+// shell - a starfield capped at the planet's own radius would look far too
+// close and go visibly empty near it.
 const STAR_FIELD_RADIUS_MULTIPLIER = 4;
+// Matches the old 0.1-radius spheres' apparent size: three sizes an
+// attenuated point as size * (half the canvas height) / depth, leaving out
+// the 1 / tan(fov / 2) a real object's perspective adds - so the 0.2
+// diameter is divided by tan(25deg), the main camera's default 50deg field
+// of view.
+const STAR_SIZE = 0.2 / Math.tan((25 * Math.PI) / 180);
+
+/**
+ * Every star is one vertex, drawn by the GPU as a point sprite: sized by its
+ * distance in the vertex shader (sizeAttenuation) and rounded off in the
+ * fragment shader. The field used to be 4,000 instanced spheres - 112
+ * triangles apiece, ~450k triangles a frame for dots a pixel or two across -
+ * whose matrices drei re-copied into the instance buffer every frame. Now
+ * it's one static buffer and one draw call.
+ */
+const starMaterial = new PointsMaterial({
+  color: "white",
+  size: STAR_SIZE,
+  sizeAttenuation: true,
+});
+// Round, not square: discard the corners of each point sprite.
+starMaterial.onBeforeCompile = (shader) => {
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "#include <clipping_planes_fragment>",
+    "if (length(gl_PointCoord - 0.5) > 0.5) discard;\n#include <clipping_planes_fragment>",
+  );
+};
 
 /**
  * Stars component to render a field of stars in the galaxy. Spans a disk
- * much larger than the ship's cylindrical travel boundary (see
- * utils/worldBounds) so the sky still reads as full when the ship is
- * pressed right up against the edge of where it's allowed to fly.
+ * much larger than the planet's shell (see utils/planets) so the sky still
+ * reads as full no matter where on the planet the ship is flying.
  * @param count - Number of stars to render
  * @returns JSX.Element
  */
 const Stars: React.FC<{ count?: number }> = ({ count = 1000 }) => {
-  const bounds = useWorldBounds();
-  const fieldRadius = bounds.radius * STAR_FIELD_RADIUS_MULTIPLIER;
+  const planet = getActivePlanet();
+  const fieldRadius = getShellRadius(planet) * STAR_FIELD_RADIUS_MULTIPLIER;
 
-  // Generate positions uniformly within the star field's disk (sqrt of a
-  // uniform random radius fraction gives uniform area density - a plain
-  // linear radius would bunch stars up near the center instead).
-  const stars = useMemo(
-    () =>
-      Array.from({ length: count }).map(() => {
-        const angle = Math.random() * Math.PI * 2;
-        const radius = fieldRadius * Math.sqrt(Math.random());
-        return {
-          position: [
-            bounds.centerX + radius * Math.cos(angle),
-            (Math.random() - 0.5) * STAR_Y_RANGE,
-            bounds.centerZ + radius * Math.sin(angle),
-          ] as [number, number, number],
-        };
-      }),
-    [count, bounds, fieldRadius],
-  );
+  // Positions uniformly within the star field's disk (sqrt of a uniform
+  // random radius fraction gives uniform area density - a plain linear
+  // radius would bunch stars up near the center instead).
+  const geometry = useMemo(() => {
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = fieldRadius * Math.sqrt(Math.random());
+      positions[i * 3] = planet.center.x + radius * Math.cos(angle);
+      positions[i * 3 + 1] =
+        planet.center.y + (Math.random() - 0.5) * STAR_Y_RANGE;
+      positions[i * 3 + 2] = planet.center.z + radius * Math.sin(angle);
+    }
+    const stars = new BufferGeometry();
+    stars.setAttribute("position", new BufferAttribute(positions, 3));
+    return stars;
+  }, [count, planet, fieldRadius]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
-  const geometry: [number, number, number] = [0.1, 8, 8]; // Sphere geometry: radius, widthSegments, heightSegments
-  const starColor = "white"; // Star color
-
-  return (
-    <Instances limit={count} range={count}>
-      <sphereGeometry args={geometry} />
-      <meshBasicMaterial color={starColor} />
-      {stars.map((star, index) => (
-        <Instance key={index} position={star.position} /> // Correctly typed as [number, number, number]
-      ))}
-    </Instances>
-  );
+  return <points geometry={geometry} material={starMaterial} />;
 };
 
 export default Stars;

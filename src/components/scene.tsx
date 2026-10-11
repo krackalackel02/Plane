@@ -1,6 +1,6 @@
 /// 3js/fiber for rendering 3D content
 import { Canvas } from "@react-three/fiber";
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 
 /// Context Providers
 import { EnvironmentProvider } from "../context/envContext";
@@ -8,12 +8,13 @@ import { KeyProvider } from "../context/keyContext";
 import { SceneProvider, useScene } from "../context/sceneContext";
 import { ProjectProvider } from "../context/projectContext";
 import { AutopilotProvider } from "../context/autopilotContext";
-import { BoundaryProvider } from "../context/boundaryContext";
 import { DebugBoundsProvider } from "../context/debugBoundsContext";
 import { useLoading } from "../context/loadingContext";
+import { isSoftwareRendered } from "../utils/renderCapability";
 import { TrickProvider } from "../context/trickContext";
 import { AudioProvider } from "../context/audioContext";
 import { ExhaustModeProvider } from "../context/exhaustModeContext";
+import { CameraModeProvider } from "../context/cameraModeContext";
 import Stats from "./helper/stats";
 
 /// 3D Scene Components
@@ -22,11 +23,10 @@ import Ship from "./ship";
 import Camera from "./camera";
 import Overlay from "./helper/overlay";
 import AutopilotBanner from "./helper/autopilotBanner";
-import OutOfZoneBanner from "./helper/outOfZoneBanner";
 import BoostBanner from "./helper/boostBanner";
 import Lights from "./lights";
 import Timeline from "./timeline";
-import Sphere from "./helper/sphere";
+import Planet from "./planet";
 import MobileControls from "./controls/mobileControls";
 import Minimap from "./minimap";
 import Highlight from "./timeline/highlight";
@@ -36,6 +36,7 @@ import HelpButton from "./helper/helpButton";
 import HudCorner from "./helper/hudCorner";
 import AudioButton from "./helper/audioButton";
 import ExhaustModeButton from "./helper/exhaustModeButton";
+import CameraModeButton from "./helper/cameraModeButton";
 import LoadingScreen from "./helper/loadingScreen";
 import DebugBoundingBox from "./helper/debugBoundingBox";
 
@@ -57,6 +58,10 @@ const Scene = () => {
   // splash, the DOM chrome fade-in below, and the camera animation all stay
   // in sync off one signal instead of three independent ones.
   const { ready } = useLoading();
+  // No GPU (WebGL drawn on the CPU - see renderCapability.ts): render at 1x
+  // density without shadows, or the page spends its whole main thread
+  // waiting on frames. Everything with a GPU renders as before.
+  const softwareRendered = useMemo(() => isSoftwareRendered(), []);
 
   return (
     <EnvironmentProvider>
@@ -69,20 +74,28 @@ const Scene = () => {
             {/* Provide loaded projects context */}
             <AutopilotProvider>
               {/* Provide autopilot flight-request context */}
-              <BoundaryProvider>
-                {/* Provide the "pushing against the world boundary" warning flag */}
-                <DebugBoundsProvider>
-                  {/* Provide the "B"-hotkey-toggled bounding-box debug overlay */}
-                  <TrickProvider>
-                    {/* Provide tap-to-trick (barrel roll) request context */}
-                    <AudioProvider>
-                      {/* Provide engine hum / activation bleep / ambient audio */}
-                      <ExhaustModeProvider>
-                        {/* Provide the ship exhaust's current render mode, live-
+              <DebugBoundsProvider>
+                {/* Provide the "B"-hotkey-toggled bounding-box debug overlay */}
+                <TrickProvider>
+                  {/* Provide tap-to-trick (barrel roll) request context */}
+                  <AudioProvider>
+                    {/* Provide engine hum / activation bleep / ambient audio */}
+                    <ExhaustModeProvider>
+                      {/* Provide the ship exhaust's current render mode, live-
                           switchable via the HUD button below */}
+                      <CameraModeProvider>
+                        {/* Provide the chase camera's current framing (close/
+                            medium/max), live-switchable via the HUD button
+                            below - consumed both inside the Canvas (Camera
+                            itself) and outside it (the HUD button), so it
+                            wraps both. */}
                         <WelcomeProvider>
                           {/* Provide intro-popup + reopenable-help-modal state */}
-                          <Canvas id="threejs-canvas">
+                          <Canvas
+                            id="threejs-canvas"
+                            shadows={!softwareRendered}
+                            dpr={softwareRendered ? 1 : [1, 2]}
+                          >
                             {/** 3D rendering canvas */}
                             {/*
                             Camera Setup
@@ -113,8 +126,8 @@ const Scene = () => {
                               <ShipDebugBounds />
                               {/* "B"-hotkey ship bounding-box overlay */}
                             </Suspense>
-                            <Sphere position={[0, 0, 0]} label="Origin" />
-                            {/* Origin sphere */}
+                            <Planet />
+                            {/* The single planet the ship is snapped to */}
                             <Suspense fallback={null}>
                               <Timeline />{" "}
                               {/* CV Timeline Objects Path Component */}
@@ -132,7 +145,6 @@ const Scene = () => {
                             <Overlay />{" "}
                             {/* Overlay for camera helper and HUD */}
                             <AutopilotBanner />
-                            <OutOfZoneBanner />
                             <BoostBanner />
                             {/* Bottom-left GTA5-style minimap */}
                             <Minimap />
@@ -140,21 +152,22 @@ const Scene = () => {
                             <MobileControls />
                             {/* Project details modal, shown when the ship activates a board */}
                             <Highlight />
-                            {/* Shared top-right HUD group: sound + help + exhaust style */}
+                            {/* Shared top-right HUD group: sound + help + exhaust/camera style */}
                             <HudCorner>
                               <AudioButton />
                               <ExhaustModeButton />
+                              <CameraModeButton />
                               <HelpButton />
                             </HudCorner>
                             {/* Intro alert + reopenable controls reference */}
                             <WelcomeOverlay />
                           </div>
                         </WelcomeProvider>
-                      </ExhaustModeProvider>
-                    </AudioProvider>
-                  </TrickProvider>
-                </DebugBoundsProvider>
-              </BoundaryProvider>
+                      </CameraModeProvider>
+                    </ExhaustModeProvider>
+                  </AudioProvider>
+                </TrickProvider>
+              </DebugBoundsProvider>
             </AutopilotProvider>
           </ProjectProvider>
         </SceneProvider>

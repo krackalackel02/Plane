@@ -8,7 +8,7 @@ import Board from "../../components/timeline/board";
 // to board.tsx were needed to support this.
 const BoardSandbox = () => (
   <Suspense fallback={null}>
-    <Board id="sandbox" helper position={[0, 0, 0]} rotation={[0, 0, 0]} />
+    <Board id="sandbox" helper position={[0, 0, 0]} quaternion={[0, 0, 0, 1]} />
   </Suspense>
 );
 

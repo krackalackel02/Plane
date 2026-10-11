@@ -45,6 +45,19 @@ vi.mock("../../context/loadingContext", () => ({
   }),
 }));
 
+const testPreset = {
+  position: { x: -22.46, y: 22.1, z: -39.2 },
+  lookingAt: { x: 0.89, y: 0.45, z: -0.12 },
+};
+
+vi.mock("../../context/cameraModeContext", () => ({
+  useCameraMode: () => ({
+    mode: "medium",
+    setMode: () => {},
+    preset: testPreset,
+  }),
+}));
+
 import Camera from "./index";
 
 describe("Camera intro animation wiring", () => {
@@ -70,14 +83,21 @@ describe("Camera intro animation wiring", () => {
       expect.anything(),
       true,
       notifyIntroCompleteMock,
+      undefined, // ship anchor - undefined here since the mocked shipRef.current is null
+      testPreset, // the intro's final leg target - see cameraModeContext
     );
   });
 
-  test("skips the intro animation while the camera-helper debug view is active", () => {
+  // Regression test: the camera-helper debug view used to skip the intro
+  // entirely, so watching the flythrough and reading live position/lookAt
+  // coordinates off the debug overlay were mutually exclusive. The helper
+  // should only add the free-orbit controls and readout on top, not replace
+  // the intro.
+  test("still plays the intro animation while the camera-helper debug view is active", () => {
     useEnvironmentMock.mockReturnValue({ showCameraHelper: true });
 
     render(<Camera />);
 
-    expect(animateMock).not.toHaveBeenCalled();
+    expect(animateMock).toHaveBeenCalledTimes(1);
   });
 });

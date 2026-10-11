@@ -5,9 +5,16 @@ import { ThreeEvent } from "@react-three/fiber";
 import { useTrick } from "../../../context/trickContext";
 import { useScene } from "../../../context/sceneContext";
 import { computeScale } from "../../../utils/3d";
+import shipParams from "../../../utils/shipParams.json";
 
-// Target dimensions the loaded ship model is fit to (see computeScale).
-const SHIP_FIT_DIMENSIONS = { x: 5, y: 3, z: 2 };
+// Target dimensions the loaded ship model is fit to (see computeScale) -
+// shared with ShipCollision's own collision box (shipParams.json), so the
+// two can never drift out of sync.
+const SHIP_FIT_DIMENSIONS = {
+  x: shipParams.halfExtents.x * 2,
+  y: shipParams.halfExtents.y * 2,
+  z: shipParams.halfExtents.z * 2,
+};
 
 const Body = () => {
   const { scene } = useGLTF("./models/ship.glb"); // Replace with your file path
