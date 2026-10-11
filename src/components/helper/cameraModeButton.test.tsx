@@ -67,6 +67,24 @@ describe("CameraModeButton", () => {
     ).toHaveAttribute("aria-checked", "false");
   });
 
+  // Close is the ship itself, medium a stretch of horizon with buildings on
+  // it, far the whole ringed planet - each framing pictured by what it shows.
+  it("pictures each framing by what it shows: the ship, a horizon, the whole ringed planet", () => {
+    mockMode("medium");
+    render(<CameraModeButton />);
+    fireEvent.click(
+      screen.getByLabelText("Camera framing: Medium (open to switch)"),
+    );
+
+    const pictureOf = (label: string) =>
+      screen.getByLabelText(label).querySelector("svg")?.dataset.icon;
+    expect(pictureOf("Switch camera framing to Close")).toBe("ship");
+    expect(pictureOf("Switch camera framing to Medium")).toBe("horizon");
+    expect(pictureOf("Switch camera framing to Zoomed Out")).toBe(
+      "ringed-planet",
+    );
+  });
+
   it("picking a framing calls setMode with it and folds the fan back in", () => {
     const setMode = mockMode("close");
     render(<CameraModeButton />);
