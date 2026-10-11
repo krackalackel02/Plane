@@ -1,6 +1,6 @@
 /// 3js/fiber for rendering 3D content
 import { Canvas } from "@react-three/fiber";
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 
 /// Context Providers
 import { EnvironmentProvider } from "../context/envContext";
@@ -10,6 +10,7 @@ import { ProjectProvider } from "../context/projectContext";
 import { AutopilotProvider } from "../context/autopilotContext";
 import { DebugBoundsProvider } from "../context/debugBoundsContext";
 import { useLoading } from "../context/loadingContext";
+import { isSoftwareRendered } from "../utils/renderCapability";
 import { TrickProvider } from "../context/trickContext";
 import { AudioProvider } from "../context/audioContext";
 import { ExhaustModeProvider } from "../context/exhaustModeContext";
@@ -57,6 +58,10 @@ const Scene = () => {
   // splash, the DOM chrome fade-in below, and the camera animation all stay
   // in sync off one signal instead of three independent ones.
   const { ready } = useLoading();
+  // No GPU (WebGL drawn on the CPU - see renderCapability.ts): render at 1x
+  // density without shadows, or the page spends its whole main thread
+  // waiting on frames. Everything with a GPU renders as before.
+  const softwareRendered = useMemo(() => isSoftwareRendered(), []);
 
   return (
     <EnvironmentProvider>
@@ -86,7 +91,11 @@ const Scene = () => {
                             wraps both. */}
                         <WelcomeProvider>
                           {/* Provide intro-popup + reopenable-help-modal state */}
-                          <Canvas id="threejs-canvas" shadows>
+                          <Canvas
+                            id="threejs-canvas"
+                            shadows={!softwareRendered}
+                            dpr={softwareRendered ? 1 : [1, 2]}
+                          >
                             {/** 3D rendering canvas */}
                             {/*
                             Camera Setup

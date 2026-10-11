@@ -1,5 +1,5 @@
-import { useMemo } from "react";
 import { buildSurfaceOrientation } from "../../utils/planetSurface";
+import { composeMatrix, type PropInstance } from "./instancedProps";
 import {
   GEOLOGY_GEOMETRY,
   ROCK_COLORS,
@@ -21,9 +21,11 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   IcosahedronGeometry,
+  Matrix4,
   MeshStandardMaterial,
   Quaternion,
   Vector3,
+  type Material,
 } from "three";
 
 /**
@@ -32,14 +34,10 @@ import {
  * between the forest's trees. Without these each landmass renders as one
  * enormous flat slab of a single colour.
  *
- * Every geometry and material here is shared across all instances rather than
- * created per mesh - there are a couple of hundred of these in the scene, and
- * they're only a handful of distinct shapes.
+ * They're hundreds of copies of a handful of shapes, so each kind of prop is
+ * described here as a list of placed instances (see instancedProps.tsx) and
+ * drawn as one GPU-instanced mesh per shape and material, not one mesh each.
  */
-
-/** Aligns a prop's local +Y to the surface normal, then spins it about that normal. */
-const useSurfaceQuaternion = (normal: Vector3, spin: number): Quaternion =>
-  useMemo(() => surfaceQuaternion(normal, spin), [normal, spin]);
 
 // --- snow: mountain ridges ----------------------------------------------
 
@@ -196,8 +194,24 @@ export interface RidgeProps extends FeatureProps {
   width: number;
 }
 
+/** One mesh of a prop, placed through the prop's own frame on the planet. */
+const place = (
+  frame: Matrix4,
+  geometry: BufferGeometry,
+  material: Material,
+  local: Matrix4,
+  castShadow: boolean,
+  receiveShadow: boolean,
+): PropInstance => ({
+  geometry,
+  material,
+  matrix: frame.clone().multiply(local),
+  castShadow,
+  receiveShadow,
+});
+
 /**
- * One segment of a mountain chain: a slate crest with its arete running along
+ * Mountain-chain segments: each a slate crest with its arete running along
  * the chain, a white cap over its top SNOW_CAP_FRACTION, and - on the taller
  * peaks - an ice slab jutting from one flank.
  *
@@ -206,62 +220,45 @@ export interface RidgeProps extends FeatureProps {
  * chain, squashed across it, leant off plumb by its own seed); a row of
  * upright identical shapes is exactly what reads as artificial.
  */
-export const Ridge = ({
-  position,
-  normal,
-  seed,
-  along,
-  height,
-  width,
-}: RidgeProps) => {
-  const quaternion = useMemo(() => {
-    const base = buildSurfaceOrientation(normal, along);
-    const lean = new Quaternion().setFromAxisAngle(
-      new Vector3(0, 0, 1),
-      (seed - 0.5) * 0.2,
+export const ridgeInstances = (segments: RidgeProps[]): PropInstance[] =>
+  segments.flatMap(({ position, normal, seed, along, height, width }) => {
+    const quaternion = buildSurfaceOrientation(normal, along).multiply(
+      new Quaternion().setFromAxisAngle(
+        new Vector3(0, 0, 1),
+        (seed - 0.5) * 0.2,
+      ),
     );
-    return base.multiply(lean);
-  }, [normal, along, seed]);
-
-  const across = width * (0.85 + seed * 0.25);
-  const length = width * (1.5 + seed * 0.4);
-  const hasIce = seed > 0.62 && height > 4.5;
-
-  return (
-    <group position={position} quaternion={quaternion}>
-      <mesh
-        geometry={crestGeometry}
-        material={ridgeRockMaterial}
-        position={[0, -RIDGE_EMBED, 0]}
-        scale={[across, height + RIDGE_EMBED, length]}
-        castShadow
-        receiveShadow
-      />
-      <mesh
-        geometry={capGeometry}
-        material={snowCapMaterial}
-        // Same transform as the rock: the cap was built in its unit space.
-        position={[0, -RIDGE_EMBED, 0]}
-        scale={[across, height + RIDGE_EMBED, length]}
-        castShadow
-      />
-      {hasIce && (
-        <mesh
-          geometry={iceSlabGeometry}
-          material={iceSlabMaterial}
-          position={[
-            across * (seed > 0.8 ? 0.45 : -0.45),
-            height * 0.55,
-            length * 0.1,
-          ]}
-          rotation={[0.15, seed * 0.8, seed > 0.8 ? -0.55 : 0.55]}
-          scale={[width * 0.7, 1, width * 0.6]}
-          castShadow
-        />
-      )}
-    </group>
-  );
-};
+    const frame = composeMatrix(position, quaternion);
+    const across = width * (0.85 + seed * 0.25);
+    const length = width * (1.5 + seed * 0.4);
+    // The cap was built in the rock's own unit space, so both share this.
+    const body = composeMatrix(
+      [0, -RIDGE_EMBED, 0],
+      [0, 0, 0],
+      [across, height + RIDGE_EMBED, length],
+    );
+    const parts = [
+      place(frame, crestGeometry, ridgeRockMaterial, body, true, true),
+      place(frame, capGeometry, snowCapMaterial, body, true, false),
+    ];
+    if (seed > 0.62 && height > 4.5) {
+      parts.push(
+        place(
+          frame,
+          iceSlabGeometry,
+          iceSlabMaterial,
+          composeMatrix(
+            [across * (seed > 0.8 ? 0.45 : -0.45), height * 0.55, length * 0.1],
+            [0.15, seed * 0.8, seed > 0.8 ? -0.55 : 0.55],
+            [width * 0.7, 1, width * 0.6],
+          ),
+          true,
+          false,
+        ),
+      );
+    }
+    return parts;
+  });
 
 // --- rock: one palette per biome -----------------------------------------
 
@@ -304,108 +301,29 @@ export const BIOME_ROCK_MATERIALS: Record<
   },
 };
 
-/** Renders a geology layout (see geology.ts): each part a scaled copy of one shared mesh. */
-const GeologyParts = ({
-  layout,
-  biome,
-}: {
-  layout: GeologyLayout;
-  biome: Biome;
-}) => (
-  <>
-    {layout.parts.map((part, i) => (
-      <mesh
-        key={i}
-        geometry={GEOLOGY_GEOMETRY[part.shape]}
-        material={BIOME_ROCK_MATERIALS[biome][part.tone]}
-        position={part.position}
-        quaternion={part.quaternion}
-        scale={part.scale}
-        castShadow
-        receiveShadow
-      />
-    ))}
-  </>
-);
-
-export interface GeologyProps extends FeatureProps {
-  /** The planet's radius: how fast the ground curves away under a wide prop. */
-  planetRadius: number;
-}
-
-/** A geology layout stood on its own spot of the planet. */
-const GeologyProp = ({
-  position,
-  normal,
-  seed,
-  layout,
-  biome,
-}: FeatureProps & { layout: GeologyLayout; biome: Biome }) => {
-  const quaternion = useMemo(
-    () => propQuaternion(layout, normal, seed),
-    [layout, normal, seed],
-  );
-  return (
-    <group position={position} quaternion={quaternion}>
-      <GeologyParts layout={layout} biome={biome} />
-    </group>
-  );
-};
-
 /**
- * A frosted pine, a low icy hillock or a cluster of slate boulders at the foot
- * of the range - small props that give the mountains a sense of scale.
+ * A geology layout (see geology.ts) stood on its own spot of the planet:
+ * each part a scaled copy of one shared mesh, placed through the prop's frame.
  */
-export const SnowProp = ({
-  position,
-  normal,
-  seed,
-  planetRadius,
-}: GeologyProps) => {
-  const layout = useMemo(
-    () => snowPropLayout(seed, planetRadius),
-    [seed, planetRadius],
-  );
-  const quaternion = useMemo(
-    () =>
-      layout
-        ? propQuaternion(layout, normal, seed)
-        : surfaceQuaternion(normal, propSpin(seed)),
-    [layout, normal, seed],
-  );
-
-  if (layout) {
-    return (
-      <group position={position} quaternion={quaternion}>
-        <GeologyParts layout={layout} biome="snow" />
-      </group>
-    );
-  }
-
-  return (
-    <group position={position} quaternion={quaternion} scale={pineScale(seed)}>
-      <mesh
-        geometry={frostedTrunkGeometry}
-        material={frostedTrunkMaterial}
-        position={[0, 0.35, 0]}
-        castShadow
-      />
-      <mesh
-        geometry={frostedPineGeometry}
-        material={frostedPineMaterial}
-        position={[0, 1.1, 0]}
-        castShadow
-      />
-      <mesh
-        geometry={frostedPineGeometry}
-        material={snowCapMaterial}
-        position={[0, 1.62, 0]}
-        scale={0.62}
-        castShadow
-      />
-    </group>
+export const geologyInstances = (
+  { position, normal, seed }: FeatureProps,
+  layout: GeologyLayout,
+  biome: Biome,
+): PropInstance[] => {
+  const frame = composeMatrix(position, propQuaternion(layout, normal, seed));
+  return layout.parts.map((part) =>
+    place(
+      frame,
+      GEOLOGY_GEOMETRY[part.shape],
+      BIOME_ROCK_MATERIALS[biome][part.tone],
+      composeMatrix(part.position, part.quaternion, part.scale),
+      true,
+      true,
+    ),
   );
 };
+
+// --- snow: frosted pines, icy hillocks, slate boulders -----------------------
 
 const frostedTrunkGeometry = new CylinderGeometry(0.07, 0.11, 0.7, 5);
 const frostedPineGeometry = new ConeGeometry(0.45, 1.1, 6);
@@ -419,57 +337,79 @@ const frostedPineMaterial = new MeshStandardMaterial({
   flatShading: true,
 });
 
+/**
+ * Frosted pines, low icy hillocks and clusters of slate boulders at the foot
+ * of the range - small props that give the mountains a sense of scale.
+ */
+export const snowPropInstances = (
+  props: FeatureProps[],
+  planetRadius: number,
+): PropInstance[] =>
+  props.flatMap((prop) => {
+    const layout = snowPropLayout(prop.seed, planetRadius);
+    if (layout) return geologyInstances(prop, layout, "snow");
+    const frame = composeMatrix(
+      prop.position,
+      surfaceQuaternion(prop.normal, propSpin(prop.seed)),
+      pineScale(prop.seed),
+    );
+    return [
+      place(
+        frame,
+        frostedTrunkGeometry,
+        frostedTrunkMaterial,
+        composeMatrix([0, 0.35, 0]),
+        true,
+        false,
+      ),
+      place(
+        frame,
+        frostedPineGeometry,
+        frostedPineMaterial,
+        composeMatrix([0, 1.1, 0]),
+        true,
+        false,
+      ),
+      place(
+        frame,
+        frostedPineGeometry,
+        snowCapMaterial,
+        composeMatrix([0, 1.62, 0], [0, 0, 0], 0.62),
+        true,
+        false,
+      ),
+    ];
+  });
+
 // --- desert: dunes, boulders, terraced mesas and arches -------------------
 
 /**
- * One piece of desert texture - a dune, a boulder cluster or a terraced mesa
- * ringed with gravel (see geology.ts). The mix is what keeps the desert from
- * reading as a single unbroken sheet of tan.
+ * The desert's texture - dunes, boulder clusters and terraced mesas ringed
+ * with gravel (see geology.ts). The mix is what keeps the desert from reading
+ * as a single unbroken sheet of tan.
  */
-export const DesertFeature = ({
-  position,
-  normal,
-  seed,
-  planetRadius,
-}: GeologyProps) => {
-  const layout = useMemo(
-    () => desertFeatureLayout(seed, planetRadius),
-    [seed, planetRadius],
+export const desertInstances = (
+  features: FeatureProps[],
+  planetRadius: number,
+): PropInstance[] =>
+  features.flatMap((feature) =>
+    geologyInstances(
+      feature,
+      desertFeatureLayout(feature.seed, planetRadius),
+      "desert",
+    ),
   );
-  return (
-    <GeologyProp
-      position={position}
-      normal={normal}
-      seed={seed}
-      layout={layout}
-      biome="desert"
-    />
-  );
-};
 
-/** A natural sandstone arch standing on open sand. */
-export const RockArch = ({
-  position,
-  normal,
-  seed,
-  planetRadius,
-}: GeologyProps) => {
-  const layout = useMemo(
-    () => archLayout(seed, planetRadius),
-    [seed, planetRadius],
+/** Natural sandstone arches standing on open sand. */
+export const archInstances = (
+  arches: FeatureProps[],
+  planetRadius: number,
+): PropInstance[] =>
+  arches.flatMap((arch) =>
+    geologyInstances(arch, archLayout(arch.seed, planetRadius), "desert"),
   );
-  return (
-    <GeologyProp
-      position={position}
-      normal={normal}
-      seed={seed}
-      layout={layout}
-      biome="desert"
-    />
-  );
-};
 
-// --- forest: bushes and shrubs -------------------------------------------
+// --- forest: bushes, shrubs and granite ----------------------------------
 
 const bushGeometry = new IcosahedronGeometry(0.5, 0);
 const shrubMaterialDark = new MeshStandardMaterial({
@@ -484,60 +424,55 @@ const shrubMaterialLight = new MeshStandardMaterial({
 });
 
 /**
- * A low clump of shrubbery - two or three overlapping lobes at ground level.
+ * Low clumps of shrubbery - two or three overlapping lobes at ground level.
  * Much smaller than a tree, and far more numerous, which is what makes the
  * forest floor read as undergrowth rather than bare lawn between trunks.
  */
-export const Bush = ({ position, normal, seed }: FeatureProps) => {
-  const quaternion = useSurfaceQuaternion(normal, seed * Math.PI * 2);
-  const scale = 0.55 + seed * 0.75;
-  const material = seed > 0.5 ? shrubMaterialLight : shrubMaterialDark;
-
-  return (
-    <group position={position} quaternion={quaternion} scale={scale}>
-      <mesh
-        geometry={bushGeometry}
-        material={material}
-        position={[0, 0.4, 0]}
-        castShadow
-        receiveShadow
-      />
-      <mesh
-        geometry={bushGeometry}
-        material={material}
-        position={[0.42, 0.28, 0.2]}
-        scale={0.68}
-        castShadow
-      />
-      <mesh
-        geometry={bushGeometry}
-        material={material}
-        position={[-0.36, 0.26, -0.24]}
-        scale={0.58}
-        castShadow
-      />
-    </group>
-  );
-};
+export const bushInstances = (bushes: FeatureProps[]): PropInstance[] =>
+  bushes.flatMap(({ position, normal, seed }) => {
+    const frame = composeMatrix(
+      position,
+      surfaceQuaternion(normal, seed * Math.PI * 2),
+      0.55 + seed * 0.75,
+    );
+    const material = seed > 0.5 ? shrubMaterialLight : shrubMaterialDark;
+    return [
+      place(
+        frame,
+        bushGeometry,
+        material,
+        composeMatrix([0, 0.4, 0]),
+        true,
+        true,
+      ),
+      place(
+        frame,
+        bushGeometry,
+        material,
+        composeMatrix([0.42, 0.28, 0.2], [0, 0, 0], 0.68),
+        true,
+        false,
+      ),
+      place(
+        frame,
+        bushGeometry,
+        material,
+        composeMatrix([-0.36, 0.26, -0.24], [0, 0, 0], 0.58),
+        true,
+        false,
+      ),
+    ];
+  });
 
 /** Dark granite boulders among the forest's trees. */
-export const ForestRocks = ({
-  position,
-  normal,
-  seed,
-  planetRadius,
-}: GeologyProps) => {
-  const layout = useMemo(
-    () => boulderClusterLayout(seed, planetRadius),
-    [seed, planetRadius],
+export const forestRockInstances = (
+  rocks: FeatureProps[],
+  planetRadius: number,
+): PropInstance[] =>
+  rocks.flatMap((rock) =>
+    geologyInstances(
+      rock,
+      boulderClusterLayout(rock.seed, planetRadius),
+      "forest",
+    ),
   );
-  return (
-    <GeologyProp
-      position={position}
-      normal={normal}
-      seed={seed}
-      layout={layout}
-      biome="forest"
-    />
-  );
-};

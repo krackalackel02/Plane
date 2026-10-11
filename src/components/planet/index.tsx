@@ -34,13 +34,18 @@ import {
   type ScatteredTree,
 } from "./planetTerrain";
 import {
-  Bush,
-  DesertFeature,
-  ForestRocks,
-  Ridge,
-  RockArch,
-  SnowProp,
+  archInstances,
+  bushInstances,
+  desertInstances,
+  forestRockInstances,
+  ridgeInstances,
+  snowPropInstances,
 } from "./feature";
+import {
+  InstancedProps,
+  composeMatrix,
+  type PropInstance,
+} from "./instancedProps";
 import Continent from "./landmass";
 import Moon from "./moon";
 import Cloud, { type CloudVariant } from "./cloud";
@@ -179,69 +184,42 @@ const canopyMaterialLobeB = new MeshStandardMaterial({
 const WORLD_UP = new Vector3(0, 1, 0);
 
 /**
- * A single stylised tree, standing upright on the surface (local +Y
- * aligned to the planet's outward normal at its own spot - "surface-
- * normal alignment", per the claymation reference). Alternates between a
- * stacked-cone "pine" and a stacked-icosahedron "broccoli" canopy purely
- * off its own deterministic seed, so the mix is stable across re-renders
- * without needing to store a type anywhere.
+ * Claymation trees - a trunk under either two stacked pine cones or a round
+ * three-lobed canopy - as placed instances (see instancedProps.tsx), each
+ * part composed exactly as its old <group>/<mesh> pair was.
  */
-const Tree = ({ position, normal, seed }: ScatteredTree) => {
-  const quaternion = useMemo(
-    () => new Quaternion().setFromUnitVectors(WORLD_UP, normal),
-    [normal],
-  );
-  const scale = 1.6 + seed * 1.8;
-  const isPine = seed > 0.55;
-
-  return (
-    <group position={position} quaternion={quaternion} scale={scale}>
-      <mesh
-        geometry={trunkGeometry}
-        material={trunkMaterial}
-        position={[0, 0.6, 0]}
-        castShadow
-      />
-      {isPine ? (
-        <>
-          <mesh
-            geometry={pineLowerGeometry}
-            material={pineMaterialLower}
-            position={[0, 1.35, 0]}
-            castShadow
-          />
-          <mesh
-            geometry={pineUpperGeometry}
-            material={pineMaterialUpper}
-            position={[0, 1.85, 0]}
-            castShadow
-          />
-        </>
-      ) : (
-        <>
-          <mesh
-            geometry={canopyCoreGeometry}
-            material={canopyMaterialCore}
-            position={[0, 1.3, 0]}
-            castShadow
-          />
-          <mesh
-            geometry={canopyLobeGeometry}
-            material={canopyMaterialLobeA}
-            position={[0.34, 1.55, 0.14]}
-            castShadow
-          />
-          <mesh
-            geometry={canopyLobeGeometry}
-            material={canopyMaterialLobeB}
-            position={[-0.3, 1.48, -0.2]}
-            castShadow
-          />
-        </>
-      )}
-    </group>
-  );
-};
+const treeInstances = (trees: ScatteredTree[]): PropInstance[] =>
+  trees.flatMap(({ position, normal, seed }) => {
+    const frame = composeMatrix(
+      position,
+      new Quaternion().setFromUnitVectors(WORLD_UP, normal),
+      1.6 + seed * 1.8,
+    );
+    const part = (
+      geometry: PropInstance["geometry"],
+      material: PropInstance["material"],
+      local: [number, number, number],
+    ): PropInstance => ({
+      geometry,
+      material,
+      matrix: frame.clone().multiply(composeMatrix(local)),
+      castShadow: true,
+      receiveShadow: false,
+    });
+    const trunk = part(trunkGeometry, trunkMaterial, [0, 0.6, 0]);
+    return seed > 0.55
+      ? [
+          trunk,
+          part(pineLowerGeometry, pineMaterialLower, [0, 1.35, 0]),
+          part(pineUpperGeometry, pineMaterialUpper, [0, 1.85, 0]),
+        ]
+      : [
+          trunk,
+          part(canopyCoreGeometry, canopyMaterialCore, [0, 1.3, 0]),
+          part(canopyLobeGeometry, canopyMaterialLobeA, [0.34, 1.55, 0.14]),
+          part(canopyLobeGeometry, canopyMaterialLobeB, [-0.3, 1.48, -0.2]),
+        ];
+  });
 
 /**
  * The single planet the ship is snapped to (see utils/planets - "snapping"
@@ -336,6 +314,31 @@ const Planet = () => {
   const penguins = useMemo(
     () => scatterPenguins(PENGUIN_COUNT, planet.radius, planet.center),
     [planet],
+  );
+
+  // Every static prop on the planet as GPU instances - a few dozen instanced
+  // draws for what were ~1,500 separate meshes, each its own draw call (twice,
+  // with shadows) and its own matrix for the CPU to update every frame.
+  const propInstances = useMemo(
+    () => [
+      ...treeInstances(trees),
+      ...bushInstances(bushes),
+      ...desertInstances(desertFeatures, planet.radius),
+      ...archInstances(rockArches, planet.radius),
+      ...forestRockInstances(forestRocks, planet.radius),
+      ...ridgeInstances(ridges),
+      ...snowPropInstances(snowProps, planet.radius),
+    ],
+    [
+      trees,
+      bushes,
+      desertFeatures,
+      rockArches,
+      forestRocks,
+      ridges,
+      snowProps,
+      planet,
+    ],
   );
 
   // Hand-placed (see CLOUD_DEFS) rather than scattered - each one floats
@@ -464,11 +467,9 @@ const Planet = () => {
         </mesh>
       ))}
 
-      {/* Claymation foliage, scattered across the landmasses (see
-          planetTerrain.ts / landmass.tsx). */}
-      {trees.map((tree, i) => (
-        <Tree key={i} {...tree} />
-      ))}
+      {/* Claymation foliage, rock and mountains, scattered across the
+          landmasses (see planetTerrain.ts / feature.tsx) - drawn instanced. */}
+      <InstancedProps instances={propInstances} />
 
       {/* A small grazing herd, forest continent only. */}
       {animals.map((animal, i) => (
@@ -481,61 +482,6 @@ const Planet = () => {
           seed={animal.seed}
           planetRadius={planet.radius}
           planetCenter={planet.center}
-        />
-      ))}
-      {bushes.map((bush, i) => (
-        <Bush
-          key={i}
-          position={bush.position}
-          normal={bush.normal}
-          seed={bush.seed}
-        />
-      ))}
-      {desertFeatures.map((feature, i) => (
-        <DesertFeature
-          key={i}
-          position={feature.position}
-          normal={feature.normal}
-          seed={feature.seed}
-          planetRadius={planet.radius}
-        />
-      ))}
-      {rockArches.map((arch, i) => (
-        <RockArch
-          key={i}
-          position={arch.position}
-          normal={arch.normal}
-          seed={arch.seed}
-          planetRadius={planet.radius}
-        />
-      ))}
-      {forestRocks.map((rocks, i) => (
-        <ForestRocks
-          key={i}
-          position={rocks.position}
-          normal={rocks.normal}
-          seed={rocks.seed}
-          planetRadius={planet.radius}
-        />
-      ))}
-      {ridges.map((segment, i) => (
-        <Ridge
-          key={i}
-          position={segment.position}
-          normal={segment.normal}
-          seed={segment.seed}
-          along={segment.along}
-          height={segment.height}
-          width={segment.width}
-        />
-      ))}
-      {snowProps.map((prop, i) => (
-        <SnowProp
-          key={i}
-          position={prop.position}
-          normal={prop.normal}
-          seed={prop.seed}
-          planetRadius={planet.radius}
         />
       ))}
       {penguins.map((penguin, i) => (
