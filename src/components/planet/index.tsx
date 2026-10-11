@@ -24,14 +24,23 @@ import {
   scatterAnimals,
   scatterBushes,
   scatterDesertFeatures,
+  scatterForestRocks,
   scatterPenguins,
+  placeRockArches,
   ridgeChains,
   scatterSnowProps,
   scatterTrees,
   type ContinentVariant,
   type ScatteredTree,
 } from "./planetTerrain";
-import { Bush, DesertFeature, Ridge, SnowProp } from "./feature";
+import {
+  Bush,
+  DesertFeature,
+  ForestRocks,
+  Ridge,
+  RockArch,
+  SnowProp,
+} from "./feature";
 import Continent from "./landmass";
 import Moon from "./moon";
 import Cloud, { type CloudVariant } from "./cloud";
@@ -57,6 +66,8 @@ const TREE_COUNT = 90;
 const ANIMAL_COUNT = 14;
 const BUSH_COUNT = 150;
 const DESERT_FEATURE_COUNT = 70;
+// Dark granite boulder clusters among the forest's trees.
+const FOREST_ROCK_COUNT = 24;
 // Frosted pines and icy hillocks round the range's feet, and the penguins.
 const SNOW_PROP_COUNT = 70;
 const PENGUIN_COUNT = 10;
@@ -306,6 +317,14 @@ const Planet = () => {
       scatterDesertFeatures(DESERT_FEATURE_COUNT, planet.radius, planet.center),
     [planet],
   );
+  const rockArches = useMemo(
+    () => placeRockArches(planet.radius, planet.center),
+    [planet],
+  );
+  const forestRocks = useMemo(
+    () => scatterForestRocks(FOREST_ROCK_COUNT, planet.radius, planet.center),
+    [planet],
+  );
   const ridges = useMemo(
     () => ridgeChains(planet.radius, planet.center),
     [planet],
@@ -478,6 +497,25 @@ const Planet = () => {
           position={feature.position}
           normal={feature.normal}
           seed={feature.seed}
+          planetRadius={planet.radius}
+        />
+      ))}
+      {rockArches.map((arch, i) => (
+        <RockArch
+          key={i}
+          position={arch.position}
+          normal={arch.normal}
+          seed={arch.seed}
+          planetRadius={planet.radius}
+        />
+      ))}
+      {forestRocks.map((rocks, i) => (
+        <ForestRocks
+          key={i}
+          position={rocks.position}
+          normal={rocks.normal}
+          seed={rocks.seed}
+          planetRadius={planet.radius}
         />
       ))}
       {ridges.map((segment, i) => (
@@ -497,6 +535,7 @@ const Planet = () => {
           position={prop.position}
           normal={prop.normal}
           seed={prop.seed}
+          planetRadius={planet.radius}
         />
       ))}
       {penguins.map((penguin, i) => (

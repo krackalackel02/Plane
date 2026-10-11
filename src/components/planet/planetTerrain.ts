@@ -5,6 +5,12 @@ import {
   pointOnSphere,
   surfaceNormal,
 } from "../../utils/planetSurface";
+import {
+  archLayout,
+  boulderClusterLayout,
+  desertFeatureLayout,
+  snowPropFootprint,
+} from "./geology";
 
 export interface OutlineHarmonic {
   amplitude: number;
@@ -539,7 +545,7 @@ const seededRandom = (n: number): number => {
 // coastline - see heightAt's `margin` doc above. Comfortably bigger than any
 // layer's actual bevelSize (landmass.tsx), so a prop only ever lands on flat,
 // full-height ground.
-const FEATURE_EDGE_MARGIN = 0.6;
+export const FEATURE_EDGE_MARGIN = 0.6;
 
 /**
  * Deterministic rejection scatter of props onto whichever biomes `variants`
@@ -592,6 +598,114 @@ export const scatterFeatures = (
   return features;
 };
 
+/** heightAt for a unit direction from the planet's centre, off the coastal bevel. */
+const flatHeightToward = (
+  planetRadius: number,
+  center: Vector3,
+  direction: Vector3,
+  variants: ContinentVariant[],
+): number =>
+  heightAt(
+    planetRadius,
+    center,
+    Math.atan2(direction.x, direction.z),
+    Math.asin(Math.max(-1, Math.min(1, direction.y))),
+    FEATURE_EDGE_MARGIN,
+    variants,
+  );
+
+// Rings of sample points a footprint check walks: [fraction of the
+// footprint, samples round it]. Dense enough that a fjord can't slip between
+// two samples on the outer ring.
+const FOOTPRINT_RINGS: [number, number][] = [
+  [1, 24],
+  [0.5, 12],
+];
+
+/**
+ * Whether everything within `footprint` world units of `feature` stands on
+ * the same flat stretch of ground as the feature itself: never out over the
+ * sea or the coast's bevel, never across the step up onto a highland.
+ */
+const groundIsFlatAround = (
+  planetRadius: number,
+  center: Vector3,
+  feature: ScatteredFeature,
+  footprint: number,
+  variants: ContinentVariant[],
+): boolean => {
+  const own = flatHeightToward(planetRadius, center, feature.normal, variants);
+  if (own <= 0) return false;
+  const { east, north } = eastNorthAt(feature.normal);
+  for (const [fraction, samples] of FOOTPRINT_RINGS) {
+    // Against the bare planet radius, so each ring lands a touch further out
+    // than the footprint itself.
+    const angle = (footprint * fraction) / planetRadius;
+    for (let i = 0; i < samples; i++) {
+      const bearing = (i / samples) * Math.PI * 2;
+      const direction = feature.normal
+        .clone()
+        .multiplyScalar(Math.cos(angle))
+        .addScaledVector(east, Math.sin(angle) * Math.sin(bearing))
+        .addScaledVector(north, Math.sin(angle) * Math.cos(bearing));
+      if (flatHeightToward(planetRadius, center, direction, variants) !== own) {
+        return false;
+      }
+    }
+  }
+  return true;
+};
+
+export interface FootprintedFeature {
+  position: Vector3;
+  footprint: number;
+}
+
+/**
+ * scatterFeatures, for props too wide for "its centre is on land" to be
+ * enough: a candidate is kept only if its whole footprint (`footprintOf` its
+ * seed) is on one flat stretch of its own biome - a dune near the shore would
+ * otherwise hang out over the sea - and it overlaps nothing in `avoid` (nor,
+ * when `spaced`, any prop already kept).
+ */
+export const scatterWithFootprint = (
+  count: number,
+  planetRadius: number,
+  center: Vector3,
+  variants: ContinentVariant[],
+  seedOffset: number,
+  footprintOf: (seed: number) => number,
+  avoid: FootprintedFeature[] = [],
+  spaced = false,
+): ScatteredFeature[] => {
+  const kept: ScatteredFeature[] = [];
+  const taken = [...avoid];
+  const candidates = scatterFeatures(
+    count * 3,
+    planetRadius,
+    center,
+    variants,
+    seedOffset,
+  );
+  for (const candidate of candidates) {
+    if (kept.length >= count) break;
+    const footprint = footprintOf(candidate.seed);
+    const overlaps = taken.some(
+      (t) =>
+        t.position.distanceTo(candidate.position) < t.footprint + footprint,
+    );
+    if (overlaps) continue;
+    if (
+      !groundIsFlatAround(planetRadius, center, candidate, footprint, variants)
+    ) {
+      continue;
+    }
+    kept.push(candidate);
+    if (spaced) taken.push({ position: candidate.position, footprint });
+  }
+  return kept;
+};
+
 /**
  * Trees - the green forest continent only (the desert is bare sand and the
  * snow continent bare rock).
@@ -611,13 +725,62 @@ export const scatterBushes = (
 ): ScatteredFeature[] =>
   scatterFeatures(count, planetRadius, center, ["forest"], 413);
 
-/** Rocks, dunes and mesas breaking up the desert's otherwise flat sand. */
+export const ROCK_ARCH_COUNT = 2;
+
+/** The desert's natural rock arches, each on open, flat sand, clear of the other. */
+export const placeRockArches = (
+  planetRadius: number,
+  center: Vector3,
+): ScatteredFeature[] =>
+  scatterWithFootprint(
+    ROCK_ARCH_COUNT,
+    planetRadius,
+    center,
+    ["desert"],
+    5153,
+    (seed) => archLayout(seed, planetRadius).footprint,
+    [],
+    true,
+  );
+
+/**
+ * Dunes, boulder clusters and terraced mesas breaking up the desert's flat
+ * sand - each wholly on the sand, and none crowding an arch.
+ */
 export const scatterDesertFeatures = (
   count: number,
   planetRadius: number,
   center: Vector3,
+): ScatteredFeature[] => {
+  const arches = placeRockArches(planetRadius, center).map((arch) => ({
+    position: arch.position,
+    footprint: archLayout(arch.seed, planetRadius).footprint,
+  }));
+  return scatterWithFootprint(
+    count,
+    planetRadius,
+    center,
+    ["desert"],
+    787,
+    (seed) => desertFeatureLayout(seed, planetRadius).footprint,
+    arches,
+  );
+};
+
+/** Dark granite boulders among the forest's trees. */
+export const scatterForestRocks = (
+  count: number,
+  planetRadius: number,
+  center: Vector3,
 ): ScatteredFeature[] =>
-  scatterFeatures(count, planetRadius, center, ["desert"], 787);
+  scatterWithFootprint(
+    count,
+    planetRadius,
+    center,
+    ["forest"],
+    6029,
+    (seed) => boulderClusterLayout(seed, planetRadius).footprint,
+  );
 
 export interface RidgeSegment {
   /** Ground point the segment stands on, on the snow continent's surface. */
@@ -756,13 +919,15 @@ export const ridgeChains = (
   return segments;
 };
 
-/** Frosted pines and icy hillocks around the range's feet, for scale. */
+/** Frosted pines, icy hillocks and slate boulders round the range's feet. */
 export const scatterSnowProps = (
   count: number,
   planetRadius: number,
   center: Vector3,
 ): ScatteredFeature[] =>
-  scatterFeatures(count, planetRadius, center, ["snow"], 2411, 1.5);
+  scatterWithFootprint(count, planetRadius, center, ["snow"], 2411, (seed) =>
+    snowPropFootprint(seed, planetRadius),
+  );
 
 /** Penguin colonies on the snow continent. */
 export const scatterPenguins = (

@@ -1,6 +1,20 @@
 import { useMemo } from "react";
 import { buildSurfaceOrientation } from "../../utils/planetSurface";
 import {
+  GEOLOGY_GEOMETRY,
+  ROCK_COLORS,
+  archLayout,
+  boulderClusterLayout,
+  desertFeatureLayout,
+  pineScale,
+  propQuaternion,
+  propSpin,
+  snowPropLayout,
+  surfaceQuaternion,
+  type GeologyLayout,
+  type GeologyTone,
+} from "./geology";
+import {
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
@@ -9,7 +23,6 @@ import {
   IcosahedronGeometry,
   MeshStandardMaterial,
   Quaternion,
-  SphereGeometry,
   Vector3,
 } from "three";
 
@@ -24,14 +37,9 @@ import {
  * they're only a handful of distinct shapes.
  */
 
-const WORLD_UP = new Vector3(0, 1, 0);
-
 /** Aligns a prop's local +Y to the surface normal, then spins it about that normal. */
 const useSurfaceQuaternion = (normal: Vector3, spin: number): Quaternion =>
-  useMemo(() => {
-    const align = new Quaternion().setFromUnitVectors(WORLD_UP, normal);
-    return new Quaternion().setFromAxisAngle(normal, spin).multiply(align);
-  }, [normal, spin]);
+  useMemo(() => surfaceQuaternion(normal, spin), [normal, spin]);
 
 // --- snow: mountain ridges ----------------------------------------------
 
@@ -152,22 +160,16 @@ const capGeometry = (() => {
   return solid(inflated, CREST_FACES, [0, 0.8, 0]);
 })();
 const iceSlabGeometry = new BoxGeometry(1, 0.14, 1.5);
-const hillockGeometry = new IcosahedronGeometry(1, 0);
 
-// Slate blue-grey rock, pure white snow, ice-blue ground and ice.
+// Slate blue-grey rock, pure white snow, and glassy ice.
 const ridgeRockMaterial = new MeshStandardMaterial({
-  color: "#52627a",
+  color: ROCK_COLORS.snow,
   roughness: 0.6,
   flatShading: true,
 });
 const snowCapMaterial = new MeshStandardMaterial({
   color: "#ffffff",
   roughness: 0.5,
-  flatShading: true,
-});
-const iceMaterial = new MeshStandardMaterial({
-  color: "#e8f4f8",
-  roughness: 0.65,
   flatShading: true,
 });
 const iceSlabMaterial = new MeshStandardMaterial({
@@ -261,50 +263,145 @@ export const Ridge = ({
   );
 };
 
-/**
- * A low icy hillock or a frosted pine at the foot of the range - small props
- * that give the mountains a sense of scale.
- */
-export const SnowProp = ({ position, normal, seed }: FeatureProps) => {
-  const quaternion = useSurfaceQuaternion(normal, seed * Math.PI * 2);
-  const isPine = seed > 0.55;
+// --- rock: one palette per biome -----------------------------------------
 
-  if (isPine) {
-    const scale = 0.7 + seed * 0.8;
+const rockMaterial = (color: string, roughness: number) =>
+  new MeshStandardMaterial({ color, roughness, flatShading: true });
+
+export type Biome = keyof typeof ROCK_COLORS;
+
+/**
+ * Each biome's rock tones, so a stone reads as belonging to the land it sits
+ * on: its main rock (ROCK_COLORS - terracotta, slate, dark granite), a paler
+ * band for strata and smaller stones, and its loose ground - sand on the
+ * desert, ice on the snow.
+ */
+export const BIOME_ROCK_MATERIALS: Record<
+  Biome,
+  Record<GeologyTone, MeshStandardMaterial>
+> = {
+  desert: {
+    rock: rockMaterial(ROCK_COLORS.desert, 0.85),
+    band: rockMaterial("#d0844f", 0.88),
+    // A touch warmer than the #e3c896 desert floor, so dunes read against it.
+    ground: rockMaterial("#d8b47e", 0.95),
+  },
+  snow: {
+    rock: ridgeRockMaterial,
+    band: rockMaterial("#71819a", 0.6),
+    // Glossier and a shade bluer than the #e8f4f8 shelf, or an icy hillock
+    // would vanish into the ground it stands on.
+    ground: new MeshStandardMaterial({
+      color: "#cfe5f0",
+      roughness: 0.3,
+      flatShading: true,
+    }),
+  },
+  forest: {
+    rock: rockMaterial(ROCK_COLORS.forest, 0.8),
+    band: rockMaterial("#5f6a7d", 0.8),
+    ground: rockMaterial(ROCK_COLORS.forest, 0.8),
+  },
+};
+
+/** Renders a geology layout (see geology.ts): each part a scaled copy of one shared mesh. */
+const GeologyParts = ({
+  layout,
+  biome,
+}: {
+  layout: GeologyLayout;
+  biome: Biome;
+}) => (
+  <>
+    {layout.parts.map((part, i) => (
+      <mesh
+        key={i}
+        geometry={GEOLOGY_GEOMETRY[part.shape]}
+        material={BIOME_ROCK_MATERIALS[biome][part.tone]}
+        position={part.position}
+        quaternion={part.quaternion}
+        scale={part.scale}
+        castShadow
+        receiveShadow
+      />
+    ))}
+  </>
+);
+
+export interface GeologyProps extends FeatureProps {
+  /** The planet's radius: how fast the ground curves away under a wide prop. */
+  planetRadius: number;
+}
+
+/** A geology layout stood on its own spot of the planet. */
+const GeologyProp = ({
+  position,
+  normal,
+  seed,
+  layout,
+  biome,
+}: FeatureProps & { layout: GeologyLayout; biome: Biome }) => {
+  const quaternion = useMemo(
+    () => propQuaternion(layout, normal, seed),
+    [layout, normal, seed],
+  );
+  return (
+    <group position={position} quaternion={quaternion}>
+      <GeologyParts layout={layout} biome={biome} />
+    </group>
+  );
+};
+
+/**
+ * A frosted pine, a low icy hillock or a cluster of slate boulders at the foot
+ * of the range - small props that give the mountains a sense of scale.
+ */
+export const SnowProp = ({
+  position,
+  normal,
+  seed,
+  planetRadius,
+}: GeologyProps) => {
+  const layout = useMemo(
+    () => snowPropLayout(seed, planetRadius),
+    [seed, planetRadius],
+  );
+  const quaternion = useMemo(
+    () =>
+      layout
+        ? propQuaternion(layout, normal, seed)
+        : surfaceQuaternion(normal, propSpin(seed)),
+    [layout, normal, seed],
+  );
+
+  if (layout) {
     return (
-      <group position={position} quaternion={quaternion} scale={scale}>
-        <mesh
-          geometry={frostedTrunkGeometry}
-          material={frostedTrunkMaterial}
-          position={[0, 0.35, 0]}
-          castShadow
-        />
-        <mesh
-          geometry={frostedPineGeometry}
-          material={frostedPineMaterial}
-          position={[0, 1.1, 0]}
-          castShadow
-        />
-        <mesh
-          geometry={frostedPineGeometry}
-          material={snowCapMaterial}
-          position={[0, 1.62, 0]}
-          scale={0.62}
-          castShadow
-        />
+      <group position={position} quaternion={quaternion}>
+        <GeologyParts layout={layout} biome="snow" />
       </group>
     );
   }
 
-  const width = 1.1 + seed * 2.2;
   return (
-    <group position={position} quaternion={quaternion}>
+    <group position={position} quaternion={quaternion} scale={pineScale(seed)}>
       <mesh
-        geometry={hillockGeometry}
-        material={iceMaterial}
-        scale={[width, 0.4 + seed * 0.5, width * 0.78]}
+        geometry={frostedTrunkGeometry}
+        material={frostedTrunkMaterial}
+        position={[0, 0.35, 0]}
         castShadow
-        receiveShadow
+      />
+      <mesh
+        geometry={frostedPineGeometry}
+        material={frostedPineMaterial}
+        position={[0, 1.1, 0]}
+        castShadow
+      />
+      <mesh
+        geometry={frostedPineGeometry}
+        material={snowCapMaterial}
+        position={[0, 1.62, 0]}
+        scale={0.62}
+        castShadow
       />
     </group>
   );
@@ -322,98 +419,53 @@ const frostedPineMaterial = new MeshStandardMaterial({
   flatShading: true,
 });
 
-// --- desert: rocks, dunes and mesas --------------------------------------
-
-const boulderGeometry = new IcosahedronGeometry(1, 0);
-const duneGeometry = new SphereGeometry(1, 8, 5);
-const mesaGeometry = new CylinderGeometry(1, 1.25, 1, 7);
-
-const sandstoneMaterial = new MeshStandardMaterial({
-  color: "#c8a06a",
-  roughness: 0.9,
-  flatShading: true,
-});
-const duneMaterial = new MeshStandardMaterial({
-  color: "#dcbe8e",
-  roughness: 0.95,
-  flatShading: true,
-});
-const mesaMaterial = new MeshStandardMaterial({
-  color: "#b98e5c",
-  roughness: 0.88,
-  flatShading: true,
-});
+// --- desert: dunes, boulders, terraced mesas and arches -------------------
 
 /**
- * One piece of desert texture, chosen off its own seed: a low wind-smoothed
- * dune, a cluster of sandstone boulders, or a flat-topped mesa. The mix is
- * what keeps the desert from reading as a single unbroken sheet of tan.
+ * One piece of desert texture - a dune, a boulder cluster or a terraced mesa
+ * ringed with gravel (see geology.ts). The mix is what keeps the desert from
+ * reading as a single unbroken sheet of tan.
  */
-export const DesertFeature = ({ position, normal, seed }: FeatureProps) => {
-  const quaternion = useSurfaceQuaternion(normal, seed * Math.PI * 2);
-  const kind = seed < 0.45 ? "dune" : seed < 0.8 ? "rocks" : "mesa";
-
-  if (kind === "dune") {
-    const width = 2.6 + seed * 5;
-    const height = 0.5 + seed * 0.9;
-    return (
-      <group position={position} quaternion={quaternion}>
-        <mesh
-          geometry={duneGeometry}
-          material={duneMaterial}
-          scale={[width, height, width * 0.62]}
-          castShadow
-          receiveShadow
-        />
-      </group>
-    );
-  }
-
-  if (kind === "mesa") {
-    const width = 1.8 + seed * 1.6;
-    const height = 1.6 + seed * 2.4;
-    return (
-      <group position={position} quaternion={quaternion}>
-        <mesh
-          geometry={mesaGeometry}
-          material={mesaMaterial}
-          position={[0, height / 2, 0]}
-          scale={[width, height, width]}
-          castShadow
-          receiveShadow
-        />
-      </group>
-    );
-  }
-
-  const scale = 0.5 + seed * 0.7;
+export const DesertFeature = ({
+  position,
+  normal,
+  seed,
+  planetRadius,
+}: GeologyProps) => {
+  const layout = useMemo(
+    () => desertFeatureLayout(seed, planetRadius),
+    [seed, planetRadius],
+  );
   return (
-    <group position={position} quaternion={quaternion}>
-      <mesh
-        geometry={boulderGeometry}
-        material={sandstoneMaterial}
-        position={[0, scale * 0.55, 0]}
-        scale={scale}
-        castShadow
-        receiveShadow
-      />
-      <mesh
-        geometry={boulderGeometry}
-        material={sandstoneMaterial}
-        position={[scale * 1.35, scale * 0.35, scale * 0.5]}
-        scale={scale * 0.62}
-        castShadow
-        receiveShadow
-      />
-      <mesh
-        geometry={boulderGeometry}
-        material={sandstoneMaterial}
-        position={[-scale * 1.1, scale * 0.3, -scale * 0.7]}
-        scale={scale * 0.5}
-        castShadow
-        receiveShadow
-      />
-    </group>
+    <GeologyProp
+      position={position}
+      normal={normal}
+      seed={seed}
+      layout={layout}
+      biome="desert"
+    />
+  );
+};
+
+/** A natural sandstone arch standing on open sand. */
+export const RockArch = ({
+  position,
+  normal,
+  seed,
+  planetRadius,
+}: GeologyProps) => {
+  const layout = useMemo(
+    () => archLayout(seed, planetRadius),
+    [seed, planetRadius],
+  );
+  return (
+    <GeologyProp
+      position={position}
+      normal={normal}
+      seed={seed}
+      layout={layout}
+      biome="desert"
+    />
   );
 };
 
@@ -465,5 +517,27 @@ export const Bush = ({ position, normal, seed }: FeatureProps) => {
         castShadow
       />
     </group>
+  );
+};
+
+/** Dark granite boulders among the forest's trees. */
+export const ForestRocks = ({
+  position,
+  normal,
+  seed,
+  planetRadius,
+}: GeologyProps) => {
+  const layout = useMemo(
+    () => boulderClusterLayout(seed, planetRadius),
+    [seed, planetRadius],
+  );
+  return (
+    <GeologyProp
+      position={position}
+      normal={normal}
+      seed={seed}
+      layout={layout}
+      biome="forest"
+    />
   );
 };
