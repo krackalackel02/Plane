@@ -1,6 +1,13 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { useFrame } from "@react-three/fiber";
-import { Euler, Group, Quaternion } from "three";
+import { Group } from "three";
 
 // Leva's debug panel is only used when helper=true (never in production
 // usage). Lazy-load it so leva and its deps don't bloat the main bundle.
@@ -21,6 +28,7 @@ import { HarmonicMotion } from "./motions/harmonic/harmonic";
 import { PlanetMotion } from "./motions/planet/planet";
 import { AutopilotMotion } from "./motions/autopilot/autopilot";
 import { TrickMotion } from "./motions/trick/trick";
+import { applyShipPose } from "./shipPose";
 import { hasAnyRealControlKey, isBoostEngaged } from "../../../utils/boost";
 import { useProjects } from "../../../context/projectContext";
 import { spawnTransform } from "../../timeline/calculatedBoardPositionsAndRotations";
@@ -73,14 +81,16 @@ const BOOST_MULTIPLIER = 1.6;
 
 /**
  * Props for Physics component
- * - groupRef: Reference to the ship's group object
+ * - attitudeRef: the group holding the ship's body and exhaust, which takes
+ *   the cosmetic lean (pitch, banking, the barrel roll) - see shipPose.ts
  * - helper: Optional boolean to enable motion parameter controls
  */
 interface PhysicsProps {
+  attitudeRef?: RefObject<Group>;
   helper?: boolean; // Optional prop
 }
 
-const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
+const Physics: React.FC<PhysicsProps> = ({ attitudeRef, helper = false }) => {
   // Initialize motion parameters state
   const initialParams: Record<keyof typeof defaultMotionParams, any> = {
     roll: { ...defaultMotionParams.roll, ...motionConstants.roll },
@@ -201,25 +211,24 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
       motions.current[Motion.ROLL].update(delta, new Set());
       motions.current[Motion.PITCH].update(delta, new Set());
 
-      const tilt = new Quaternion().setFromEuler(
-        new Euler(
-          pitchTarget.current.rotation.x,
-          0,
-          rollTarget.current.rotation.z,
-        ),
+      applyShipPose(
+        ship,
+        attitudeRef?.current,
+        result.position,
+        result.orientation,
+        pitchTarget.current.rotation.x,
+        rollTarget.current.rotation.z,
       );
-      ship.position.copy(result.position);
-      ship.quaternion.copy(result.orientation);
       if (flightEnded) {
         // Hand the heading back. PlanetMotion keeps orientation as internal
         // state and only re-syncs position from the caller each frame, so
         // without this it resumes manual flight on whatever heading it held
         // when autopilot engaged - snapping the ship away from the board it
-        // just arrived facing. Seeded before the cosmetic tilt is applied, so
-        // it adopts the true surface heading rather than the roll/pitch lean.
+        // just arrived facing. (The ship's frame holds the pure heading -
+        // the cosmetic lean is on the attitude group - so that's what it
+        // adopts.)
         planetMotion.current.attachTo(ship);
       }
-      ship.quaternion.multiply(tilt);
       return; // skip manual motions entirely this frame
     }
 
@@ -261,15 +270,14 @@ const Physics: React.FC<PhysicsProps> = ({ helper = false }) => {
     });
     const base = planetMotion.current.update(delta, activeKeys, ship.position);
 
-    const tilt = new Quaternion().setFromEuler(
-      new Euler(
-        pitchTarget.current.rotation.x,
-        0,
-        rollTarget.current.rotation.z,
-      ),
+    applyShipPose(
+      ship,
+      attitudeRef?.current,
+      base.position,
+      base.orientation,
+      pitchTarget.current.rotation.x,
+      rollTarget.current.rotation.z,
     );
-    ship.position.copy(base.position);
-    ship.quaternion.copy(base.orientation).multiply(tilt);
   });
 
   return helper ? (
