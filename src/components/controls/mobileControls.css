@@ -26,12 +26,39 @@
   touch-action: none;
 }
 
+/* The base plate: gunmetal lit from the top-left, finished like spun metal -
+   hairline concentric grooves, with light catching them in streaks that
+   rotate round the centre - and bevelled at the rim, so it reads as a
+   physical control rather than a flat translucent disc. */
 .circular-stick-track {
   position: relative;
   width: 130px;
   height: 130px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
+  background: conic-gradient(
+      from 25deg,
+      rgba(255, 255, 255, 0.11),
+      rgba(255, 255, 255, 0) 12%,
+      rgba(255, 255, 255, 0.07) 25%,
+      rgba(255, 255, 255, 0) 38%,
+      rgba(255, 255, 255, 0.11) 50%,
+      rgba(255, 255, 255, 0) 62%,
+      rgba(255, 255, 255, 0.07) 75%,
+      rgba(255, 255, 255, 0) 88%,
+      rgba(255, 255, 255, 0.11)
+    ),
+    repeating-radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.05) 0 1px,
+      rgba(0, 0, 0, 0.06) 1px 2px
+    ),
+    radial-gradient(circle at 35% 30%, #5d6676 0%, #3b424e 48%, #20242c 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.22),
+    inset 0 -4px 7px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 8px 20px rgba(0, 0, 0, 0.55);
   touch-action: none;
 }
 
@@ -57,6 +84,9 @@
   border-color: rgba(57, 255, 106, 0.95);
 }
 
+/* The thumb cap: a domed, brushed-steel cap lit from the top-left - bright
+   top edge, shaded underside - standing proud of the base on its own drop
+   shadow, so it reads as raised off the plate rather than painted on it. */
 .circular-stick-knob {
   position: absolute;
   top: 50%;
@@ -64,29 +94,82 @@
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.55);
+  background: radial-gradient(
+    circle at 36% 30%,
+    #f4f6f9 0%,
+    #c8cdd5 34%,
+    #8e95a0 72%,
+    #6b717b 100%
+  );
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 4px rgba(0, 0, 0, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.55),
+    0 5px 10px rgba(0, 0, 0, 0.5);
   pointer-events: none;
   transition:
     background 0.15s ease,
     box-shadow 0.15s ease;
 }
 
-.circular-stick-knob.is-boosting {
-  background: rgba(57, 255, 106, 0.85);
-  box-shadow: 0 0 14px rgba(57, 255, 106, 0.9);
+/* Grip: a knurled band of fine radial notches round the cap's rim. */
+.circular-stick-knob::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    rgba(0, 0, 0, 0.26) 0deg 4deg,
+    rgba(255, 255, 255, 0.2) 4deg 8deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 0 66%, #000 69% 100%);
+  mask: radial-gradient(circle, transparent 0 66%, #000 69% 100%);
 }
 
-/* Small direction hints rendered inside each stick. High-contrast white
-   glyphs with a dark outline so they stay legible over any base/knob
-   color and against the scene behind them. */
+/* A shallow dish in the middle for the thumb: lit from the far side, the
+   way a concave surface catches the same light. */
+.circular-stick-knob::after {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 62% 68%,
+    rgba(255, 255, 255, 0.45),
+    rgba(0, 0, 0, 0.14) 80%
+  );
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* Boosting: the cap glows green from within, its dish lit like an LED. */
+.circular-stick-knob.is-boosting {
+  background: radial-gradient(
+    circle at 36% 30%,
+    #eafff0 0%,
+    #9ff5b8 34%,
+    #39d46a 72%,
+    #1f8a44 100%
+  );
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 4px rgba(0, 0, 0, 0.3),
+    0 0 14px rgba(57, 255, 106, 0.9),
+    0 5px 10px rgba(0, 0, 0, 0.45);
+}
+
+/* Small direction hints set into the plate, back-lit like indicator LEDs:
+   a pale core with a cyan glow round it, crisp against the dark metal
+   rather than floating on top as flat white graphics. */
 .stick-label {
   position: absolute;
   pointer-events: none;
-  color: #fff;
+  color: #dffaff;
   text-shadow:
-    0 0 2px #000,
-    0 0 2px #000,
-    0 1px 1px #000;
+    0 0 2px rgba(80, 220, 255, 0.95),
+    0 0 6px rgba(80, 220, 255, 0.75),
+    0 0 12px rgba(80, 220, 255, 0.4);
   font-family: "Orbitron", sans-serif;
   font-size: 14px;
   line-height: 1;
