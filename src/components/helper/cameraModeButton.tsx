@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from "react";
 import {
   useCameraMode,
   CameraMode,
   CAMERA_MODE_ORDER,
 } from "../../context/cameraModeContext";
-import "./cameraModeButton.css";
+import RadialNodeMenu, { RadialMenuNode } from "./radialNodeMenu";
 
 export const MODE_LABEL: Record<CameraMode, string> = {
   close: "Close",
@@ -56,69 +55,30 @@ const ModeIcon = ({ mode }: { mode: CameraMode }) => (
   </svg>
 );
 
-// Speed-dial-style icon button that branches out into one node per camera
-// framing (close/medium/max) - same interaction pattern as
-// ExhaustModeButton: hovering (or focusing) pops the branch open on
-// desktop, a tap toggles it on touch devices, and picking a node glides the
-// camera there (see camera/index.tsx) and folds the branch back in.
+// Speed-dial icon button whose camera framings (close/medium/max) fan out in
+// an arc below it, built on the shared RadialNodeMenu template (see
+// radialNodeMenu.tsx) - the same one the audio and exhaust buttons use, so
+// all three HUD buttons open, fan out and dismiss identically: hover on
+// desktop, a single tap on touch, an edge-aware fan, and the mobile
+// tap-swallowing fixes that template carries. Picking a node glides the
+// camera there (see camera/index.tsx) and folds the fan back in.
 const CameraModeButton = () => {
   const { mode, setMode } = useCameraMode();
-  const [expanded, setExpanded] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!expanded) return;
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setExpanded(false);
-      }
-    };
-    window.addEventListener("pointerdown", handlePointerDown);
-    return () => window.removeEventListener("pointerdown", handlePointerDown);
-  }, [expanded]);
-
-  const selectMode = (next: CameraMode) => {
-    setMode(next);
-    setExpanded(false);
-    // A clicked/tapped button keeps DOM focus afterward, which would hold
-    // the branch open via :focus-within (see the CSS) even though we just
-    // asked it to close - drop focus so the collapse actually happens.
-    (document.activeElement as HTMLElement | null)?.blur();
-  };
+  const nodes: RadialMenuNode[] = CAMERA_MODE_ORDER.map((option) => ({
+    key: option,
+    icon: <ModeIcon mode={option} />,
+    label: `Switch camera framing to ${MODE_LABEL[option]}`,
+    active: option === mode,
+    onSelect: () => setMode(option),
+  }));
 
   return (
-    <div
-      ref={rootRef}
-      className={`camera-mode-cluster${expanded ? " camera-mode-cluster--expanded" : ""}`}
-    >
-      <button
-        className="hud-icon-button"
-        type="button"
-        onClick={() => setExpanded((current) => !current)}
-        aria-haspopup="true"
-        aria-expanded={expanded}
-        aria-label={`Camera framing: ${MODE_LABEL[mode]} (open to switch)`}
-        title={`Camera: ${MODE_LABEL[mode]}`}
-      >
-        <MainIcon />
-      </button>
-      <div className="camera-mode-branch" role="menu">
-        {CAMERA_MODE_ORDER.map((option) => (
-          <button
-            key={option}
-            className={`hud-icon-button camera-mode-node${option === mode ? " camera-mode-node--active" : ""}`}
-            type="button"
-            role="menuitemradio"
-            aria-checked={option === mode}
-            onClick={() => selectMode(option)}
-            aria-label={`Switch camera framing to ${MODE_LABEL[option]}`}
-            title={MODE_LABEL[option]}
-          >
-            <ModeIcon mode={option} />
-          </button>
-        ))}
-      </div>
-    </div>
+    <RadialNodeMenu
+      trigger={<MainIcon />}
+      triggerLabel={`Camera framing: ${MODE_LABEL[mode]} (open to switch)`}
+      nodes={nodes}
+    />
   );
 };
 
