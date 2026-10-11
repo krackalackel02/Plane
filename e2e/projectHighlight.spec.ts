@@ -95,3 +95,28 @@ test("clicking the backdrop closes the popup", async ({ page }) => {
   await overlay.click({ position: { x: 2, y: 2 } });
   await expect(overlay).toHaveCount(0);
 });
+
+// On a phone the card is a steady ~60% of the screen tall whatever the
+// project - not sized by how long its description happens to be (it used to
+// only have a 65% ceiling, so short projects got a small card and long ones a
+// tall one). Checked with the shortest and the longest description.
+test("on a phone the card takes ~60% of the screen height, short project or long", async ({
+  page,
+}) => {
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("missing viewport");
+  const card = page.locator(".highlight-content-3d");
+
+  for (const id of ["automated-structural-design", "parallel-fluid-solver"]) {
+    await openProject(page, id);
+    await expect(card).toBeVisible();
+    const box = await card.boundingBox();
+    if (!box) throw new Error("missing bounding box");
+    const share = box.height / viewport.height;
+    expect(share, id).toBeGreaterThan(0.56);
+    expect(share, id).toBeLessThan(0.64);
+
+    await page.evaluate(() => window.__setActiveProjectId?.(null));
+    await expect(card).toBeHidden();
+  }
+});

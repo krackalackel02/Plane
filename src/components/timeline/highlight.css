@@ -243,8 +243,14 @@
     /* Rounded on every corner (not just the top) - a floating card, not a
        bottom sheet flush against the screen edge. */
     border-radius: 16px;
-    max-height: min(65vh, calc(100% - 2rem));
-    max-height: min(65dvh, calc(100% - 2rem));
+    /* A consistent ~60% of the screen whatever the project - the
+       description scrolls inside it (.highlight-scroll), with the buttons
+       pinned below, rather than the card growing and shrinking with each
+       project's text. dvh so mobile toolbars sliding in and out don't
+       change it; capped to the overlay for short (landscape) screens. */
+    height: 60vh;
+    height: 60dvh;
+    max-height: calc(100% - 2rem);
   }
 
   .highlight-image-wrap {
