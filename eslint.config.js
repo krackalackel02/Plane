@@ -79,6 +79,7 @@ export default [
             "shadow-camera-bottom",
             "shadow-camera-near",
             "shadow-camera-far",
+            "shadow-normalBias",
           ],
         },
       ],
