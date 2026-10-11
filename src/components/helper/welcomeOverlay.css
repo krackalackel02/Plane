@@ -82,6 +82,11 @@
 
 .welcome-alert-title {
   margin: 0 0 10px;
+  /* Keeps the title's whole box - not just its text - clear of the close
+     button, so nothing overlaps the button for a click to land on instead.
+     Stacking it above the title (z-index, below) isn't enough on its own:
+     WebKit still hit-tested the title on top of the button's lower half. */
+  margin-right: 40px;
   font-family: "Orbitron", sans-serif;
   font-weight: 900;
   font-size: 1.3rem;
@@ -152,6 +157,13 @@
   transition:
     background 0.15s,
     border-color 0.15s;
+  /* Above the panel's other children. `.welcome-alert > *` gives every
+     child - this button included - z-index 2, and the title comes next in
+     the DOM with its box reaching up under the button, so at equal z-index
+     the title painted on top and swallowed clicks on the button's lower
+     half: its bottom-left on desktop, and on phones (tighter top padding)
+     the whole lower half, centre included. */
+  z-index: 3;
 }
 
 .welcome-alert-close:hover {

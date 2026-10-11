@@ -1,0 +1,19 @@
+/* GlitchText (see glitchText.tsx): the final text sizes the box, and the
+   scrambled reveal is painted over it, so the reveal can never re-wrap a
+   line or move anything around it. */
+.glitch-text {
+  position: relative;
+}
+
+.glitch-text__final {
+  color: transparent;
+  /* Inherited glows (the welcome title's) would otherwise paint this
+     invisible copy's shadow behind the scramble. */
+  text-shadow: none;
+}
+
+.glitch-text__live {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
